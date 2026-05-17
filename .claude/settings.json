@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcrun simctl io booted screenshot *)",
+      "Bash(xcrun simctl spawn booted log show *)",
+      "Bash(curl -sL *)",
+      "Bash(curl -sI *)"
+    ]
+  }
+}

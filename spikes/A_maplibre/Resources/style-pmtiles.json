@@ -1,0 +1,29 @@
+{
+  "version": 8,
+  "name": "AlaskaRouter Spike A.5 — PMTiles smoke test (NZ buildings sample)",
+  "center": [174.7762, -41.2865],
+  "zoom": 12,
+  "sources": {
+    "nz_buildings": {
+      "type": "vector",
+      "url": "pmtiles://https://r2-public.protomaps.com/protomaps-sample-datasets/nz-buildings-v3.pmtiles",
+      "attribution": "© LINZ, via Protomaps"
+    }
+  },
+  "layers": [
+    { "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#f1ece1" } },
+
+    { "id": "buildings",
+      "type": "fill",
+      "source": "nz_buildings",
+      "source-layer": "buildings",
+      "paint": {
+        "fill-color": "#c4b59a",
+        "fill-outline-color": "#8a7860",
+        "fill-opacity": 0.85
+      }
+    }
+  ]
+}

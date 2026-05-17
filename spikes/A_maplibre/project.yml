@@ -1,0 +1,34 @@
+name: AlaskaRouterSpike
+options:
+  bundleIdPrefix: dev.alaskarouter
+  developmentLanguage: en
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  MapLibreSwiftUI:
+    url: https://github.com/maplibre/swiftui-dsl
+    branch: main
+targets:
+  AlaskaRouterSpike:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alaskarouter.MapLibreSpike
+        GENERATE_INFOPLIST_FILE: "YES"
+    dependencies:
+      - package: MapLibreSwiftUI
+        product: MapLibreSwiftUI
+      - package: MapLibreSwiftUI
+        product: MapLibreSwiftDSL
