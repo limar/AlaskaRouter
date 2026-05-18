@@ -1,11 +1,14 @@
-// Trip bottom sheet (v1 first cut).
+// Trip bottom sheet (v1).
 //
 // State-driven detent — collapsed | overview | full — animated via simple
-// height transition. We don't use SwiftUI's `.sheet(...)` because that lets
-// the user fully dismiss with a downward swipe, and our bottom sheet should
-// always be present. Custom container instead.
+// height transition. Custom container (not SwiftUI's `.sheet`) so the user
+// can't accidentally dismiss it; the trip is always present.
+//
+// Waypoint list uses `List` with `.onMove` (drag-to-reorder) and `.onDelete`
+// (swipe-to-delete). Persistence directly via SwiftData @Environment.
 
 import SwiftUI
+import SwiftData
 import CoreLocation
 
 enum TripSheetDetent: CaseIterable {
@@ -34,7 +37,9 @@ struct TripBottomSheet: View {
     let trip: Trip
     @Binding var detent: TripSheetDetent
     let onTapWaypoint: (Waypoint) -> Void
+    let onWaypointDeleted: (Waypoint) -> Void
 
+    @Environment(\.modelContext) private var modelContext
     @GestureState private var dragOffset: CGFloat = 0
 
     var body: some View {
@@ -117,49 +122,82 @@ struct TripBottomSheet: View {
     }
 
     private var waypointList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(trip.orderedWaypoints) { wp in
-                    Button {
-                        onTapWaypoint(wp)
-                    } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(tripAccent.opacity(0.18))
-                                    .frame(width: 28, height: 28)
-                                Text("\(wp.order + 1)")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(tripAccent)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(wp.label ?? "Untitled stop")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                                HStack(spacing: 4) {
-                                    Text(wp.category?.replacingOccurrences(of: "_", with: " ") ?? "stop")
-                                    Text("·")
-                                    Text(String(format: "%.3f, %.3f", wp.lat, wp.lon))
-                                }
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    Divider().opacity(0.3).padding(.horizontal, 18)
-                }
+        List {
+            ForEach(trip.orderedWaypoints, id: \.id) { wp in
+                waypointRow(wp)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTapWaypoint(wp) }
             }
-            .padding(.bottom, 24)
+            .onMove(perform: reorder)
+            .onDelete(perform: delete)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+    }
+
+    private func waypointRow(_ wp: Waypoint) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(tripAccent.opacity(0.18))
+                    .frame(width: 28, height: 28)
+                Text("\(wp.order + 1)")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(tripAccent)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(wp.label ?? "Untitled stop")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(wp.category?.replacingOccurrences(of: "_", with: " ") ?? "stop")
+                    Text("·")
+                    Text(String(format: "%.3f, %.3f", wp.lat, wp.lon))
+                }
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Mutations
+
+    private func reorder(from source: IndexSet, to destination: Int) {
+        var current = trip.orderedWaypoints
+        current.move(fromOffsets: source, toOffset: destination)
+        // Renumber .order to match new sequence.
+        for (i, wp) in current.enumerated() {
+            wp.order = i
+        }
+        try? modelContext.save()
+    }
+
+    private func delete(at offsets: IndexSet) {
+        let ordered = trip.orderedWaypoints
+        for idx in offsets {
+            guard idx < ordered.count else { continue }
+            let victim = ordered[idx]
+            modelContext.delete(victim)
+            onWaypointDeleted(victim)
+        }
+        // Renumber remaining waypoints.
+        let remaining = trip.orderedWaypoints.filter { wp in
+            !offsets.contains(where: { ordered[$0].id == wp.id })
+        }
+        for (i, wp) in remaining.enumerated() {
+            wp.order = i
+        }
+        try? modelContext.save()
     }
 
     // MARK: - Computed

@@ -81,7 +81,8 @@ struct RootView: View {
                 TripBottomSheet(
                     trip: trip,
                     detent: $bottomSheetDetent,
-                    onTapWaypoint: handleSheetWaypointTap
+                    onTapWaypoint: handleSheetWaypointTap,
+                    onWaypointDeleted: handleSheetWaypointDeleted
                 )
                 .ignoresSafeArea(.container, edges: .bottom)
             }
@@ -206,6 +207,15 @@ struct RootView: View {
             selectedWaypointID = wp.id
             bottomSheetDetent = .collapsed
             previewedResult = nil
+        }
+    }
+
+    private func handleSheetWaypointDeleted(_ wp: Waypoint) {
+        if selectedWaypointID == wp.id {
+            withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
+        }
+        if recentlyAddedWaypoint?.id == wp.id {
+            withAnimation(.smooth(duration: 0.2)) { recentlyAddedWaypoint = nil }
         }
     }
 
