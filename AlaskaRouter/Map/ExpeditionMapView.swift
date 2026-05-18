@@ -38,10 +38,10 @@ private let styleURL: URL = {
     }
 }()
 
-// v1 route geometry: straight-line polyline between consecutive waypoints
-// (pendingSnap-style — the Routing layer will replace this with cached
-// snap-to-road geometry per RouteSegment when it lands).
-private func routeCoords(for trip: Trip) -> [CLLocationCoordinate2D] {
+// Default route geometry: straight-line polyline between consecutive waypoints.
+// Used when no snap-to-road result is available (offline, awaiting routing, etc).
+// Rendered dashed in this case to signal "pendingSnap".
+private func straightRouteCoords(for trip: Trip) -> [CLLocationCoordinate2D] {
     trip.orderedWaypoints.map(\.coordinate)
 }
 
@@ -53,11 +53,16 @@ struct ExpeditionMapView: View {
     let selectedWaypointID: UUID?
     let previewCoord: CLLocationCoordinate2D?
     let previewName: String?
+    /// Snap-to-road geometry from the Routing layer. When present, replaces
+    /// the straight-line fallback with the real road shape (solid, not dashed).
+    let snappedRouteCoords: [CLLocationCoordinate2D]?
 
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {
             if let trip {
-                let coords = routeCoords(for: trip)
+                // Prefer the snapped geometry if it's available and matches the trip.
+                let isSnapped = (snappedRouteCoords != nil)
+                let coords = snappedRouteCoords ?? straightRouteCoords(for: trip)
                 if coords.count >= 2 {
                     let routeFeature = MLNPolylineFeature(coordinates: coords, count: UInt(coords.count))
                     let routeSource = ShapeSource(identifier: "trip-route") { routeFeature }
@@ -67,11 +72,15 @@ struct ExpeditionMapView: View {
                         .lineWidth(8.0).lineCap(.round).lineJoin(.round)
 
                     let c = trip.color.swiftUIColor
-                    // Dashed line = pendingSnap visual (no snap-to-road yet, by design).
-                    LineStyleLayer(identifier: "route", source: routeSource)
+                    // Solid when snap-to-road geometry is in hand; dashed (pendingSnap) otherwise.
+                    let routeLayer = LineStyleLayer(identifier: "route", source: routeSource)
                         .lineColor(UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0))
                         .lineWidth(4.0).lineCap(.round).lineJoin(.round).lineOpacity(0.92)
-                        .lineDashPattern([3.0, 2.0])
+                    if isSnapped {
+                        routeLayer
+                    } else {
+                        routeLayer.lineDashPattern([3.0, 2.0])
+                    }
                 }
 
                 let ordered = trip.orderedWaypoints

@@ -26,6 +26,14 @@ struct RootView: View {
         .init(latitude: 63.95, longitude: -148.9), zoom: 8.5
     )
 
+    // Routing layer state
+    private let routingProvider: any RoutingProvider = OSRMProvider()
+    @State private var networkMonitor = NetworkMonitor()
+    @State private var snappedRouteCoords: [CLLocationCoordinate2D]?
+    @State private var snappedRouteKey: String = ""        // tracks which trip-state the snap is for
+    @State private var snapTask: Task<Void, Never>?
+    @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
+
     private var activeTrip: Trip? { trips.first }
 
     var body: some View {
@@ -35,7 +43,8 @@ struct RootView: View {
                 trip: activeTrip,
                 selectedWaypointID: selectedWaypointID,
                 previewCoord: previewedResult?.coord,
-                previewName: previewedResult?.name
+                previewName: previewedResult?.name,
+                snappedRouteCoords: snappedRouteCoords
             )
             .ignoresSafeArea()
 
@@ -104,7 +113,6 @@ struct RootView: View {
             if let prefill = LaunchArgs.prefillQuery {
                 searchService.setQuery(prefill)
                 if let action = LaunchArgs.debugAutoAction {
-                    // Wait for the FTS5 query + debounce to land, then fire the action.
                     Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 800_000_000)
                         let idx = action.index
@@ -118,6 +126,65 @@ struct RootView: View {
                     }
                 }
             }
+            networkMonitor.onReconnect = { [self] in
+                if let key = pendingSnapKey { fireSnap(forKey: key) }
+            }
+            scheduleSnapForCurrentTrip()
+        }
+        .onChange(of: tripGeometryKey) { _, newKey in
+            scheduleSnapForCurrentTrip(key: newKey)
+        }
+    }
+
+    /// A string that changes whenever the snap-relevant trip state changes
+    /// (waypoint coordinate sequence). Used as the `.onChange` trigger.
+    private var tripGeometryKey: String {
+        guard let trip = activeTrip else { return "" }
+        return trip.orderedWaypoints
+            .map { String(format: "%.5f,%.5f", $0.lat, $0.lon) }
+            .joined(separator: "|")
+    }
+
+    // MARK: - Routing: debounced snap-to-road fetch
+
+    private func scheduleSnapForCurrentTrip(key: String? = nil) {
+        let effectiveKey = key ?? tripGeometryKey
+        // Invalidate any prior result that doesn't match the current trip state.
+        snapTask?.cancel()
+        if snappedRouteKey != effectiveKey { snappedRouteCoords = nil }
+        guard let trip = activeTrip, trip.orderedWaypoints.count >= 2 else {
+            pendingSnapKey = nil
+            return
+        }
+        let coords = trip.orderedWaypoints.map(\.coordinate)
+        snapTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)   // 500 ms debounce
+            guard !Task.isCancelled else { return }
+            await runSnap(coords: coords, key: effectiveKey)
+        }
+    }
+
+    private func fireSnap(forKey key: String) {
+        guard let trip = activeTrip, trip.orderedWaypoints.count >= 2 else { return }
+        let coords = trip.orderedWaypoints.map(\.coordinate)
+        Task { @MainActor in await runSnap(coords: coords, key: key) }
+    }
+
+    @MainActor
+    private func runSnap(coords: [CLLocationCoordinate2D], key: String) async {
+        do {
+            let result = try await routingProvider.snap(waypoints: coords)
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth(duration: 0.35)) {
+                snappedRouteCoords = result.coordinates
+                snappedRouteKey = key
+                pendingSnapKey = nil
+            }
+        } catch {
+            // Fall back to the dashed pendingSnap line; remember the key so
+            // we can retry on reconnect.
+            snappedRouteCoords = nil
+            pendingSnapKey = key
         }
     }
 

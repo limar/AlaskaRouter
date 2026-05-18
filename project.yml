@@ -17,6 +17,7 @@ targets:
       - path: AlaskaRouter/App
       - path: AlaskaRouter/Data
       - path: AlaskaRouter/Map
+      - path: AlaskaRouter/Routing
       - path: AlaskaRouter/Search
       - path: AlaskaRouter/UI
       - path: AlaskaRouter/Resources
