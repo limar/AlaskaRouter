@@ -1,4 +1,8 @@
 // Search-results dropdown rendered under the expanded floating bar.
+//
+// Each row has two tap targets:
+//   - Body  → `onPreview(result)`   (research-first, opens floating callout)
+//   - "+"   → `onFastAdd(result)`   (instant geographic-smart insert into trip)
 
 import SwiftUI
 import CoreLocation
@@ -6,7 +10,8 @@ import CoreLocation
 struct SearchResultsView: View {
     let results: [SearchResult]
     let parsed: StructuredQuery
-    let onSelect: (SearchResult) -> Void
+    let onPreview: (SearchResult) -> Void
+    let onFastAdd: (SearchResult) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,39 +31,7 @@ struct SearchResultsView: View {
                 .padding(.top, 10)
             }
             ForEach(results) { result in
-                Button { onSelect(result) } label: {
-                    HStack(spacing: 12) {
-                        iconForCategory(result.category)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22, height: 22)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(result.name)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            HStack(spacing: 4) {
-                                Text(result.category.replacingOccurrences(of: "_", with: " "))
-                                Text("·")
-                                Text(String(format: "%.3f, %.3f",
-                                            result.coord.latitude,
-                                            result.coord.longitude))
-                                if result.stage == 2 {
-                                    Text("·").foregroundStyle(.secondary)
-                                    Text("fuzzy ±\(result.editDistance)")
-                                        .foregroundStyle(.orange.opacity(0.9))
-                                }
-                            }
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                resultRow(result)
                 Divider().opacity(0.4)
             }
         }
@@ -70,6 +43,56 @@ struct SearchResultsView: View {
         .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
         .padding(.horizontal, 14)
         .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func resultRow(_ result: SearchResult) -> some View {
+        HStack(spacing: 12) {
+            // Tappable body — opens preview.
+            Button { onPreview(result) } label: {
+                HStack(spacing: 12) {
+                    iconForCategory(result.category)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(result.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(result.category.replacingOccurrences(of: "_", with: " "))
+                            Text("·")
+                            Text(String(format: "%.3f, %.3f",
+                                        result.coord.latitude,
+                                        result.coord.longitude))
+                            if result.stage == 2 {
+                                Text("·").foregroundStyle(.secondary)
+                                Text("fuzzy ±\(result.editDistance)")
+                                    .foregroundStyle(.orange.opacity(0.9))
+                            }
+                        }
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Trailing "+" — fast-add (instant geographic-smart insert).
+            Button { onFastAdd(result) } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder

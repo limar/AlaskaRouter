@@ -28,6 +28,16 @@ enum LaunchArgs {
         default:          return .overview
         }
     }
+
+    /// After prefill query results land, auto-trigger this action for screenshot
+    /// capture: `preview:<index>` opens the preview callout; `add:<index>` runs
+    /// the fast-add flow. Index is into the results list.
+    static var debugAutoAction: (kind: String, index: Int)? {
+        let raw = UserDefaults.standard.string(forKey: "autoAction") ?? ""
+        let parts = raw.split(separator: ":")
+        guard parts.count == 2, let i = Int(parts[1]) else { return nil }
+        return (String(parts[0]), i)
+    }
 }
 
 enum FloatingSearchBarState: String {

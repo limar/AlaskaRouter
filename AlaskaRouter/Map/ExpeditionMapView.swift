@@ -38,62 +38,28 @@ private let styleURL: URL = {
     }
 }()
 
-// MARK: - GeoJSON loader for the bundled OSRM-snapped route
-
-private struct OSRMGeoJSON: Decodable {
-    let features: [Feature]
-    struct Feature: Decodable { let geometry: Geometry }
-    struct Geometry: Decodable { let type: String; let coordinates: [[Double]] }
+// v1 route geometry: straight-line polyline between consecutive waypoints
+// (pendingSnap-style — the Routing layer will replace this with cached
+// snap-to-road geometry per RouteSegment when it lands).
+private func routeCoords(for trip: Trip) -> [CLLocationCoordinate2D] {
+    trip.orderedWaypoints.map(\.coordinate)
 }
-
-private func loadSnappedRouteCoords() -> [CLLocationCoordinate2D] {
-    guard let url = Bundle.main.url(forResource: "demo-route", withExtension: "geojson"),
-          let data = try? Data(contentsOf: url),
-          let fc = try? JSONDecoder().decode(OSRMGeoJSON.self, from: data),
-          let geom = fc.features.first?.geometry,
-          geom.type == "LineString" else { return [] }
-    return geom.coordinates.compactMap {
-        guard $0.count >= 2 else { return nil }
-        return CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0])
-    }
-}
-
-// MARK: - Marker icon (cream disc + brown ring + warm-tomato dot)
-
-private func makeWaypointIcon() -> UIImage {
-    let size = CGSize(width: 44, height: 44)
-    let renderer = UIGraphicsImageRenderer(size: size)
-    return renderer.image { ctx in
-        let c = ctx.cgContext
-        c.setShadow(offset: CGSize(width: 0, height: 1.5), blur: 3,
-                    color: UIColor.black.withAlphaComponent(0.22).cgColor)
-        let outer = CGRect(x: 5, y: 5, width: 34, height: 34)
-        c.setFillColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0).cgColor)
-        c.fillEllipse(in: outer)
-        c.setShadow(offset: .zero, blur: 0, color: nil)
-        c.setStrokeColor(UIColor(red: 0.40, green: 0.30, blue: 0.16, alpha: 0.95).cgColor)
-        c.setLineWidth(1.6)
-        c.strokeEllipse(in: outer.insetBy(dx: 0.8, dy: 0.8))
-        c.setFillColor(UIColor(red: 0.78, green: 0.32, blue: 0.20, alpha: 1.0).cgColor)
-        c.fillEllipse(in: outer.insetBy(dx: 9, dy: 9))
-    }
-}
-
-private let waypointIcon = makeWaypointIcon()
 
 // MARK: - The view
 
 struct ExpeditionMapView: View {
     @Binding var camera: MapViewCamera
     let trip: Trip?
+    let selectedWaypointID: UUID?
+    let previewCoord: CLLocationCoordinate2D?
+    let previewName: String?
 
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {
             if let trip {
-                let routeCoords = loadSnappedRouteCoords()
-                if !routeCoords.isEmpty {
-                    let routeFeature = MLNPolylineFeature(coordinates: routeCoords,
-                                                          count: UInt(routeCoords.count))
+                let coords = routeCoords(for: trip)
+                if coords.count >= 2 {
+                    let routeFeature = MLNPolylineFeature(coordinates: coords, count: UInt(coords.count))
                     let routeSource = ShapeSource(identifier: "trip-route") { routeFeature }
 
                     LineStyleLayer(identifier: "route-casing", source: routeSource)
@@ -101,34 +67,78 @@ struct ExpeditionMapView: View {
                         .lineWidth(8.0).lineCap(.round).lineJoin(.round)
 
                     let c = trip.color.swiftUIColor
+                    // Dashed line = pendingSnap visual (no snap-to-road yet, by design).
                     LineStyleLayer(identifier: "route", source: routeSource)
                         .lineColor(UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0))
                         .lineWidth(4.0).lineCap(.round).lineJoin(.round).lineOpacity(0.92)
+                        .lineDashPattern([3.0, 2.0])
                 }
 
-                let markerFeatures = trip.orderedWaypoints.map { wp -> MLNPointFeature in
+                let ordered = trip.orderedWaypoints
+                let selectedSet = ordered.filter { $0.id == selectedWaypointID }
+                let unselectedSet = ordered.filter { $0.id != selectedWaypointID }
+
+                // Default-style markers (everyone except the selected one).
+                let unselectedFeatures = unselectedSet.map { wp -> MLNPointFeature in
                     let f = MLNPointFeature()
                     f.coordinate = wp.coordinate
                     f.attributes = ["name": wp.label ?? ""]
                     return f
                 }
-                let markersSource = ShapeSource(identifier: "trip-markers") { markerFeatures }
+                if !unselectedFeatures.isEmpty {
+                    let src = ShapeSource(identifier: "trip-markers-default") { unselectedFeatures }
+                    SymbolStyleLayer(identifier: "trip-marker-default-icons", source: src)
+                        .iconImage(WaypointIcons.committedDefault)
+                        .iconAllowsOverlap(true)
+                        .iconAnchor("center")
+                    SymbolStyleLayer(identifier: "trip-marker-default-labels", source: src)
+                        .textFontNames(["Noto Sans Regular"])
+                        .textFontSize(13)
+                        .textColor(UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0))
+                        .textHaloColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0))
+                        .textHaloWidth(1.6)
+                        .text(featurePropertyNamed: "name")
+                        .textAnchor("top")
+                        .textOffset(CGVector(dx: 0, dy: 1.4))
+                        .textAllowsOverlap(false)
+                }
 
-                SymbolStyleLayer(identifier: "trip-marker-icons", source: markersSource)
-                    .iconImage(waypointIcon)
+                // Selected (sobresaliente) marker — rendered on top, bigger.
+                let selectedFeatures = selectedSet.map { wp -> MLNPointFeature in
+                    let f = MLNPointFeature()
+                    f.coordinate = wp.coordinate
+                    f.attributes = ["name": wp.label ?? ""]
+                    return f
+                }
+                if !selectedFeatures.isEmpty {
+                    let src = ShapeSource(identifier: "trip-markers-selected") { selectedFeatures }
+                    SymbolStyleLayer(identifier: "trip-marker-selected-icons", source: src)
+                        .iconImage(WaypointIcons.committedSelected)
+                        .iconAllowsOverlap(true)
+                        .iconAnchor("center")
+                    SymbolStyleLayer(identifier: "trip-marker-selected-labels", source: src)
+                        .textFontNames(["Noto Sans Bold"])
+                        .textFontSize(14)
+                        .textColor(UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0))
+                        .textHaloColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0))
+                        .textHaloWidth(1.8)
+                        .text(featurePropertyNamed: "name")
+                        .textAnchor("top")
+                        .textOffset(CGVector(dx: 0, dy: 1.8))
+                        .textAllowsOverlap(false)
+                }
+            }
+
+            // Preview pin (investigating a search result, not yet added).
+            if let pc = previewCoord {
+                let pf = MLNPointFeature()
+                pf.coordinate = pc
+                pf.attributes = ["name": previewName ?? ""]
+                let src = ShapeSource(identifier: "preview-pin") { pf }
+                SymbolStyleLayer(identifier: "preview-pin-icon", source: src)
+                    .iconImage(WaypointIcons.preview)
                     .iconAllowsOverlap(true)
                     .iconAnchor("center")
-
-                SymbolStyleLayer(identifier: "trip-marker-labels", source: markersSource)
-                    .textFontNames(["Noto Sans Regular"])
-                    .textFontSize(13)
-                    .textColor(UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0))
-                    .textHaloColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0))
-                    .textHaloWidth(1.6)
-                    .text(featurePropertyNamed: "name")
-                    .textAnchor("top")
-                    .textOffset(CGVector(dx: 0, dy: 1.2))
-                    .textAllowsOverlap(false)
             }
         }
     }
