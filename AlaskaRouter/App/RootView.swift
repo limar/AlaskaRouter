@@ -1,24 +1,26 @@
 import SwiftUI
+import SwiftData
 import MapLibreSwiftUI
 import CoreLocation
 
-/// The single root screen: full-screen map with floating chrome on top.
-/// v1 architecture — see SPIKE_FINDINGS.md and memory.
+/// The single root screen: full-screen map + floating chrome + bottom sheet.
 struct RootView: View {
+    @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
+
     @State private var searchQuery: String = ""
     @State private var barState: FloatingSearchBarState = LaunchArgs.initialBarState
     @State private var searchService = SearchService(db: PlacesDB(bundleResource: "alaska-places"))
+    @State private var bottomSheetDetent: TripSheetDetent = LaunchArgs.initialTripDetent
 
-    /// Mid-route default; gets overwritten when a search result is tapped.
     @State private var mapCamera: MapViewCamera = .center(
         .init(latitude: 63.95, longitude: -148.9), zoom: 8.5
     )
 
-    private let activeTripName: String = "Dalton Highway — North"
+    private var activeTrip: Trip? { trips.first }
 
     var body: some View {
         ZStack(alignment: .top) {
-            ExpeditionMapView(camera: $mapCamera)
+            ExpeditionMapView(camera: $mapCamera, trip: activeTrip)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -28,9 +30,8 @@ struct RootView: View {
                         get: { searchService.query },
                         set: { searchService.setQuery($0) }
                     ),
-                    activeTripName: activeTripName
+                    activeTripName: activeTrip?.name ?? "(no trip)"
                 )
-
                 if barState == .expanded && !searchService.results.isEmpty {
                     SearchResultsView(
                         results: searchService.results,
@@ -38,8 +39,16 @@ struct RootView: View {
                         onSelect: handleResultSelected
                     )
                 }
-
                 Spacer(minLength: 0)
+            }
+
+            if let trip = activeTrip {
+                TripBottomSheet(
+                    trip: trip,
+                    detent: $bottomSheetDetent,
+                    onTapWaypoint: flyToWaypoint
+                )
+                .ignoresSafeArea(.container, edges: .bottom)
             }
         }
         .onAppear {
@@ -50,21 +59,28 @@ struct RootView: View {
     }
 
     private func handleResultSelected(_ result: SearchResult) {
-        let zoom: Double = zoomForCategory(result.category)
+        let zoom = zoomForCategory(result.category)
         withAnimation(.smooth(duration: 0.5)) {
             mapCamera = .center(result.coord, zoom: zoom)
             barState = .collapsed
-            searchService.setQuery("")          // dismiss results
+            searchService.setQuery("")
+        }
+    }
+
+    private func flyToWaypoint(_ wp: Waypoint) {
+        withAnimation(.smooth(duration: 0.5)) {
+            mapCamera = .center(wp.coordinate, zoom: 12.0)
+            bottomSheetDetent = .collapsed
         }
     }
 
     private func zoomForCategory(_ category: String) -> Double {
         switch category {
         case "settlement_major":             return 11.5
-        case "settlement", "settlement_major", "locality": return 12.5
+        case "settlement", "locality":       return 12.5
         case "airfield":                     return 13.0
         case "peak", "glacier", "volcano":   return 11.0
-        default:                              return 13.0
+        default:                             return 13.0
         }
     }
 }

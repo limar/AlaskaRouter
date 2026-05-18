@@ -19,6 +19,15 @@ enum LaunchArgs {
         let raw = UserDefaults.standard.string(forKey: "prefillQuery") ?? ""
         return raw.isEmpty ? nil : raw
     }
+
+    /// Force the trip bottom sheet to a particular detent for screenshots.
+    static var initialTripDetent: TripSheetDetent {
+        switch UserDefaults.standard.string(forKey: "tripDetent") ?? "overview" {
+        case "collapsed": return .collapsed
+        case "full":      return .full
+        default:          return .overview
+        }
+    }
 }
 
 enum FloatingSearchBarState: String {

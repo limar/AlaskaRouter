@@ -15,6 +15,7 @@ targets:
     platform: iOS
     sources:
       - path: AlaskaRouter/App
+      - path: AlaskaRouter/Data
       - path: AlaskaRouter/Map
       - path: AlaskaRouter/Search
       - path: AlaskaRouter/UI
