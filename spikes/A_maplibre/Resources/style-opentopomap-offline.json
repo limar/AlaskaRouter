@@ -5,7 +5,7 @@
     "approach": "Path A locked: OpenTopoMap raster basemap loaded from bundled PMTiles file (offline), vector route + markers added programmatically by ContentView on top.",
     "attribution": "Map data: © OpenStreetMap contributors. Tiles: © OpenTopoMap (CC-BY-SA)."
   },
-  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  "glyphs": "__GLYPHS_URL_BASE__/{fontstack}/{range}.pbf",
   "sources": {
     "basemap": {
       "type": "raster",

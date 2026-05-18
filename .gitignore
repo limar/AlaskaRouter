@@ -28,3 +28,6 @@ spikes/B_fts5/data/
 .idea/
 .vscode/
 spikes/A_maplibre/Resources-secrets/
+
+# Claude Code scheduled-task state
+.claude/scheduled_tasks.lock

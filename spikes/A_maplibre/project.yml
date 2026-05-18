@@ -18,6 +18,9 @@ targets:
       - path: Resources
       - path: Resources-secrets
         optional: true
+      - path: glyphs
+        type: folder
+        optional: true
     settings:
       base:
         SWIFT_VERSION: "6.0"
