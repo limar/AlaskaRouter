@@ -1,9 +1,9 @@
 {
   "version": 8,
-  "name": "AlaskaRouter — Expedition v2 (real-paper atlas)",
+  "name": "AlaskaRouter — Expedition v3 (taiga + tundra)",
   "metadata": {
-    "palette": "warm parchment + terrain hillshade + vibrant roads + letterpress regions",
-    "reference": "Spike C v2 — driven by the mockup that the spike v1 failed to match"
+    "palette": "warm parchment + saturated boreal forest + softer hillshade + wetland/tundra/rock detail",
+    "reference": "Spike C v3 — v2 was all tundra/glacier; v3 surfaces taiga"
   },
   "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   "sources": {
@@ -25,35 +25,126 @@
   "layers": [
     { "id": "background",
       "type": "background",
-      "paint": { "background-color": "#f0e8d2" } },
+      "paint": { "background-color": "#ecdfb8" } },
 
-    { "id": "hillshade",
-      "type": "hillshade",
-      "source": "terrain",
+    { "id": "park-national-forest",
+      "type": "fill",
+      "source": "omt", "source-layer": "park",
+      "filter": ["any",
+                  ["==", ["get", "class"], "national_forest"],
+                  ["==", ["get", "class"], "state_forest"]],
       "paint": {
-        "hillshade-exaggeration": 0.65,
-        "hillshade-shadow-color": "#7a5a30",
-        "hillshade-highlight-color": "#fffaee",
-        "hillshade-accent-color": "#b48b54",
-        "hillshade-illumination-direction": 315
+        "fill-color": "#5a9047",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.78, 8, 0.85, 14, 0.9]
       } },
 
-    { "id": "landcover-forest",
+    { "id": "park-wilderness",
+      "type": "fill",
+      "source": "omt", "source-layer": "park",
+      "filter": ["any",
+                  ["==", ["get", "class"], "wilderness_area"],
+                  ["==", ["get", "class"], "wilderness_study_area"],
+                  ["==", ["get", "class"], "nature_reserve"],
+                  ["==", ["get", "class"], "national_wildlife_refuge"]],
+      "paint": {
+        "fill-color": "#6ba551",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.72, 8, 0.78, 14, 0.85]
+      } },
+
+    { "id": "park-national",
+      "type": "fill",
+      "source": "omt", "source-layer": "park",
+      "filter": ["any",
+                  ["==", ["get", "class"], "national_park"],
+                  ["==", ["get", "class"], "national_preserve"],
+                  ["==", ["get", "class"], "national_monument"],
+                  ["==", ["get", "class"], "national_recreation_area"],
+                  ["==", ["get", "class"], "national_conservation_area"],
+                  ["==", ["get", "class"], "national_historical_park"]],
+      "paint": {
+        "fill-color": "#83b86b",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.65, 8, 0.72, 14, 0.82]
+      } },
+
+    { "id": "park-state-protected",
+      "type": "fill",
+      "source": "omt", "source-layer": "park",
+      "filter": ["any",
+                  ["==", ["get", "class"], "state_park"],
+                  ["==", ["get", "class"], "state_recreation_area"],
+                  ["==", ["get", "class"], "state_recreation_river"],
+                  ["==", ["get", "class"], "state_public_use_area"],
+                  ["==", ["get", "class"], "protected_area"],
+                  ["==", ["get", "class"], "wild_and_scenic_river"]],
+      "paint": {
+        "fill-color": "#9bc77f",
+        "fill-opacity": 0.7
+      } },
+
+    { "id": "park-game-refuge",
+      "type": "fill",
+      "source": "omt", "source-layer": "park",
+      "filter": ["any",
+                  ["==", ["get", "class"], "wildlife_sanctuary"],
+                  ["==", ["get", "class"], "state_game_refuge"],
+                  ["==", ["get", "class"], "state_game_sanctuary"],
+                  ["==", ["get", "class"], "state_moose_range"]],
+      "paint": {
+        "fill-color": "#b5cd83",
+        "fill-opacity": 0.62
+      } },
+
+    { "id": "landcover-rock",
+      "type": "fill",
+      "source": "omt", "source-layer": "landcover",
+      "filter": ["==", ["get", "class"], "rock"],
+      "paint": { "fill-color": "#bda788", "fill-opacity": 0.7 } },
+
+    { "id": "landcover-sand",
+      "type": "fill",
+      "source": "omt", "source-layer": "landcover",
+      "filter": ["==", ["get", "class"], "sand"],
+      "paint": { "fill-color": "#e8d49a", "fill-opacity": 0.75 } },
+
+    { "id": "landcover-farmland",
+      "type": "fill",
+      "source": "omt", "source-layer": "landcover",
+      "filter": ["==", ["get", "class"], "farmland"],
+      "paint": { "fill-color": "#d8dd8a", "fill-opacity": 0.6 } },
+
+    { "id": "landcover-grass-tundra",
+      "type": "fill",
+      "source": "omt", "source-layer": "landcover",
+      "filter": ["==", ["get", "class"], "grass"],
+      "paint": { "fill-color": "#c4cf7c", "fill-opacity": 0.7 } },
+
+    { "id": "landcover-wood",
       "type": "fill",
       "source": "omt", "source-layer": "landcover",
       "filter": ["any",
                   ["==", ["get", "class"], "wood"],
                   ["==", ["get", "class"], "forest"]],
       "paint": {
-        "fill-color": "#a6bf7e",
-        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.45, 8, 0.7]
+        "fill-color": "#6ba551",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.75, 6, 0.85, 14, 0.95]
       } },
 
-    { "id": "landcover-grass",
+    { "id": "landuse-forest",
+      "type": "fill",
+      "source": "omt", "source-layer": "landuse",
+      "filter": ["any",
+                  ["==", ["get", "class"], "forest"],
+                  ["==", ["get", "class"], "wood"]],
+      "paint": {
+        "fill-color": "#6ba551",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.75, 12, 0.9]
+      } },
+
+    { "id": "landcover-wetland",
       "type": "fill",
       "source": "omt", "source-layer": "landcover",
-      "filter": ["==", ["get", "class"], "grass"],
-      "paint": { "fill-color": "#cdd49e", "fill-opacity": 0.55 } },
+      "filter": ["==", ["get", "class"], "wetland"],
+      "paint": { "fill-color": "#a8c489", "fill-opacity": 0.65 } },
 
     { "id": "landcover-ice",
       "type": "fill",
@@ -62,25 +153,10 @@
                   ["==", ["get", "class"], "ice"],
                   ["==", ["get", "subclass"], "glacier"]],
       "paint": {
-        "fill-color": "#f4f7f8",
-        "fill-outline-color": "#a8b9c2",
-        "fill-opacity": 0.9
+        "fill-color": "#e0e9ec",
+        "fill-outline-color": "#9eb4be",
+        "fill-opacity": 0.92
       } },
-
-    { "id": "landcover-sand",
-      "type": "fill",
-      "source": "omt", "source-layer": "landcover",
-      "filter": ["==", ["get", "class"], "sand"],
-      "paint": { "fill-color": "#ead8a4", "fill-opacity": 0.7 } },
-
-    { "id": "landuse-park",
-      "type": "fill",
-      "source": "omt", "source-layer": "landuse",
-      "filter": ["any",
-                  ["==", ["get", "class"], "park"],
-                  ["==", ["get", "class"], "nature_reserve"],
-                  ["==", ["get", "class"], "national_park"]],
-      "paint": { "fill-color": "#bdd09a", "fill-opacity": 0.55 } },
 
     { "id": "landuse-urban",
       "type": "fill",
@@ -95,8 +171,8 @@
       "type": "fill",
       "source": "omt", "source-layer": "water",
       "paint": {
-        "fill-color": "#9dbed1",
-        "fill-outline-color": "#6f9ab2"
+        "fill-color": "#8ab4cc",
+        "fill-outline-color": "#5c8b9f"
       } },
 
     { "id": "waterway-stream",
@@ -108,8 +184,8 @@
                   ["==", ["get", "class"], "drain"],
                   ["==", ["get", "class"], "ditch"]],
       "paint": {
-        "line-color": "#9dbed1",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.3, 12, 0.8, 16, 1.6]
+        "line-color": "#8ab4cc",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.3, 12, 0.9, 16, 1.6]
       } },
 
     { "id": "waterway-river",
@@ -120,8 +196,8 @@
                   ["==", ["get", "class"], "river"],
                   ["==", ["get", "class"], "canal"]],
       "paint": {
-        "line-color": "#6f9ab2",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 10, 1.8, 14, 3.2]
+        "line-color": "#5c8b9f",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.7, 10, 2.0, 14, 3.4]
       } },
 
     { "id": "aeroway-area",
@@ -129,7 +205,18 @@
       "source": "omt", "source-layer": "aeroway",
       "filter": ["any", ["==", ["geometry-type"], "Polygon"], ["==", ["geometry-type"], "MultiPolygon"]],
       "minzoom": 10,
-      "paint": { "fill-color": "#d7c79f", "fill-opacity": 0.75 } },
+      "paint": { "fill-color": "#d7c79f", "fill-opacity": 0.8 } },
+
+    { "id": "hillshade",
+      "type": "hillshade",
+      "source": "terrain",
+      "paint": {
+        "hillshade-exaggeration": 0.5,
+        "hillshade-shadow-color": "rgba(78, 50, 18, 0.32)",
+        "hillshade-highlight-color": "rgba(255, 250, 230, 0.22)",
+        "hillshade-accent-color": "rgba(140, 100, 55, 0.18)",
+        "hillshade-illumination-direction": 315
+      } },
 
     { "id": "road-track-casing",
       "type": "line",
@@ -279,9 +366,9 @@
         "text-max-angle": 30
       },
       "paint": {
-        "text-color": "#2c4d62",
+        "text-color": "#1f3d52",
         "text-halo-color": "#f0e8d2",
-        "text-halo-width": 1.4
+        "text-halo-width": 1.5
       } },
 
     { "id": "waterway-name",
@@ -296,9 +383,9 @@
         "symbol-placement": "line"
       },
       "paint": {
-        "text-color": "#2c4d62",
+        "text-color": "#1f3d52",
         "text-halo-color": "#f0e8d2",
-        "text-halo-width": 1.2
+        "text-halo-width": 1.4
       } },
 
     { "id": "mountain-peak",
@@ -313,9 +400,9 @@
         "text-offset": [0, 0.6]
       },
       "paint": {
-        "text-color": "#4a2f12",
+        "text-color": "#3a230d",
         "text-halo-color": "#f0e8d2",
-        "text-halo-width": 1.6
+        "text-halo-width": 1.7
       } },
 
     { "id": "place-village",
@@ -329,9 +416,9 @@
         "text-size": ["interpolate", ["linear"], ["zoom"], 9, 10, 14, 13]
       },
       "paint": {
-        "text-color": "#4a3a22",
+        "text-color": "#3a2b18",
         "text-halo-color": "#f0e8d2",
-        "text-halo-width": 1.4
+        "text-halo-width": 1.6
       } },
 
     { "id": "place-town",
@@ -345,9 +432,9 @@
         "text-size": ["interpolate", ["linear"], ["zoom"], 6, 12, 13, 16]
       },
       "paint": {
-        "text-color": "#2c2316",
+        "text-color": "#1f1810",
         "text-halo-color": "#f0e8d2",
-        "text-halo-width": 1.7
+        "text-halo-width": 1.9
       } },
 
     { "id": "place-city",
@@ -362,9 +449,9 @@
         "text-letter-spacing": 0.04
       },
       "paint": {
-        "text-color": "#1f1a10",
+        "text-color": "#15110a",
         "text-halo-color": "#f0e8d2",
-        "text-halo-width": 2.2
+        "text-halo-width": 2.4
       } },
 
     { "id": "place-region-letterpress",
@@ -383,10 +470,10 @@
         "text-max-width": 9
       },
       "paint": {
-        "text-color": "#6a5328",
+        "text-color": "#5c4520",
         "text-halo-color": "#f0e8d2",
         "text-halo-width": 2.5,
-        "text-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.55, 6, 0.5, 9, 0.35]
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 6, 0.42, 9, 0.3]
       } },
 
     { "id": "place-country-letterpress",

@@ -16,6 +16,8 @@ targets:
     sources:
       - path: Sources
       - path: Resources
+      - path: Resources-secrets
+        optional: true
     settings:
       base:
         SWIFT_VERSION: "6.0"

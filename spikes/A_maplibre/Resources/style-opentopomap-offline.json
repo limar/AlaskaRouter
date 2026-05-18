@@ -1,0 +1,23 @@
+{
+  "version": 8,
+  "name": "OpenTopoMap offline (Denali test pack) + vector overlay",
+  "metadata": {
+    "approach": "Path A locked: OpenTopoMap raster basemap loaded from bundled PMTiles file (offline), vector route + markers added programmatically by ContentView on top.",
+    "attribution": "Map data: © OpenStreetMap contributors. Tiles: © OpenTopoMap (CC-BY-SA)."
+  },
+  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  "sources": {
+    "basemap": {
+      "type": "raster",
+      "url": "__BASEMAP_URL__",
+      "tileSize": 256,
+      "minzoom": 4,
+      "maxzoom": 10,
+      "attribution": "© OpenTopoMap (CC-BY-SA), © OpenStreetMap"
+    }
+  },
+  "layers": [
+    { "id": "bg", "type": "background", "paint": { "background-color": "#f0e8d2" } },
+    { "id": "basemap", "type": "raster", "source": "basemap" }
+  ]
+}
