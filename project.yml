@@ -16,6 +16,7 @@ targets:
     sources:
       - path: AlaskaRouter/App
       - path: AlaskaRouter/Map
+      - path: AlaskaRouter/Search
       - path: AlaskaRouter/UI
       - path: AlaskaRouter/Resources
       - path: AlaskaRouter/glyphs

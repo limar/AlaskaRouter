@@ -12,6 +12,13 @@ enum LaunchArgs {
         let raw = UserDefaults.standard.string(forKey: "barState") ?? "expanded"
         return FloatingSearchBarState(rawValue: raw) ?? .expanded
     }
+
+    /// Pre-fill the search query at launch (for screenshot-driven evaluation
+    /// since the simulator doesn't easily accept synthesized keyboard input).
+    static var prefillQuery: String? {
+        let raw = UserDefaults.standard.string(forKey: "prefillQuery") ?? ""
+        return raw.isEmpty ? nil : raw
+    }
 }
 
 enum FloatingSearchBarState: String {

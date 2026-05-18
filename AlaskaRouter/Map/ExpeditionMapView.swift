@@ -99,10 +99,7 @@ private let waypointIcon = makeWaypointIcon()
 // MARK: - The view
 
 struct ExpeditionMapView: View {
-    // Center on Healy (mid-route) at a planning zoom; lets the bundled Denali pack show off.
-    @State private var camera: MapViewCamera = .center(
-        .init(latitude: 63.95, longitude: -148.9), zoom: 8.5
-    )
+    @Binding var camera: MapViewCamera
 
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {

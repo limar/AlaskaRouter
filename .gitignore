@@ -35,3 +35,5 @@ spikes/A_maplibre/Resources-secrets/
 
 # Claude Code scheduled-task state
 .claude/scheduled_tasks.lock
+AlaskaRouter/Resources/*.sqlite-shm
+AlaskaRouter/Resources/*.sqlite-wal
