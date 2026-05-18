@@ -1,0 +1,22 @@
+{
+  "version": 8,
+  "name": "AlaskaRouter base style (OpenTopoMap raster + offline glyphs)",
+  "metadata": {
+    "attribution": "Map data: © OpenStreetMap contributors. Tiles: © OpenTopoMap (CC-BY-SA)."
+  },
+  "glyphs": "__GLYPHS_URL_BASE__/{fontstack}/{range}.pbf",
+  "sources": {
+    "basemap": {
+      "type": "raster",
+      "url": "__BASEMAP_URL__",
+      "tileSize": 256,
+      "minzoom": 4,
+      "maxzoom": 14,
+      "attribution": "© OpenTopoMap (CC-BY-SA), © OpenStreetMap"
+    }
+  },
+  "layers": [
+    { "id": "bg", "type": "background", "paint": { "background-color": "#f0e8d2" } },
+    { "id": "basemap", "type": "raster", "source": "basemap" }
+  ]
+}

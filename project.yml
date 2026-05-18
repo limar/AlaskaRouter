@@ -1,0 +1,38 @@
+name: AlaskaRouter
+options:
+  bundleIdPrefix: dev.alaskarouter
+  developmentLanguage: en
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  MapLibreSwiftUI:
+    url: https://github.com/maplibre/swiftui-dsl
+    branch: main
+targets:
+  AlaskaRouter:
+    type: application
+    platform: iOS
+    sources:
+      - path: AlaskaRouter/App
+      - path: AlaskaRouter/Map
+      - path: AlaskaRouter/UI
+      - path: AlaskaRouter/Resources
+      - path: AlaskaRouter/glyphs
+        type: folder
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alaskarouter.AlaskaRouter
+        GENERATE_INFOPLIST_FILE: "YES"
+    dependencies:
+      - package: MapLibreSwiftUI
+        product: MapLibreSwiftUI
+      - package: MapLibreSwiftUI
+        product: MapLibreSwiftDSL
