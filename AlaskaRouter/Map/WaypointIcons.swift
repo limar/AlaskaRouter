@@ -15,9 +15,21 @@ enum WaypointIconStyle {
 
 enum WaypointIcons {
 
-    static let committedDefault: UIImage = make(style: .committedDefault)
-    static let committedSelected: UIImage = make(style: .committedSelected)
-    static let preview: UIImage = make(style: .preview)
+    static let committedDefault: UIImage = pngBacked(make(style: .committedDefault))
+    static let committedSelected: UIImage = pngBacked(make(style: .committedSelected))
+    static let preview: UIImage = pngBacked(make(style: .preview))
+
+    /// `UIGraphicsImageRenderer` produces images whose `cgImage?.dataProvider?.data`
+    /// is often unavailable (it's a render-target IOSurface, not raw bytes).
+    /// MapLibreSwiftDSL keys icon registrations by `UIImage.sha256()`, which silently
+    /// returns "" when `dataProvider.data` is nil — two such icons collide on name ""
+    /// and the second clobbers the first in `style.setImage(_:forName:)`. Decoding
+    /// through PNG guarantees a backing dataProvider with raw bytes, hence a unique hash.
+    private static func pngBacked(_ image: UIImage) -> UIImage {
+        guard let png = image.pngData(),
+              let cg = UIImage(data: png)?.cgImage else { return image }
+        return UIImage(cgImage: cg, scale: image.scale, orientation: image.imageOrientation)
+    }
 
     private static func make(style: WaypointIconStyle) -> UIImage {
         let (size, ringWidth, shadowAlpha, shadowBlur, fillRGB, ringRGB, dotRGB): (CGFloat, CGFloat, CGFloat, CGFloat, (CGFloat, CGFloat, CGFloat), (CGFloat, CGFloat, CGFloat), (CGFloat, CGFloat, CGFloat)) = {
