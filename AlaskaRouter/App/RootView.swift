@@ -43,6 +43,19 @@ struct RootView: View {
         isSearchFieldFocused || !searchService.query.isEmpty
     }
 
+    /// How far above the screen bottom the floating controls should sit, given
+    /// the current bottom-sheet detent. Always clears the sheet's collapsed
+    /// header; at .overview the sheet is taller so we lift further.
+    private var sheetClearance: CGFloat {
+        // Disappears entirely when isSearchActive (no sheet shown) — use the
+        // collapsed-equivalent clearance so the controls don't jump.
+        switch bottomSheetDetent {
+        case .collapsed: return 110
+        case .overview:  return UIScreen.main.bounds.height * 0.45 + 14
+        case .full:      return 0   // unused: controls hidden at .full
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             ExpeditionMapView(
@@ -118,6 +131,25 @@ struct RootView: View {
                 .ignoresSafeArea(.container, edges: .bottom)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // On-map controls (right edge, vertical) + scale (bottom-left).
+            // Both auto-hide when the sheet is at full detent (covers the map).
+            if bottomSheetDetent != .full {
+                VStack {
+                    Spacer()
+                    HStack(alignment: .bottom, spacing: 0) {
+                        ScaleIndicator(camera: mapCamera)
+                            .padding(.leading, 12)
+                            .padding(.bottom, sheetClearance)
+                        Spacer()
+                        MapControls(camera: $mapCamera)
+                            .padding(.trailing, 12)
+                            .padding(.bottom, sheetClearance)
+                    }
+                }
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+                .allowsHitTesting(!isSearchActive)   // don't compete with the search dim layer
             }
 
             if let added = recentlyAddedWaypoint {
@@ -309,8 +341,8 @@ struct RootView: View {
         withAnimation(.smooth(duration: 0.5)) {
             mapCamera = .center(wp.coordinate, zoom: 12.0)
             selectedWaypointID = wp.id
-            bottomSheetDetent = .collapsed
             previewedResult = nil
+            // Leave bottomSheetDetent alone — user keeps control of the sheet's size.
         }
     }
 
