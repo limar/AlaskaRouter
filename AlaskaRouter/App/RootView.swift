@@ -21,6 +21,7 @@ struct RootView: View {
     @State private var selectedWaypointID: UUID?
     @State private var previewedResult: SearchResult?
     @State private var recentlyAddedWaypoint: Waypoint?
+    @State private var isSearchFieldFocused: Bool = false
 
     @State private var mapCamera: MapViewCamera = .center(
         .init(latitude: 63.95, longitude: -148.9), zoom: 8.5
@@ -36,6 +37,12 @@ struct RootView: View {
 
     private var activeTrip: Trip? { trips.first }
 
+    /// "Search mode active" — field is focused OR there's a non-empty query.
+    /// We hide the bottom sheet and dim/hold the map during this state.
+    private var isSearchActive: Bool {
+        isSearchFieldFocused || !searchService.query.isEmpty
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             ExpeditionMapView(
@@ -48,6 +55,16 @@ struct RootView: View {
             )
             .ignoresSafeArea()
 
+            // Tap-outside-to-dismiss layer. Only active while searching;
+            // intercepts taps that don't hit the bar or the result rows.
+            if isSearchActive {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissSearch() }
+                    .transition(.opacity)
+            }
+
             VStack(spacing: 0) {
                 FloatingSearchBar(
                     state: $barState,
@@ -55,9 +72,13 @@ struct RootView: View {
                         get: { searchService.query },
                         set: { searchService.setQuery($0) }
                     ),
+                    isFieldFocused: $isSearchFieldFocused,
                     activeTripName: activeTrip?.name ?? "(no trip)"
                 )
-                if barState == .expanded && !searchService.results.isEmpty {
+                if barState == .expanded
+                    && !searchService.results.isEmpty
+                    && previewedResult == nil
+                {
                     SearchResultsView(
                         results: searchService.results,
                         parsed: searchService.parsed,
@@ -67,6 +88,7 @@ struct RootView: View {
                 }
                 Spacer(minLength: 0)
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // Preview callout (floating mid-screen near the previewed pin).
             if let preview = previewedResult {
@@ -86,7 +108,7 @@ struct RootView: View {
                 .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
 
-            if let trip = activeTrip {
+            if let trip = activeTrip, !isSearchActive {
                 TripBottomSheet(
                     trip: trip,
                     detent: $bottomSheetDetent,
@@ -94,6 +116,8 @@ struct RootView: View {
                     onWaypointDeleted: handleSheetWaypointDeleted
                 )
                 .ignoresSafeArea(.container, edges: .bottom)
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             if let added = recentlyAddedWaypoint {
@@ -188,14 +212,25 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Search dismissal
+
+    /// Tap-outside-to-dismiss. Blurs the field and (if query is empty)
+    /// collapses the bar to the pill state.
+    private func dismissSearch() {
+        isSearchFieldFocused = false
+        if searchService.query.isEmpty {
+            withAnimation(.smooth(duration: 0.25)) { barState = .collapsed }
+        }
+    }
+
     // MARK: - Actions: preview (research-first)
 
     private func handlePreviewSelected(_ result: SearchResult) {
+        // Dismiss the keyboard so the user can see the callout + map.
+        isSearchFieldFocused = false
         withAnimation(.smooth(duration: 0.45)) {
             previewedResult = result
             mapCamera = .center(result.coord, zoom: zoomForCategory(result.category))
-            // Keep search bar expanded behind callout so user can scan other results easily.
-            // Selection isn't applied here — the result isn't committed yet.
             selectedWaypointID = nil
         }
     }
@@ -209,6 +244,7 @@ struct RootView: View {
             into: trip,
             using: modelContext
         )
+        isSearchFieldFocused = false
         withAnimation(.smooth(duration: 0.45)) {
             previewedResult = nil
             barState = .collapsed
@@ -236,6 +272,7 @@ struct RootView: View {
             into: trip,
             using: modelContext
         )
+        isSearchFieldFocused = false
         withAnimation(.smooth(duration: 0.45)) {
             barState = .collapsed
             searchService.setQuery("")

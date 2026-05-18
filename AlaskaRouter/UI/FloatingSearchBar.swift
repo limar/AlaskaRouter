@@ -1,20 +1,25 @@
 // Floating search bar — pill collapse aesthetic (locked v1, 2026-05-18).
 //
 // Two states:
-//   - .expanded: full-width Safari-style pill with search field, mic, profile chip
+//   - .expanded:  full Safari-style pill with search field, mic, profile chip.
+//                  When the field is focused, a "Cancel" button replaces the
+//                  profile chip — tap it to blur the field and collapse the
+//                  bar back to pill form.
 //   - .collapsed: thin oval pill below the Dynamic Island, showing the active
-//     trip name + chevron — same pattern Safari uses for its address bar.
+//                  trip name + chevron. Tap to re-expand.
 //
-// Top placement relies on the parent NOT calling `.ignoresSafeArea()` so the
-// inset accounts for status bar + Dynamic Island. The map underneath calls
-// `.ignoresSafeArea()` on itself so it still fills the screen.
+// Top placement uses .ignoresSafeArea(.keyboard, edges: .bottom) so the bar
+// is not shoved up when the keyboard appears.
 
 import SwiftUI
 
 struct FloatingSearchBar: View {
     @Binding var state: FloatingSearchBarState
     @Binding var query: String
+    @Binding var isFieldFocused: Bool   // mirrors @FocusState outward for RootView
     let activeTripName: String
+
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,6 +31,12 @@ struct FloatingSearchBar: View {
         }
         .padding(.top, 8)
         .padding(.horizontal, 14)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .onChange(of: fieldFocused) { _, new in isFieldFocused = new }
+        .onChange(of: isFieldFocused) { _, new in
+            // Allow the parent to forcibly dismiss the keyboard.
+            if !new && fieldFocused { fieldFocused = false }
+        }
     }
 
     private var expandedPill: some View {
@@ -36,21 +47,33 @@ struct FloatingSearchBar: View {
             TextField("Search places, peaks, fuel…", text: $query)
                 .font(.system(size: 16, weight: .regular))
                 .textFieldStyle(.plain)
+                .focused($fieldFocused)
                 .submitLabel(.search)
             Spacer(minLength: 0)
-            Image(systemName: "mic.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Circle()
-                .fill(Color.orange.opacity(0.85))
-                .frame(width: 24, height: 24)
-                .overlay(Text("AK").font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
+            if fieldFocused || !query.isEmpty {
+                Button(action: cancelSearch) {
+                    Text("Cancel")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Circle()
+                    .fill(Color.orange.opacity(0.85))
+                    .frame(width: 24, height: 24)
+                    .overlay(Text("AK").font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(.thinMaterial, in: Capsule(style: .continuous))
         .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.08), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+        .contentShape(Capsule())
+        .onTapGesture { fieldFocused = true }
     }
 
     private var collapsedPill: some View {
@@ -74,6 +97,21 @@ struct FloatingSearchBar: View {
         .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
         .frame(maxWidth: 240)
         .frame(maxWidth: .infinity, alignment: .center)
-        .onTapGesture { withAnimation(.smooth(duration: 0.25)) { state = .expanded } }
+        .onTapGesture {
+            withAnimation(.smooth(duration: 0.25)) { state = .expanded }
+            // Defer focusing so the layout has time to settle.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                fieldFocused = true
+            }
+        }
+    }
+
+    private func cancelSearch() {
+        query = ""
+        fieldFocused = false
+        withAnimation(.smooth(duration: 0.25)) {
+            state = .collapsed
+        }
     }
 }
