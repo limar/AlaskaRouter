@@ -36,18 +36,18 @@ enum TripSheetDetent: CaseIterable {
     }
 }
 
-private enum SheetMode { case stops, trips }
+enum SheetMode { case stops, trips }
 
 struct TripBottomSheet: View {
     let trip: Trip
     @Binding var detent: TripSheetDetent
+    @Binding var mode: SheetMode
     let onTapWaypoint: (Waypoint) -> Void
     let onWaypointDeleted: (Waypoint) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var allTrips: [Trip]
     @GestureState private var dragOffset: CGFloat = 0
-    @State private var mode: SheetMode = LaunchArgs.startInTripsMode ? .trips : .stops
 
     // Rename alert
     @State private var renameAlertShown = false

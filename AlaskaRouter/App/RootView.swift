@@ -23,6 +23,7 @@ struct RootView: View {
     @State private var recentlyAddedWaypoint: Waypoint?
     @State private var isSearchFieldFocused: Bool = false
     @State private var showWelcome: Bool = WelcomeFlag.shouldShow
+    @State private var sheetMode: SheetMode = LaunchArgs.startInTripsMode ? .trips : .stops
     /// Observed only so SwiftUI re-renders when the active trip changes via
     /// TripStore.setActive. The actual resolution still happens in TripStore.
     @AppStorage("activeTripID") private var activeTripIDObserved: String = ""
@@ -130,6 +131,7 @@ struct RootView: View {
                 TripBottomSheet(
                     trip: trip,
                     detent: $bottomSheetDetent,
+                    mode: $sheetMode,
                     onTapWaypoint: handleSheetWaypointTap,
                     onWaypointDeleted: handleSheetWaypointDeleted
                 )
@@ -306,6 +308,7 @@ struct RootView: View {
             searchService.setQuery("")
             selectedWaypointID = new.id
             bottomSheetDetent = .overview
+            sheetMode = .stops
             recentlyAddedWaypoint = new
             mapCamera = .center(new.coordinate, zoom: zoomForCategory(result.category))
         }
@@ -333,6 +336,9 @@ struct RootView: View {
             searchService.setQuery("")
             selectedWaypointID = new.id
             bottomSheetDetent = .overview
+            // Force the sheet back to the stops list so the user sees their
+            // newly-added stop instead of the trip switcher.
+            sheetMode = .stops
             recentlyAddedWaypoint = new
             mapCamera = .center(new.coordinate, zoom: zoomForCategory(result.category))
         }

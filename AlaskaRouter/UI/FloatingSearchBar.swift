@@ -52,6 +52,12 @@ struct FloatingSearchBar: View {
                 .textFieldStyle(.plain)
                 .focused($fieldFocused)
                 .submitLabel(.search)
+                // Place names (Native, Russian, Athabaskan transliterations
+                // like "Kotsina") aren't English words; autocorrect mangles
+                // them mid-type. Disable correction + capitalization + spell.
+                .autocorrectionDisabled(true)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.default)
             Spacer(minLength: 0)
             // Mic + AK chip stay visible at all times. The user dismisses by
             // tapping outside the bar (RootView's dim layer → dismissSearch).
