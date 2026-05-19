@@ -24,7 +24,8 @@ struct RootView: View {
     @State private var isSearchFieldFocused: Bool = false
 
     @State private var mapCamera: MapViewCamera = .center(
-        .init(latitude: 63.95, longitude: -148.9), zoom: 8.5
+        .init(latitude: 63.95, longitude: -148.9),
+        zoom: LaunchArgs.initialZoom ?? 8.5
     )
 
     // Routing layer state

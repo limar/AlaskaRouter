@@ -10,8 +10,8 @@
       "type": "raster",
       "url": "__BASEMAP_URL__",
       "tileSize": 256,
-      "minzoom": 4,
-      "maxzoom": 14,
+      "minzoom": 0,
+      "maxzoom": 10,
       "attribution": "© OpenTopoMap (CC-BY-SA), © OpenStreetMap"
     }
   },

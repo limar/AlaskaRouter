@@ -29,6 +29,14 @@ enum LaunchArgs {
         }
     }
 
+    /// Override the initial camera zoom for screenshot evaluation. Useful for
+    /// verifying world-skeleton (low zoom) and Alaska detail (high zoom) at
+    /// boot without manual tapping. Reads `initialZoom` from UserDefaults.
+    static var initialZoom: Double? {
+        let raw = UserDefaults.standard.string(forKey: "initialZoom") ?? ""
+        return Double(raw)
+    }
+
     /// After prefill query results land, auto-trigger this action for screenshot
     /// capture: `preview:<index>` opens the preview callout; `add:<index>` runs
     /// the fast-add flow. Index is into the results list.

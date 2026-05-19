@@ -19,8 +19,8 @@ private let styleURL: URL = {
     guard let templateURL = Bundle.main.url(forResource: "style-base", withExtension: "json") else {
         fatalError("Missing style-base.json in bundle")
     }
-    guard let pmtilesURL = Bundle.main.url(forResource: "denali-otm", withExtension: "pmtiles") else {
-        fatalError("Missing denali-otm.pmtiles in bundle")
+    guard let pmtilesURL = Bundle.main.url(forResource: "alaska-pack", withExtension: "pmtiles") else {
+        fatalError("Missing alaska-pack.pmtiles in bundle")
     }
     let pmtilesRef = "pmtiles://\(pmtilesURL.absoluteString)"
     let glyphsBase = Bundle.main.bundleURL.appendingPathComponent("glyphs").absoluteString
