@@ -52,6 +52,12 @@ enum LaunchArgs {
         return Double(raw)
     }
 
+    /// Open the bottom sheet directly to its trips-switcher mode (Step 3 of
+    /// the new-trip flow). Dev-only — for screenshot evaluation.
+    static var startInTripsMode: Bool {
+        UserDefaults.standard.bool(forKey: "tripsMode")
+    }
+
     /// Seed the Parks-Highway demo trip on first launch. Dev-only — by default
     /// the app bootstraps an empty trip ("Trip from <today>") instead.
     static var seedDemoTrip: Bool {

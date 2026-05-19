@@ -23,6 +23,9 @@ struct RootView: View {
     @State private var recentlyAddedWaypoint: Waypoint?
     @State private var isSearchFieldFocused: Bool = false
     @State private var showWelcome: Bool = WelcomeFlag.shouldShow
+    /// Observed only so SwiftUI re-renders when the active trip changes via
+    /// TripStore.setActive. The actual resolution still happens in TripStore.
+    @AppStorage("activeTripID") private var activeTripIDObserved: String = ""
 
     @State private var mapCamera: MapViewCamera = .center(
         .init(latitude: 63.95, longitude: -148.9),
