@@ -58,14 +58,6 @@ enum LaunchArgs {
         UserDefaults.standard.bool(forKey: "tripsMode")
     }
 
-    /// AlaskaRouter-02pm — choose which route-line palette/width variant
-    /// the map should render. 0 = current production, 1+ = experimental.
-    /// Dev-only, will be removed once we lock the final palette.
-    static var routePaletteVariant: Int {
-        let raw = UserDefaults.standard.string(forKey: "routePaletteVariant") ?? "0"
-        return Int(raw) ?? 0
-    }
-
     /// Load the bundled demo-route.geojson as the initial snapped coords
     /// so screenshots show the real curvy snapped road line, not the
     /// straight-line dashed fallback. Dev-only.

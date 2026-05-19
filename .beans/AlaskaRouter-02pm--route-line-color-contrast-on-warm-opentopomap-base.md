@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-02pm
 title: Route line color contrast on warm OpenTopoMap basemap
-status: in-progress
+status: completed
 type: bug
 priority: normal
 created_at: 2026-05-19T14:07:11Z
-updated_at: 2026-05-19T14:10:43Z
+updated_at: 2026-05-19T18:59:12Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -22,3 +22,11 @@ Options:
 - [ ] Sketch 2–3 palette/width variants, screenshot at zoom 8, 9, 11
 - [ ] Confirm with user
 - [ ] Roll out
+
+
+
+## Summary of Changes
+
+Locked in v11 (two-stroke translucent highlighter / wash + core, zoom-interpolated with low-zoom floor) as the production route-line rendering. Stripped variants 0–10, the routePaletteVariant launch arg, and the variantColor helper. TripColor.swiftUIColor updated to the design-handoff palette so blocks pick up the same atlas-style hues used throughout the UI.
+
+Tweak point preserved: the washStops / coreStops dictionaries at the top of the per-block loop in ExpeditionMapView are documented as the place to adjust widths/floors in the future.

@@ -38,37 +38,8 @@ private let styleURL: URL = {
     }
 }()
 
-/// AlaskaRouter-02pm — palette variants. v0 returns the production
-/// TripColor RGB tuple. v1 returns a punchier saturated version.
-/// v2/v3 reuse v0 (their differentiation is in width/casing/outline).
-private func variantColor(for color: TripColor, variant: Int) -> TripColor.ColorTuple {
-    if variant == 1 || variant == 4 || variant == 5 || variant == 6 {
-        switch color {
-        case .amber:      return .init(red: 0.88, green: 0.20, blue: 0.10)   // crimson
-        case .teal:       return .init(red: 0.08, green: 0.42, blue: 0.78)   // cobalt
-        case .terracotta: return .init(red: 0.92, green: 0.50, blue: 0.10)   // burnt orange
-        case .sage:       return .init(red: 0.18, green: 0.55, blue: 0.20)   // forest green
-        case .indigo:     return .init(red: 0.42, green: 0.20, blue: 0.68)   // deep violet
-        case .slate:      return .init(red: 0.28, green: 0.28, blue: 0.32)   // dark gray
-        }
-    }
-    // v11: exact palette from the design-handoff mock (design/mocks/map.jsx).
-    if variant == 11 {
-        switch color {
-        case .amber:      return .init(red: 0.760, green: 0.255, blue: 0.047) // #c2410c burnt orange
-        case .teal:       return .init(red: 0.114, green: 0.306, blue: 0.847) // #1d4ed8 royal blue
-        case .terracotta: return .init(red: 0.882, green: 0.114, blue: 0.282) // #e11d48 rose
-        case .sage:       return .init(red: 0.082, green: 0.502, blue: 0.239) // #15803d forest green
-        case .indigo:     return .init(red: 0.427, green: 0.157, blue: 0.851) // #6d28d9 violet
-        case .slate:      return .init(red: 0.216, green: 0.255, blue: 0.318) // #374151 charcoal
-        }
-    }
-    return color.swiftUIColor
-}
-
 // Default route geometry: straight-line polyline between consecutive waypoints.
 // Used when no snap-to-road result is available (offline, awaiting routing, etc).
-// Rendered dashed in this case to signal "pendingSnap".
 private func straightRouteCoords(for trip: Trip) -> [CLLocationCoordinate2D] {
     trip.orderedWaypoints.map(\.coordinate)
 }
@@ -88,132 +59,61 @@ struct ExpeditionMapView: View {
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {
             if let trip {
-                // Prefer the snapped geometry if it's available and matches the trip.
-                let isSnapped = (snappedRouteCoords != nil)
-                let wholeCoords = snappedRouteCoords ?? straightRouteCoords(for: trip)
+                // Route geometry: snap-to-road from the Routing layer when
+                // available, straight-line between waypoints as the offline /
+                // pending-snap fallback (which is fine visually here — the
+                // wash + core treatment looks like a highlighter either way).
 
-                // AlaskaRouter-02pm — temporary variant switch. v0 is the
-                // current production look. v1..v5 are experiments.
-                let variant = LaunchArgs.routePaletteVariant
-                let drawCasing = !(variant == 4 || variant == 5 || variant == 6
-                                   || variant == 7 || variant == 8
-                                   || variant == 9 || variant == 10
-                                   || variant == 11)
-                let casingWidth: Float = (variant == 2) ? 7.0 : 8.0
-                let casingOpacity: Float = (variant == 2) ? 0.75 : 0.95
-                let blockLineWidth: Float = {
-                    switch variant {
-                    case 1: return 5.0
-                    case 2: return 6.0
-                    case 3: return 4.0
-                    case 4: return 6.0
-                    case 5: return 5.0
-                    case 6: return 7.0
-                    case 7: return 5.0          // highlighter
-                    case 8: return 5.0          // colored pencil (dashed grain)
-                    case 9: return 14.0         // fat highlighter
-                    case 10: return 18.0        // very fat highlighter
-                    default: return 4.0
-                    }
-                }()
-                let darkOutlineExtra: Float = {
-                    switch variant {
-                    case 3, 4: return 2.5
-                    case 6:    return 1.0       // hairline outline
-                    default:   return 0.0
-                    }
-                }()
-                let blockOpacity: Float = {
-                    switch variant {
-                    case 7: return 0.55         // highlighter — see-through
-                    case 8: return 0.78         // pencil — slightly less transparent
-                    case 9: return 0.45         // fat highlighter
-                    case 10: return 0.40        // very fat highlighter
-                    default: return 1.0
-                    }
-                }()
-                // Fine dash so the line reads as "grainy pencil" rather than
-                // a solid brushstroke. Only used for variant 8.
-                let pencilDashPattern: [Float]? = (variant == 8) ? [2.5, 0.7] : nil
+                // Per-block translucent two-stroke pattern (design-handoff
+                // mock, design/mocks/map.jsx). A wide soft "wash" plus a
+                // tighter inner "core", both the block color, both round-
+                // capped, no casing or outline — the road shows through.
+                //
+                // Widths scale with zoom; below z=8 we floor at a "good
+                // pencil line" so the route stays readable when zoomed out.
+                // *** Tweak these stops to adjust the route-line appearance. ***
+                let washStops = NSExpression(forConstantValue: [
+                    0.0:  8.0,    // floor: minimum wash width (z=0..8)
+                    8.0:  8.0,
+                    10.0: 14.0,
+                    13.0: 26.0,
+                    15.0: 44.0,
+                    17.0: 72.0,
+                ])
+                let coreStops = NSExpression(forConstantValue: [
+                    0.0:  4.0,    // floor: minimum core width (z=0..8)
+                    8.0:  4.0,
+                    10.0: 7.0,
+                    13.0: 14.0,
+                    15.0: 24.0,
+                    17.0: 40.0,
+                ])
+                let widthCurve = NSExpression(forConstantValue: 1.5)
 
-                // Single shared casing under the entire route (cream halo).
-                if drawCasing && wholeCoords.count >= 2 {
-                    let casingFeature = MLNPolylineFeature(coordinates: wholeCoords, count: UInt(wholeCoords.count))
-                    let casingSource = ShapeSource(identifier: "trip-route-casing") { casingFeature }
-                    LineStyleLayer(identifier: "route-casing", source: casingSource)
-                        .lineColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 0.95))
-                        .lineWidth(casingWidth).lineCap(.round).lineJoin(.round).lineOpacity(casingOpacity)
-                }
-
-                // One line layer per block, each in its block color. For
-                // single-block trips this yields exactly one layer in the
-                // trip's primary color (same as before this change).
+                let geoms = trip.blockGeometries(snappedCoords: snappedRouteCoords)
                 // NB: `for entry in geoms` rather than `for (block, coords)` —
                 // the MapViewContentBuilder + tuple destructuring combination
-                // silently produced empty output in earlier tests.
-                let geoms = trip.blockGeometries(snappedCoords: snappedRouteCoords)
+                // silently produces empty output.
                 for entry in geoms {
                     let feature = MLNPolylineFeature(coordinates: entry.coords, count: UInt(entry.coords.count))
                     let src = ShapeSource(identifier: "trip-route-block-\(entry.block.id)") { feature }
-                    let c = variantColor(for: entry.block.color, variant: variant)
+                    let c = entry.block.color.swiftUIColor
                     let uic = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
 
-                    // v11: design-handoff mock — two stacked translucent strokes
-                    // (wide wash + tighter inner core). Widths scale with zoom
-                    // so the highlight stays meaningfully wider than the road
-                    // at every level. Below z=8 we floor the width to a "good
-                    // pencil line" so the route doesn't fade out at low zoom.
-                    if variant == 11 {
-                        let washStops = NSExpression(forConstantValue: [
-                            0.0:  8.0,    // floor: minimum wash width
-                            8.0:  8.0,    // floor holds up to z=8
-                            10.0: 14.0,
-                            13.0: 26.0,
-                            15.0: 44.0,
-                            17.0: 72.0,
-                        ])
-                        let coreStops = NSExpression(forConstantValue: [
-                            0.0:  4.0,    // floor: minimum core width
-                            8.0:  4.0,
-                            10.0: 7.0,
-                            13.0: 14.0,
-                            15.0: 24.0,
-                            17.0: 40.0,
-                        ])
-                        LineStyleLayer(identifier: "route-block-\(entry.block.id)-wash", source: src)
-                            .lineColor(uic)
-                            .lineCap(.round).lineJoin(.round).lineOpacity(0.18)
-                            .lineWidth(interpolatedBy: .zoomLevel,
-                                       curveType: .exponential,
-                                       parameters: NSExpression(forConstantValue: 1.5),
-                                       stops: washStops)
-                        LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
-                            .lineColor(uic)
-                            .lineCap(.round).lineJoin(.round).lineOpacity(0.34)
-                            .lineWidth(interpolatedBy: .zoomLevel,
-                                       curveType: .exponential,
-                                       parameters: NSExpression(forConstantValue: 1.5),
-                                       stops: coreStops)
-                    } else {
-                        // Variants 3 & 4: dark outline UNDER the colored line.
-                        if darkOutlineExtra > 0 {
-                            LineStyleLayer(identifier: "route-block-\(entry.block.id)-outline", source: src)
-                                .lineColor(UIColor(red: 0.20, green: 0.12, blue: 0.06, alpha: 0.85))
-                                .lineWidth(blockLineWidth + darkOutlineExtra)
-                                .lineCap(.round).lineJoin(.round)
-                        }
-
-                        let layer = LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
-                            .lineColor(uic)
-                            .lineWidth(blockLineWidth).lineCap(.round).lineJoin(.round).lineOpacity(blockOpacity)
-                        if let pencilDash = pencilDashPattern {
-                            layer.lineDashPattern(pencilDash)
-                        } else if isSnapped {
-                            layer
-                        } else {
-                            layer.lineDashPattern([3.0, 2.0])
-                        }
-                    }
+                    LineStyleLayer(identifier: "route-block-\(entry.block.id)-wash", source: src)
+                        .lineColor(uic)
+                        .lineCap(.round).lineJoin(.round).lineOpacity(0.18)
+                        .lineWidth(interpolatedBy: .zoomLevel,
+                                   curveType: .exponential,
+                                   parameters: widthCurve,
+                                   stops: washStops)
+                    LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
+                        .lineColor(uic)
+                        .lineCap(.round).lineJoin(.round).lineOpacity(0.34)
+                        .lineWidth(interpolatedBy: .zoomLevel,
+                                   curveType: .exponential,
+                                   parameters: widthCurve,
+                                   stops: coreStops)
                 }
 
                 let ordered = trip.orderedWaypoints

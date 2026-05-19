@@ -99,14 +99,16 @@ final class Waypoint {
 enum TripColor: String, Codable, CaseIterable {
     case amber, teal, terracotta, sage, indigo, slate
 
+    /// Mock-handoff palette (see design/mocks/map.jsx). Saturated atlas-style
+    /// colors that work as both a UI accent and a translucent route-line wash.
     var swiftUIColor: ColorTuple {
         switch self {
-        case .amber:      return .init(red: 0.78, green: 0.32, blue: 0.20)
-        case .teal:       return .init(red: 0.18, green: 0.45, blue: 0.50)
-        case .terracotta: return .init(red: 0.71, green: 0.38, blue: 0.24)
-        case .sage:       return .init(red: 0.40, green: 0.50, blue: 0.36)
-        case .indigo:     return .init(red: 0.30, green: 0.32, blue: 0.55)
-        case .slate:      return .init(red: 0.38, green: 0.42, blue: 0.48)
+        case .amber:      return .init(red: 0.760, green: 0.255, blue: 0.047) // #c2410c burnt orange
+        case .teal:       return .init(red: 0.114, green: 0.306, blue: 0.847) // #1d4ed8 royal blue
+        case .terracotta: return .init(red: 0.882, green: 0.114, blue: 0.282) // #e11d48 rose
+        case .sage:       return .init(red: 0.082, green: 0.502, blue: 0.239) // #15803d forest green
+        case .indigo:     return .init(red: 0.427, green: 0.157, blue: 0.851) // #6d28d9 violet
+        case .slate:      return .init(red: 0.216, green: 0.255, blue: 0.318) // #374151 charcoal
         }
     }
     struct ColorTuple { let red, green, blue: Double }
