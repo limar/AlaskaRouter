@@ -259,10 +259,9 @@ struct RootView: View {
     /// Tap-outside-to-dismiss. Blurs the field and (if query is empty)
     /// collapses the bar to the pill state.
     private func dismissSearch() {
+        searchService.setQuery("")
         isSearchFieldFocused = false
-        if searchService.query.isEmpty {
-            withAnimation(.smooth(duration: 0.25)) { barState = .collapsed }
-        }
+        withAnimation(.smooth(duration: 0.25)) { barState = .collapsed }
     }
 
     // MARK: - Actions: preview (research-first)

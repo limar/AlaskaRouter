@@ -53,22 +53,15 @@ struct FloatingSearchBar: View {
                 .focused($fieldFocused)
                 .submitLabel(.search)
             Spacer(minLength: 0)
-            if fieldFocused || !query.isEmpty {
-                Button(action: cancelSearch) {
-                    Text("Cancel")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20))
-                }
-                .buttonStyle(.plain)
-            } else {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Circle()
-                    .fill(Color.orange.opacity(0.85))
-                    .frame(width: 24, height: 24)
-                    .overlay(Text("AK").font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
-            }
+            // Mic + AK chip stay visible at all times. The user dismisses by
+            // tapping outside the bar (RootView's dim layer → dismissSearch).
+            Image(systemName: "mic.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Circle()
+                .fill(Color.orange.opacity(0.85))
+                .frame(width: 24, height: 24)
+                .overlay(Text("AK").font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -110,11 +103,4 @@ struct FloatingSearchBar: View {
         }
     }
 
-    private func cancelSearch() {
-        query = ""
-        fieldFocused = false
-        withAnimation(.smooth(duration: 0.25)) {
-            state = .collapsed
-        }
-    }
 }
