@@ -36,7 +36,7 @@ struct RootView: View {
     @State private var snapTask: Task<Void, Never>?
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
 
-    private var activeTrip: Trip? { trips.first }
+    private var activeTrip: Trip? { TripStore.resolveActive(from: trips) }
 
     /// "Search mode active" — field is focused OR there's a non-empty query.
     /// We hide the bottom sheet and dim/hold the map during this state.

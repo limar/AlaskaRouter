@@ -52,6 +52,12 @@ enum LaunchArgs {
         return Double(raw)
     }
 
+    /// Seed the Parks-Highway demo trip on first launch. Dev-only — by default
+    /// the app bootstraps an empty trip ("Trip from <today>") instead.
+    static var seedDemoTrip: Bool {
+        UserDefaults.standard.bool(forKey: "seedDemoTrip")
+    }
+
     /// After prefill query results land, auto-trigger this action for screenshot
     /// capture: `preview:<index>` opens the preview callout; `add:<index>` runs
     /// the fast-add flow. Index is into the results list.

@@ -213,6 +213,7 @@ struct TripBottomSheet: View {
     /// Real distance comes from the routing layer's snap-to-road result.
     private var distanceText: String {
         let coords = trip.orderedWaypoints.map(\.coordinate)
+        guard coords.count >= 2 else { return "0" }
         var meters: Double = 0
         for i in 1..<coords.count {
             let a = CLLocation(latitude: coords[i - 1].latitude, longitude: coords[i - 1].longitude)

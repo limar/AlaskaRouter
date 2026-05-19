@@ -23,7 +23,10 @@ struct AlaskaRouterApp: App {
             RootView()
                 .modelContainer(container)
                 .onAppear {
-                    SampleTrip.seedIfEmpty(in: container.mainContext)
+                    if LaunchArgs.seedDemoTrip {
+                        SampleTrip.seedIfEmpty(in: container.mainContext)
+                    }
+                    TripStore.bootstrapIfNeeded(in: container.mainContext)
                 }
         }
     }
