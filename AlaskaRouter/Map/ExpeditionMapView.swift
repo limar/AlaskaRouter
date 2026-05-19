@@ -158,15 +158,40 @@ struct ExpeditionMapView: View {
                     let c = variantColor(for: entry.block.color, variant: variant)
                     let uic = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
 
-                    // v11: exact design-handoff mock — two stacked translucent
-                    // strokes (wide soft wash + tighter inner highlight).
+                    // v11: design-handoff mock — two stacked translucent strokes
+                    // (wide wash + tighter inner core). Widths scale with zoom
+                    // so the highlight stays meaningfully wider than the road
+                    // at every level. Stops are roughly tuned so the highlight
+                    // sits at ~3× road width across z=6..17.
                     if variant == 11 {
+                        let washStops = NSExpression(forConstantValue: [
+                            6.0:  3.0,
+                            10.0: 12.0,
+                            13.0: 24.0,
+                            15.0: 44.0,
+                            17.0: 72.0,
+                        ])
+                        let coreStops = NSExpression(forConstantValue: [
+                            6.0:  1.5,
+                            10.0: 6.0,
+                            13.0: 13.0,
+                            15.0: 24.0,
+                            17.0: 40.0,
+                        ])
                         LineStyleLayer(identifier: "route-block-\(entry.block.id)-wash", source: src)
                             .lineColor(uic)
-                            .lineWidth(11.0).lineCap(.round).lineJoin(.round).lineOpacity(0.18)
+                            .lineCap(.round).lineJoin(.round).lineOpacity(0.18)
+                            .lineWidth(interpolatedBy: .zoomLevel,
+                                       curveType: .exponential,
+                                       parameters: NSExpression(forConstantValue: 1.5),
+                                       stops: washStops)
                         LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
                             .lineColor(uic)
-                            .lineWidth(6.0).lineCap(.round).lineJoin(.round).lineOpacity(0.34)
+                            .lineCap(.round).lineJoin(.round).lineOpacity(0.34)
+                            .lineWidth(interpolatedBy: .zoomLevel,
+                                       curveType: .exponential,
+                                       parameters: NSExpression(forConstantValue: 1.5),
+                                       stops: coreStops)
                     } else {
                         // Variants 3 & 4: dark outline UNDER the colored line.
                         if darkOutlineExtra > 0 {
