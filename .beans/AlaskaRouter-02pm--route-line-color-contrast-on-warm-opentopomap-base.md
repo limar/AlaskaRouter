@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-02pm
 title: Route line color contrast on warm OpenTopoMap basemap
-status: todo
+status: in-progress
 type: bug
 priority: normal
 created_at: 2026-05-19T14:07:11Z
-updated_at: 2026-05-19T14:07:11Z
+updated_at: 2026-05-19T14:10:43Z
 parent: AlaskaRouter-xtua
 ---
 

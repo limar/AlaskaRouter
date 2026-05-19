@@ -38,6 +38,23 @@ private let styleURL: URL = {
     }
 }()
 
+/// AlaskaRouter-02pm — palette variants. v0 returns the production
+/// TripColor RGB tuple. v1 returns a punchier saturated version.
+/// v2/v3 reuse v0 (their differentiation is in width/casing/outline).
+private func variantColor(for color: TripColor, variant: Int) -> TripColor.ColorTuple {
+    if variant == 1 || variant == 4 || variant == 5 || variant == 6 {
+        switch color {
+        case .amber:      return .init(red: 0.88, green: 0.20, blue: 0.10)   // crimson
+        case .teal:       return .init(red: 0.08, green: 0.42, blue: 0.78)   // cobalt
+        case .terracotta: return .init(red: 0.92, green: 0.50, blue: 0.10)   // burnt orange
+        case .sage:       return .init(red: 0.18, green: 0.55, blue: 0.20)   // forest green
+        case .indigo:     return .init(red: 0.42, green: 0.20, blue: 0.68)   // deep violet
+        case .slate:      return .init(red: 0.28, green: 0.28, blue: 0.32)   // dark gray
+        }
+    }
+    return color.swiftUIColor
+}
+
 // Default route geometry: straight-line polyline between consecutive waypoints.
 // Used when no snap-to-road result is available (offline, awaiting routing, etc).
 // Rendered dashed in this case to signal "pendingSnap".
@@ -64,13 +81,38 @@ struct ExpeditionMapView: View {
                 let isSnapped = (snappedRouteCoords != nil)
                 let wholeCoords = snappedRouteCoords ?? straightRouteCoords(for: trip)
 
+                // AlaskaRouter-02pm — temporary variant switch. v0 is the
+                // current production look. v1..v5 are experiments.
+                let variant = LaunchArgs.routePaletteVariant
+                let drawCasing = !(variant == 4 || variant == 5 || variant == 6)
+                let casingWidth: Float = (variant == 2) ? 7.0 : 8.0
+                let casingOpacity: Float = (variant == 2) ? 0.75 : 0.95
+                let blockLineWidth: Float = {
+                    switch variant {
+                    case 1: return 5.0
+                    case 2: return 6.0
+                    case 3: return 4.0
+                    case 4: return 6.0
+                    case 5: return 5.0
+                    case 6: return 7.0
+                    default: return 4.0
+                    }
+                }()
+                let darkOutlineExtra: Float = {
+                    switch variant {
+                    case 3, 4: return 2.5
+                    case 6:    return 1.0       // hairline outline
+                    default:   return 0.0
+                    }
+                }()
+
                 // Single shared casing under the entire route (cream halo).
-                if wholeCoords.count >= 2 {
+                if drawCasing && wholeCoords.count >= 2 {
                     let casingFeature = MLNPolylineFeature(coordinates: wholeCoords, count: UInt(wholeCoords.count))
                     let casingSource = ShapeSource(identifier: "trip-route-casing") { casingFeature }
                     LineStyleLayer(identifier: "route-casing", source: casingSource)
                         .lineColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 0.95))
-                        .lineWidth(8.0).lineCap(.round).lineJoin(.round)
+                        .lineWidth(casingWidth).lineCap(.round).lineJoin(.round).lineOpacity(casingOpacity)
                 }
 
                 // One line layer per block, each in its block color. For
@@ -83,10 +125,19 @@ struct ExpeditionMapView: View {
                 for entry in geoms {
                     let feature = MLNPolylineFeature(coordinates: entry.coords, count: UInt(entry.coords.count))
                     let src = ShapeSource(identifier: "trip-route-block-\(entry.block.id)") { feature }
-                    let c = entry.block.color.swiftUIColor
+                    let c = variantColor(for: entry.block.color, variant: variant)
+
+                    // Variants 3 & 4: dark outline UNDER the colored line.
+                    if darkOutlineExtra > 0 {
+                        LineStyleLayer(identifier: "route-block-\(entry.block.id)-outline", source: src)
+                            .lineColor(UIColor(red: 0.20, green: 0.12, blue: 0.06, alpha: 0.85))
+                            .lineWidth(blockLineWidth + darkOutlineExtra)
+                            .lineCap(.round).lineJoin(.round)
+                    }
+
                     let layer = LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
                         .lineColor(UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0))
-                        .lineWidth(4.0).lineCap(.round).lineJoin(.round).lineOpacity(0.95)
+                        .lineWidth(blockLineWidth).lineCap(.round).lineJoin(.round).lineOpacity(1.0)
                     if isSnapped {
                         layer
                     } else {
