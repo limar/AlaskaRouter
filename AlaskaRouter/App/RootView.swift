@@ -22,6 +22,7 @@ struct RootView: View {
     @State private var previewedResult: SearchResult?
     @State private var recentlyAddedWaypoint: Waypoint?
     @State private var isSearchFieldFocused: Bool = false
+    @State private var showWelcome: Bool = WelcomeFlag.shouldShow
 
     @State private var mapCamera: MapViewCamera = .center(
         .init(latitude: 63.95, longitude: -148.9),
@@ -165,6 +166,11 @@ struct RootView: View {
                 }
                 .id(added.id)
             }
+
+            // First-launch welcome card — once-only, gated by UserDefaults.
+            if showWelcome {
+                WelcomeOverlay(onDismiss: dismissWelcome)
+            }
         }
         .onAppear {
             if let prefill = LaunchArgs.prefillQuery {
@@ -262,6 +268,11 @@ struct RootView: View {
         searchService.setQuery("")
         isSearchFieldFocused = false
         withAnimation(.smooth(duration: 0.25)) { barState = .collapsed }
+    }
+
+    private func dismissWelcome() {
+        WelcomeFlag.markSeen()
+        withAnimation(.easeOut(duration: 0.25)) { showWelcome = false }
     }
 
     // MARK: - Actions: preview (research-first)
