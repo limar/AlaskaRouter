@@ -66,6 +66,13 @@ enum LaunchArgs {
         return Int(raw) ?? 0
     }
 
+    /// Load the bundled demo-route.geojson as the initial snapped coords
+    /// so screenshots show the real curvy snapped road line, not the
+    /// straight-line dashed fallback. Dev-only.
+    static var preloadDemoRoute: Bool {
+        UserDefaults.standard.bool(forKey: "preloadDemoRoute")
+    }
+
     /// Seed the Parks-Highway demo trip on first launch. Dev-only — by default
     /// the app bootstraps an empty trip ("Trip from <today>") instead.
     static var seedDemoTrip: Bool {

@@ -198,6 +198,19 @@ struct RootView: View {
                 if let key = pendingSnapKey { fireSnap(forKey: key) }
             }
             scheduleSnapForCurrentTrip()
+            if LaunchArgs.preloadDemoRoute, snappedRouteCoords == nil {
+                if let url = Bundle.main.url(forResource: "demo-route", withExtension: "geojson"),
+                   let data = try? Data(contentsOf: url),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let feats = json["features"] as? [[String: Any]],
+                   let geom = feats.first?["geometry"] as? [String: Any],
+                   let coords = geom["coordinates"] as? [[Double]] {
+                    snappedRouteCoords = coords.compactMap {
+                        guard $0.count >= 2 else { return nil }
+                        return CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0])
+                    }
+                }
+            }
             if let idx = LaunchArgs.preselectStopIndex,
                let trip = activeTrip,
                idx >= 0, idx < trip.orderedWaypoints.count {

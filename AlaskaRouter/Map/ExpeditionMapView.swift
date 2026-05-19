@@ -84,7 +84,8 @@ struct ExpeditionMapView: View {
                 // AlaskaRouter-02pm — temporary variant switch. v0 is the
                 // current production look. v1..v5 are experiments.
                 let variant = LaunchArgs.routePaletteVariant
-                let drawCasing = !(variant == 4 || variant == 5 || variant == 6)
+                let drawCasing = !(variant == 4 || variant == 5 || variant == 6
+                                   || variant == 7 || variant == 8)
                 let casingWidth: Float = (variant == 2) ? 7.0 : 8.0
                 let casingOpacity: Float = (variant == 2) ? 0.75 : 0.95
                 let blockLineWidth: Float = {
@@ -95,6 +96,8 @@ struct ExpeditionMapView: View {
                     case 4: return 6.0
                     case 5: return 5.0
                     case 6: return 7.0
+                    case 7: return 5.0          // highlighter
+                    case 8: return 5.0          // colored pencil (dashed grain)
                     default: return 4.0
                     }
                 }()
@@ -105,6 +108,16 @@ struct ExpeditionMapView: View {
                     default:   return 0.0
                     }
                 }()
+                let blockOpacity: Float = {
+                    switch variant {
+                    case 7: return 0.55         // highlighter — see-through
+                    case 8: return 0.78         // pencil — slightly less transparent
+                    default: return 1.0
+                    }
+                }()
+                // Fine dash so the line reads as "grainy pencil" rather than
+                // a solid brushstroke. Only used for variant 8.
+                let pencilDashPattern: [Float]? = (variant == 8) ? [2.5, 0.7] : nil
 
                 // Single shared casing under the entire route (cream halo).
                 if drawCasing && wholeCoords.count >= 2 {
@@ -137,8 +150,10 @@ struct ExpeditionMapView: View {
 
                     let layer = LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
                         .lineColor(UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0))
-                        .lineWidth(blockLineWidth).lineCap(.round).lineJoin(.round).lineOpacity(1.0)
-                    if isSnapped {
+                        .lineWidth(blockLineWidth).lineCap(.round).lineJoin(.round).lineOpacity(blockOpacity)
+                    if let pencilDash = pencilDashPattern {
+                        layer.lineDashPattern(pencilDash)
+                    } else if isSnapped {
                         layer
                     } else {
                         layer.lineDashPattern([3.0, 2.0])
