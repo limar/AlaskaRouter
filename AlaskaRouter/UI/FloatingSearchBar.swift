@@ -22,12 +22,15 @@ struct FloatingSearchBar: View {
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
+        // The bar takes only its intrinsic (pill) height — no internal Spacer.
+        // The parent layout is responsible for vertical positioning; a Spacer
+        // here would expand this view to fill its container and push siblings
+        // (like the search-results dropdown) to the bottom of the screen.
+        Group {
             switch state {
             case .expanded:  expandedPill
             case .collapsed: collapsedPill
             }
-            Spacer(minLength: 0)
         }
         .padding(.top, 8)
         .padding(.horizontal, 14)
