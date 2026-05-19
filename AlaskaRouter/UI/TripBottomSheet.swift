@@ -43,7 +43,7 @@ struct TripBottomSheet: View {
     @Binding var detent: TripSheetDetent
     @Binding var mode: SheetMode
     let onTapWaypoint: (Waypoint) -> Void
-    let onWaypointDeleted: (Waypoint) -> Void
+    let onWaypointDeleted: (DeletedStopSnapshot) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var allTrips: [Trip]
@@ -260,8 +260,6 @@ struct TripBottomSheet: View {
         switch item {
         case .stop(let wp):
             waypointRow(wp, accent: stopColorByID[wp.id] ?? tripAccent)
-                .contentShape(Rectangle())
-                .onTapGesture { onTapWaypoint(wp) }
         case let .separator(_, blockIndex, color, displayName):
             separatorRow(blockIndex: blockIndex, color: swiftUIColor(color), displayName: displayName)
         }
@@ -269,28 +267,46 @@ struct TripBottomSheet: View {
 
     private func waypointRow(_ wp: Waypoint, accent: Color) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(0.18))
-                    .frame(width: 28, height: 28)
-                Text("\(wp.order + 1)")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(accent)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(wp.label ?? "Untitled stop")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(wp.category?.replacingOccurrences(of: "_", with: " ") ?? "stop")
-                    Text("·")
-                    Text(String(format: "%.3f, %.3f", wp.lat, wp.lon))
+            Button(action: { onTapWaypoint(wp) }) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(0.18))
+                            .frame(width: 28, height: 28)
+                        Text("\(wp.order + 1)")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(accent)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(wp.label ?? "Untitled stop")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(wp.category?.replacingOccurrences(of: "_", with: " ") ?? "stop")
+                            Text("·")
+                            Text(String(format: "%.3f, %.3f", wp.lat, wp.lon))
+                        }
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
                 }
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+
+            // Trash — instant delete; the Undo toast (AlaskaRouter-j5w1) is
+            // the safety net so no confirmation alert here.
+            Button(action: { deleteWaypoint(wp) }) {
+                Image(systemName: "trash")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20).opacity(0.85))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.tertiary)
@@ -492,8 +508,7 @@ struct TripBottomSheet: View {
             guard idx < items.count else { continue }
             switch items[idx] {
             case .stop(let wp):
-                modelContext.delete(wp)
-                onWaypointDeleted(wp)
+                deleteWaypoint(wp, renumberAfter: false)
             case .separator(let sep, _, _, _):
                 modelContext.delete(sep)
             }
@@ -503,6 +518,28 @@ struct TripBottomSheet: View {
         for (i, wp) in remainingStops.enumerated() { wp.order = i }
         pruneDegenerateSeparators()
         try? modelContext.save()
+    }
+
+    /// Single chokepoint for waypoint deletion — captures a snapshot first so
+    /// the parent can offer Undo, then removes the waypoint and (optionally)
+    /// renumbers the rest. The swipe-delete path opts out of inline renumber
+    /// since it does its own pass over all offsets at the end.
+    private func deleteWaypoint(_ wp: Waypoint, renumberAfter: Bool = true) {
+        let snapshot = DeletedStopSnapshot(
+            id: wp.id,
+            order: wp.order,
+            coordinate: wp.coordinate,
+            label: wp.label,
+            category: wp.category
+        )
+        modelContext.delete(wp)
+        onWaypointDeleted(snapshot)
+        if renumberAfter {
+            let remaining = trip.orderedWaypoints
+            for (i, w) in remaining.enumerated() { w.order = i }
+            pruneDegenerateSeparators()
+            try? modelContext.save()
+        }
     }
 
     /// Removes separators that have no anchor or whose anchor is the very

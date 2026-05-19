@@ -21,6 +21,7 @@ struct RootView: View {
     @State private var selectedWaypointID: UUID?
     @State private var previewedResult: SearchResult?
     @State private var recentlyAddedWaypoint: Waypoint?
+    @State private var recentlyDeletedSnapshot: DeletedStopSnapshot?
     @State private var isSearchFieldFocused: Bool = false
     @State private var showWelcome: Bool = WelcomeFlag.shouldShow
     @State private var sheetMode: SheetMode = LaunchArgs.startInTripsMode ? .trips : .stops
@@ -162,7 +163,8 @@ struct RootView: View {
             if let added = recentlyAddedWaypoint {
                 VStack {
                     Spacer()
-                    AddedToTripToast(
+                    TripEditToast(
+                        kind: .added,
                         waypointLabel: added.label ?? "(stop)",
                         onUndo: { undoAdd(added) }
                     )
@@ -170,6 +172,18 @@ struct RootView: View {
                     .padding(.bottom, 110)   // sits above the bottom sheet
                 }
                 .id(added.id)
+            } else if let deleted = recentlyDeletedSnapshot {
+                VStack {
+                    Spacer()
+                    TripEditToast(
+                        kind: .removed,
+                        waypointLabel: deleted.label ?? "(stop)",
+                        onUndo: { undoDelete(deleted) }
+                    )
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 110)
+                }
+                .id(deleted.id)
             }
 
             // First-launch welcome card — once-only, gated by UserDefaults.
@@ -388,12 +402,46 @@ struct RootView: View {
         }
     }
 
-    private func handleSheetWaypointDeleted(_ wp: Waypoint) {
-        if selectedWaypointID == wp.id {
+    private func handleSheetWaypointDeleted(_ snapshot: DeletedStopSnapshot) {
+        if selectedWaypointID == snapshot.id {
             withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
         }
-        if recentlyAddedWaypoint?.id == wp.id {
+        if recentlyAddedWaypoint?.id == snapshot.id {
             withAnimation(.smooth(duration: 0.2)) { recentlyAddedWaypoint = nil }
+        }
+        // Show the Undo toast and schedule auto-dismiss.
+        withAnimation(.smooth(duration: 0.2)) {
+            recentlyDeletedSnapshot = snapshot
+        }
+        scheduleDeletedToastDismiss(snapshotID: snapshot.id)
+    }
+
+    private func scheduleDeletedToastDismiss(snapshotID: UUID) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if recentlyDeletedSnapshot?.id == snapshotID {
+                withAnimation(.smooth(duration: 0.25)) { recentlyDeletedSnapshot = nil }
+            }
+        }
+    }
+
+    private func undoDelete(_ snapshot: DeletedStopSnapshot) {
+        guard let trip = activeTrip else { return }
+        // Re-insert at the original order, shifting subsequent stops up.
+        let restored = Waypoint(
+            order: snapshot.order,
+            coordinate: snapshot.coordinate,
+            label: snapshot.label,
+            category: snapshot.category
+        )
+        restored.trip = trip
+        modelContext.insert(restored)
+        for wp in trip.orderedWaypoints where wp.id != restored.id && wp.order >= snapshot.order {
+            wp.order += 1
+        }
+        try? modelContext.save()
+        withAnimation(.smooth(duration: 0.25)) {
+            recentlyDeletedSnapshot = nil
         }
     }
 

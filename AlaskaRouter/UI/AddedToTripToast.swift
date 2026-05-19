@@ -1,19 +1,45 @@
-// Brief, auto-dismissing toast shown after a search result is added to the
-// trip. Floats above the bottom sheet, contains an Undo button for ~4 sec.
+// Brief, auto-dismissing toast shown after a trip mutation (add / remove).
+// Floats above the bottom sheet, contains an Undo button for ~4 sec.
 
 import SwiftUI
 
-struct AddedToTripToast: View {
+enum TripToastKind {
+    case added, removed
+
+    var iconName: String {
+        switch self {
+        case .added:   return "mappin.circle.fill"
+        case .removed: return "trash.circle.fill"
+        }
+    }
+
+    var iconColor: Color {
+        switch self {
+        case .added:   return .green
+        case .removed: return Color(red: 0.78, green: 0.32, blue: 0.20)
+        }
+    }
+
+    var titleText: String {
+        switch self {
+        case .added:   return "Added to trip"
+        case .removed: return "Removed from trip"
+        }
+    }
+}
+
+struct TripEditToast: View {
+    let kind: TripToastKind
     let waypointLabel: String
     let onUndo: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "mappin.circle.fill")
+            Image(systemName: kind.iconName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.green)
+                .foregroundStyle(kind.iconColor)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Added to trip")
+                Text(kind.titleText)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
                 Text(waypointLabel)
@@ -32,5 +58,14 @@ struct AddedToTripToast: View {
         .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.10), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.10), radius: 10, y: 4)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+/// Back-compat shim — existing call sites stay working.
+struct AddedToTripToast: View {
+    let waypointLabel: String
+    let onUndo: () -> Void
+    var body: some View {
+        TripEditToast(kind: .added, waypointLabel: waypointLabel, onUndo: onUndo)
     }
 }
