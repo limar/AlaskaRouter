@@ -46,6 +46,28 @@ enum SampleTrip {
             context.insert(sep)
         }
 
+        // Optional dev seed for AlaskaRouter-9axu — append the same 5 stops
+        // in reverse order (excluding the last to avoid two consecutive
+        // Fairbanks stops). Produces a synthetic out-and-back trip where
+        // every segment overlaps with its return counterpart, exercising the
+        // multi-pass offset rendering.
+        if UserDefaults.standard.bool(forKey: "seedDemoReturnLeg"),
+           waypoints.count >= 2 {
+            let reverse = waypoints.dropLast().reversed()
+            var nextOrder = waypoints.count
+            for source in reverse {
+                let w = Waypoint(
+                    order: nextOrder,
+                    coordinate: source.coordinate,
+                    label: source.label,
+                    category: source.category
+                )
+                w.trip = trip
+                context.insert(w)
+                nextOrder += 1
+            }
+        }
+
         try? context.save()
     }
 }

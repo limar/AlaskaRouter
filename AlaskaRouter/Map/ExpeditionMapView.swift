@@ -100,30 +100,38 @@ struct ExpeditionMapView: View {
                 ])
                 let widthCurve = NSExpression(forConstantValue: 1.5)
 
-                let geoms = trip.blockGeometries(snappedCoords: snappedRouteCoords)
-                // NB: `for entry in geoms` rather than `for (block, coords)` —
-                // the MapViewContentBuilder + tuple destructuring combination
-                // silently produces empty output.
-                for entry in geoms {
-                    let feature = MLNPolylineFeature(coordinates: entry.coords, count: UInt(entry.coords.count))
-                    let src = ShapeSource(identifier: "trip-route-block-\(entry.block.id)") { feature }
-                    let c = entry.block.color.swiftUIColor
+                // Iterate SEGMENTS (one leg per consecutive waypoint pair)
+                // instead of whole blocks. Each segment carries a perpendicular
+                // pass-offset and may be flagged as an "extra pass" (dashed) —
+                // see Trip.passOffsetSegments + AlaskaRouter-9axu.
+                let segments = trip.passOffsetSegments(snappedCoords: snappedRouteCoords)
+                for seg in segments {
+                    let feature = MLNPolylineFeature(coordinates: seg.coords, count: UInt(seg.coords.count))
+                    let src = ShapeSource(identifier: "trip-route-seg-\(seg.id)") { feature }
+                    let c = seg.color.swiftUIColor
                     let uic = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
 
-                    LineStyleLayer(identifier: "route-block-\(entry.block.id)-wash", source: src)
+                    let washLayer = LineStyleLayer(identifier: "route-seg-\(seg.id)-wash", source: src)
                         .lineColor(uic)
                         .lineCap(.round).lineJoin(.round).lineOpacity(0.18)
                         .lineWidth(interpolatedBy: .zoomLevel,
                                    curveType: .exponential,
                                    parameters: widthCurve,
                                    stops: washStops)
-                    LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
+                    let coreLayer = LineStyleLayer(identifier: "route-seg-\(seg.id)", source: src)
                         .lineColor(uic)
                         .lineCap(.round).lineJoin(.round).lineOpacity(0.34)
                         .lineWidth(interpolatedBy: .zoomLevel,
                                    curveType: .exponential,
                                    parameters: widthCurve,
                                    stops: coreStops)
+                    if seg.isExtraPass {
+                        washLayer.lineDashPattern([2.0, 1.5])
+                        coreLayer.lineDashPattern([2.0, 1.5])
+                    } else {
+                        washLayer
+                        coreLayer
+                    }
                 }
 
                 let ordered = trip.orderedWaypoints
