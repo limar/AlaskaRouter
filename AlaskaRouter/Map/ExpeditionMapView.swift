@@ -161,20 +161,22 @@ struct ExpeditionMapView: View {
                     // v11: design-handoff mock — two stacked translucent strokes
                     // (wide wash + tighter inner core). Widths scale with zoom
                     // so the highlight stays meaningfully wider than the road
-                    // at every level. Stops are roughly tuned so the highlight
-                    // sits at ~3× road width across z=6..17.
+                    // at every level. Below z=8 we floor the width to a "good
+                    // pencil line" so the route doesn't fade out at low zoom.
                     if variant == 11 {
                         let washStops = NSExpression(forConstantValue: [
-                            6.0:  3.0,
-                            10.0: 12.0,
-                            13.0: 24.0,
+                            0.0:  8.0,    // floor: minimum wash width
+                            8.0:  8.0,    // floor holds up to z=8
+                            10.0: 14.0,
+                            13.0: 26.0,
                             15.0: 44.0,
                             17.0: 72.0,
                         ])
                         let coreStops = NSExpression(forConstantValue: [
-                            6.0:  1.5,
-                            10.0: 6.0,
-                            13.0: 13.0,
+                            0.0:  4.0,    // floor: minimum core width
+                            8.0:  4.0,
+                            10.0: 7.0,
+                            13.0: 14.0,
                             15.0: 24.0,
                             17.0: 40.0,
                         ])
