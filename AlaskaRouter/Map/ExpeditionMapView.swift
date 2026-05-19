@@ -126,7 +126,11 @@ struct ExpeditionMapView: View {
                         .iconAllowsOverlap(true)
                         .iconAnchor("center")
                     SymbolStyleLayer(identifier: "trip-marker-selected-labels", source: src)
-                        .textFontNames(["Noto Sans Bold"])
+                        // We only bundle Noto Sans Regular glyphs (see AlaskaRouter/glyphs/).
+                        // Requesting "Noto Sans Bold" makes MapLibre fail the entire symbol —
+                        // BOTH icon and label disappear. Use the bundled font; distinction
+                        // comes from size + halo + the bigger selected icon.
+                        .textFontNames(["Noto Sans Regular"])
                         .textFontSize(14)
                         .textColor(UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0))
                         .textHaloColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0))
