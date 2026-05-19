@@ -29,6 +29,21 @@ enum LaunchArgs {
         }
     }
 
+    /// Pre-select waypoint at this index (0-based) in the active trip's
+    /// orderedWaypoints, so screenshots of the "selected (sobresaliente)" icon
+    /// style can be captured without manually tapping the bottom sheet.
+    static var preselectStopIndex: Int? {
+        let raw = UserDefaults.standard.string(forKey: "preselectStopIndex") ?? ""
+        return Int(raw)
+    }
+
+    /// Pair with preselectStopIndex: keep the camera move but skip setting
+    /// selectedWaypointID. Useful for A/B comparison of same-camera-no-selection
+    /// vs same-camera-with-selection screenshots.
+    static var cameraOnlyNoSelect: Bool {
+        UserDefaults.standard.bool(forKey: "cameraOnly")
+    }
+
     /// Override the initial camera zoom for screenshot evaluation. Useful for
     /// verifying world-skeleton (low zoom) and Alaska detail (high zoom) at
     /// boot without manual tapping. Reads `initialZoom` from UserDefaults.

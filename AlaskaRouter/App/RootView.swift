@@ -187,6 +187,15 @@ struct RootView: View {
                 if let key = pendingSnapKey { fireSnap(forKey: key) }
             }
             scheduleSnapForCurrentTrip()
+            if let idx = LaunchArgs.preselectStopIndex,
+               let trip = activeTrip,
+               idx >= 0, idx < trip.orderedWaypoints.count {
+                let wp = trip.orderedWaypoints[idx]
+                if !LaunchArgs.cameraOnlyNoSelect {
+                    selectedWaypointID = wp.id
+                }
+                mapCamera = .center(wp.coordinate, zoom: LaunchArgs.initialZoom ?? 8.5)
+            }
         }
         .onChange(of: tripGeometryKey) { _, newKey in
             scheduleSnapForCurrentTrip(key: newKey)

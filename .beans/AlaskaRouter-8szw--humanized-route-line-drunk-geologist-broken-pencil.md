@@ -3,9 +3,9 @@
 title: Humanized route line — drunk-geologist broken-pencil aesthetic
 status: todo
 type: feature
-priority: high
+priority: normal
 created_at: 2026-05-19T07:16:44Z
-updated_at: 2026-05-19T07:16:44Z
+updated_at: 2026-05-19T07:35:12Z
 parent: AlaskaRouter-xtua
 ---
 

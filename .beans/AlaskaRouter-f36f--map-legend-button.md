@@ -3,9 +3,9 @@
 title: Map Legend button
 status: todo
 type: feature
-priority: high
+priority: normal
 created_at: 2026-05-19T07:16:39Z
-updated_at: 2026-05-19T07:16:39Z
+updated_at: 2026-05-19T07:35:12Z
 parent: AlaskaRouter-xtua
 ---
 
