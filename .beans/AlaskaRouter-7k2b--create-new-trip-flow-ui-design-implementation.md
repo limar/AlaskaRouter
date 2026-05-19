@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-7k2b
 title: Create-new-Trip flow (UI + design + implementation)
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-19T07:35:02Z
-updated_at: 2026-05-19T07:35:02Z
+updated_at: 2026-05-19T10:08:42Z
 parent: AlaskaRouter-xtua
 ---
 
