@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-7nxj
 title: Split route into named blocks (days / itinerary stretches)
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-19T10:08:36Z
-updated_at: 2026-05-19T10:08:36Z
+updated_at: 2026-05-19T12:14:04Z
 parent: AlaskaRouter-xtua
 ---
 

@@ -20,6 +20,9 @@ final class Trip {
     @Relationship(deleteRule: .cascade, inverse: \Waypoint.trip)
     var waypoints: [Waypoint] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \BlockSeparator.trip)
+    var separators: [BlockSeparator] = []
+
     init(name: String, color: TripColor = .amber, createdAt: Date = .now, notes: String = "") {
         self.name = name
         self.colorRaw = color.rawValue
@@ -35,6 +38,23 @@ final class Trip {
     /// Waypoints sorted by their `order` for stable rendering.
     var orderedWaypoints: [Waypoint] {
         waypoints.sorted { $0.order < $1.order }
+    }
+}
+
+/// A user-placed boundary between two consecutive stops, splitting the trip
+/// into multiple itinerary blocks (days / stretches). A separator sits AFTER
+/// the waypoint with `afterWaypointID` in the ordered sequence; the implicit
+/// first block runs from the trip start up to the first separator.
+@Model
+final class BlockSeparator {
+    var id: UUID = UUID()
+    /// The waypoint this separator sits AFTER in the ordered sequence.
+    /// If nil, the separator is degenerate (no anchor); should be cleaned up.
+    var afterWaypointID: UUID?
+    var trip: Trip?
+
+    init(afterWaypointID: UUID) {
+        self.afterWaypointID = afterWaypointID
     }
 }
 

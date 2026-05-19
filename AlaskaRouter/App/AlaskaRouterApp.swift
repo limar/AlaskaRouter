@@ -6,7 +6,7 @@ struct AlaskaRouterApp: App {
     /// Single shared SwiftData stack (local-only v1, schema designed to be
     /// CloudKit-compatible later).
     let container: ModelContainer = {
-        let schema = Schema([Trip.self, Waypoint.self])
+        let schema = Schema([Trip.self, Waypoint.self, BlockSeparator.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [config])
