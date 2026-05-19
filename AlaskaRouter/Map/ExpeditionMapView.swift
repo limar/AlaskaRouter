@@ -62,24 +62,35 @@ struct ExpeditionMapView: View {
             if let trip {
                 // Prefer the snapped geometry if it's available and matches the trip.
                 let isSnapped = (snappedRouteCoords != nil)
-                let coords = snappedRouteCoords ?? straightRouteCoords(for: trip)
-                if coords.count >= 2 {
-                    let routeFeature = MLNPolylineFeature(coordinates: coords, count: UInt(coords.count))
-                    let routeSource = ShapeSource(identifier: "trip-route") { routeFeature }
+                let wholeCoords = snappedRouteCoords ?? straightRouteCoords(for: trip)
 
-                    LineStyleLayer(identifier: "route-casing", source: routeSource)
+                // Single shared casing under the entire route (cream halo).
+                if wholeCoords.count >= 2 {
+                    let casingFeature = MLNPolylineFeature(coordinates: wholeCoords, count: UInt(wholeCoords.count))
+                    let casingSource = ShapeSource(identifier: "trip-route-casing") { casingFeature }
+                    LineStyleLayer(identifier: "route-casing", source: casingSource)
                         .lineColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 0.95))
                         .lineWidth(8.0).lineCap(.round).lineJoin(.round)
+                }
 
-                    let c = trip.color.swiftUIColor
-                    // Solid when snap-to-road geometry is in hand; dashed (pendingSnap) otherwise.
-                    let routeLayer = LineStyleLayer(identifier: "route", source: routeSource)
+                // One line layer per block, each in its block color. For
+                // single-block trips this yields exactly one layer in the
+                // trip's primary color (same as before this change).
+                // NB: `for entry in geoms` rather than `for (block, coords)` —
+                // the MapViewContentBuilder + tuple destructuring combination
+                // silently produced empty output in earlier tests.
+                let geoms = trip.blockGeometries(snappedCoords: snappedRouteCoords)
+                for entry in geoms {
+                    let feature = MLNPolylineFeature(coordinates: entry.coords, count: UInt(entry.coords.count))
+                    let src = ShapeSource(identifier: "trip-route-block-\(entry.block.id)") { feature }
+                    let c = entry.block.color.swiftUIColor
+                    let layer = LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
                         .lineColor(UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0))
-                        .lineWidth(4.0).lineCap(.round).lineJoin(.round).lineOpacity(0.92)
+                        .lineWidth(4.0).lineCap(.round).lineJoin(.round).lineOpacity(0.95)
                     if isSnapped {
-                        routeLayer
+                        layer
                     } else {
-                        routeLayer.lineDashPattern([3.0, 2.0])
+                        layer.lineDashPattern([3.0, 2.0])
                     }
                 }
 
