@@ -52,6 +52,17 @@ private func variantColor(for color: TripColor, variant: Int) -> TripColor.Color
         case .slate:      return .init(red: 0.28, green: 0.28, blue: 0.32)   // dark gray
         }
     }
+    // v11: exact palette from the design-handoff mock (design/mocks/map.jsx).
+    if variant == 11 {
+        switch color {
+        case .amber:      return .init(red: 0.760, green: 0.255, blue: 0.047) // #c2410c burnt orange
+        case .teal:       return .init(red: 0.114, green: 0.306, blue: 0.847) // #1d4ed8 royal blue
+        case .terracotta: return .init(red: 0.882, green: 0.114, blue: 0.282) // #e11d48 rose
+        case .sage:       return .init(red: 0.082, green: 0.502, blue: 0.239) // #15803d forest green
+        case .indigo:     return .init(red: 0.427, green: 0.157, blue: 0.851) // #6d28d9 violet
+        case .slate:      return .init(red: 0.216, green: 0.255, blue: 0.318) // #374151 charcoal
+        }
+    }
     return color.swiftUIColor
 }
 
@@ -85,7 +96,9 @@ struct ExpeditionMapView: View {
                 // current production look. v1..v5 are experiments.
                 let variant = LaunchArgs.routePaletteVariant
                 let drawCasing = !(variant == 4 || variant == 5 || variant == 6
-                                   || variant == 7 || variant == 8)
+                                   || variant == 7 || variant == 8
+                                   || variant == 9 || variant == 10
+                                   || variant == 11)
                 let casingWidth: Float = (variant == 2) ? 7.0 : 8.0
                 let casingOpacity: Float = (variant == 2) ? 0.75 : 0.95
                 let blockLineWidth: Float = {
@@ -98,6 +111,8 @@ struct ExpeditionMapView: View {
                     case 6: return 7.0
                     case 7: return 5.0          // highlighter
                     case 8: return 5.0          // colored pencil (dashed grain)
+                    case 9: return 14.0         // fat highlighter
+                    case 10: return 18.0        // very fat highlighter
                     default: return 4.0
                     }
                 }()
@@ -112,6 +127,8 @@ struct ExpeditionMapView: View {
                     switch variant {
                     case 7: return 0.55         // highlighter — see-through
                     case 8: return 0.78         // pencil — slightly less transparent
+                    case 9: return 0.45         // fat highlighter
+                    case 10: return 0.40        // very fat highlighter
                     default: return 1.0
                     }
                 }()
@@ -139,24 +156,36 @@ struct ExpeditionMapView: View {
                     let feature = MLNPolylineFeature(coordinates: entry.coords, count: UInt(entry.coords.count))
                     let src = ShapeSource(identifier: "trip-route-block-\(entry.block.id)") { feature }
                     let c = variantColor(for: entry.block.color, variant: variant)
+                    let uic = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
 
-                    // Variants 3 & 4: dark outline UNDER the colored line.
-                    if darkOutlineExtra > 0 {
-                        LineStyleLayer(identifier: "route-block-\(entry.block.id)-outline", source: src)
-                            .lineColor(UIColor(red: 0.20, green: 0.12, blue: 0.06, alpha: 0.85))
-                            .lineWidth(blockLineWidth + darkOutlineExtra)
-                            .lineCap(.round).lineJoin(.round)
-                    }
-
-                    let layer = LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
-                        .lineColor(UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0))
-                        .lineWidth(blockLineWidth).lineCap(.round).lineJoin(.round).lineOpacity(blockOpacity)
-                    if let pencilDash = pencilDashPattern {
-                        layer.lineDashPattern(pencilDash)
-                    } else if isSnapped {
-                        layer
+                    // v11: exact design-handoff mock — two stacked translucent
+                    // strokes (wide soft wash + tighter inner highlight).
+                    if variant == 11 {
+                        LineStyleLayer(identifier: "route-block-\(entry.block.id)-wash", source: src)
+                            .lineColor(uic)
+                            .lineWidth(11.0).lineCap(.round).lineJoin(.round).lineOpacity(0.18)
+                        LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
+                            .lineColor(uic)
+                            .lineWidth(6.0).lineCap(.round).lineJoin(.round).lineOpacity(0.34)
                     } else {
-                        layer.lineDashPattern([3.0, 2.0])
+                        // Variants 3 & 4: dark outline UNDER the colored line.
+                        if darkOutlineExtra > 0 {
+                            LineStyleLayer(identifier: "route-block-\(entry.block.id)-outline", source: src)
+                                .lineColor(UIColor(red: 0.20, green: 0.12, blue: 0.06, alpha: 0.85))
+                                .lineWidth(blockLineWidth + darkOutlineExtra)
+                                .lineCap(.round).lineJoin(.round)
+                        }
+
+                        let layer = LineStyleLayer(identifier: "route-block-\(entry.block.id)", source: src)
+                            .lineColor(uic)
+                            .lineWidth(blockLineWidth).lineCap(.round).lineJoin(.round).lineOpacity(blockOpacity)
+                        if let pencilDash = pencilDashPattern {
+                            layer.lineDashPattern(pencilDash)
+                        } else if isSnapped {
+                            layer
+                        } else {
+                            layer.lineDashPattern([3.0, 2.0])
+                        }
                     }
                 }
 
