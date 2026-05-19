@@ -55,6 +55,16 @@ struct ExpeditionMapView: View {
     /// Snap-to-road geometry from the Routing layer. When present, replaces
     /// the straight-line fallback with the real road shape (solid, not dashed).
     let snappedRouteCoords: [CLLocationCoordinate2D]?
+    /// Map tap on a waypoint marker (AlaskaRouter-kcq8). `nil` means an empty
+    /// area was tapped — the parent should clear selection.
+    var onWaypointTap: ((UUID?) -> Void)? = nil
+
+    /// Tappable layer ids for hit-test. Includes both default + selected
+    /// marker layers so a stop can be selected regardless of current state.
+    private static let waypointLayerIDs: Set<String> = [
+        "trip-marker-default-icons",
+        "trip-marker-selected-icons",
+    ]
 
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {
@@ -124,7 +134,7 @@ struct ExpeditionMapView: View {
                 let unselectedFeatures = unselectedSet.map { wp -> MLNPointFeature in
                     let f = MLNPointFeature()
                     f.coordinate = wp.coordinate
-                    f.attributes = ["name": wp.label ?? ""]
+                    f.attributes = ["name": wp.label ?? "", "wpID": wp.id.uuidString]
                     return f
                 }
                 if !unselectedFeatures.isEmpty {
@@ -149,7 +159,7 @@ struct ExpeditionMapView: View {
                 let selectedFeatures = selectedSet.map { wp -> MLNPointFeature in
                     let f = MLNPointFeature()
                     f.coordinate = wp.coordinate
-                    f.attributes = ["name": wp.label ?? ""]
+                    f.attributes = ["name": wp.label ?? "", "wpID": wp.id.uuidString]
                     return f
                 }
                 if !selectedFeatures.isEmpty {
@@ -185,6 +195,18 @@ struct ExpeditionMapView: View {
                     .iconImage(WaypointIcons.preview)
                     .iconAllowsOverlap(true)
                     .iconAnchor("center")
+            }
+        }
+        // Map tap hit-tests against the two waypoint-marker layers. When a
+        // marker is hit, fire onWaypointTap(UUID). Empty area → onWaypointTap(nil)
+        // so the parent can dismiss selection / callout.
+        .onTapMapGesture(on: Self.waypointLayerIDs) { _, features in
+            guard let cb = onWaypointTap else { return }
+            if let raw = features.first?.attribute(forKey: "wpID") as? String,
+               let id = UUID(uuidString: raw) {
+                cb(id)
+            } else {
+                cb(nil)
             }
         }
     }

@@ -71,7 +71,8 @@ struct RootView: View {
                 selectedWaypointID: selectedWaypointID,
                 previewCoord: previewedResult?.coord,
                 previewName: previewedResult?.name,
-                snappedRouteCoords: snappedRouteCoords
+                snappedRouteCoords: snappedRouteCoords,
+                onWaypointTap: handleMapWaypointTap
             )
             .ignoresSafeArea()
 
@@ -126,6 +127,36 @@ struct RootView: View {
                 }
                 .allowsHitTesting(true)
                 .transition(.scale(scale: 0.94).combined(with: .opacity))
+            }
+
+            // Stop callout — shown when a trip waypoint is selected, the user
+            // isn't previewing a search result, and search isn't active.
+            if previewedResult == nil, !isSearchActive,
+               let trip = activeTrip,
+               let selectedID = selectedWaypointID,
+               let wp = trip.orderedWaypoints.first(where: { $0.id == selectedID })
+            {
+                let ordered = trip.orderedWaypoints
+                let idx = ordered.firstIndex { $0.id == selectedID } ?? 0
+                VStack {
+                    Spacer()
+                    StopCallout(
+                        waypoint: wp,
+                        positionLabel: "STOP \(idx + 1) OF \(ordered.count)",
+                        distanceFromPrevText: distanceFromPrevText(idx: idx, in: ordered),
+                        canPrev: idx > 0,
+                        canNext: idx < ordered.count - 1,
+                        onPrev: { handleStopCalloutPrev(in: ordered, currentIdx: idx) },
+                        onNext: { handleStopCalloutNext(in: ordered, currentIdx: idx) },
+                        onClose: { handleStopCalloutClose() },
+                        onRemove: { handleStopCalloutRemove(wp) }
+                    )
+                    .padding(.horizontal, 18)
+                    Spacer()
+                    Spacer()
+                }
+                .allowsHitTesting(true)
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
 
             if let trip = activeTrip, !isSearchActive {
@@ -225,14 +256,22 @@ struct RootView: View {
                     }
                 }
             }
-            if let idx = LaunchArgs.preselectStopIndex,
-               let trip = activeTrip,
-               idx >= 0, idx < trip.orderedWaypoints.count {
-                let wp = trip.orderedWaypoints[idx]
-                if !LaunchArgs.cameraOnlyNoSelect {
-                    selectedWaypointID = wp.id
+            if let idx = LaunchArgs.preselectStopIndex {
+                // Race with SwiftData @Query — on a fresh install the just-seeded
+                // trip may not have propagated to `trips` when onAppear runs.
+                // Defer the preselect a couple frames so activeTrip is ready.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    guard let trip = activeTrip,
+                          idx >= 0, idx < trip.orderedWaypoints.count else { return }
+                    let wp = trip.orderedWaypoints[idx]
+                    withAnimation(.smooth(duration: 0.2)) {
+                        if !LaunchArgs.cameraOnlyNoSelect {
+                            selectedWaypointID = wp.id
+                        }
+                        mapCamera = .center(wp.coordinate, zoom: LaunchArgs.initialZoom ?? 8.5)
+                    }
                 }
-                mapCamera = .center(wp.coordinate, zoom: LaunchArgs.initialZoom ?? 8.5)
             }
         }
         .onChange(of: tripGeometryKey) { _, newKey in
@@ -400,6 +439,73 @@ struct RootView: View {
             previewedResult = nil
             // Leave bottomSheetDetent alone — user keeps control of the sheet's size.
         }
+    }
+
+    // MARK: - Stop callout (AlaskaRouter-kcq8)
+
+    private func handleMapWaypointTap(_ id: UUID?) {
+        guard let id else {
+            // Empty area tap — dismiss any selection / callout.
+            withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
+            return
+        }
+        guard let trip = activeTrip,
+              let wp = trip.orderedWaypoints.first(where: { $0.id == id })
+        else { return }
+        withAnimation(.smooth(duration: 0.2)) {
+            selectedWaypointID = wp.id
+            mapCamera = .center(wp.coordinate, zoom: zoomForCategory(wp.category ?? ""))
+        }
+    }
+
+    private func handleStopCalloutClose() {
+        withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
+    }
+
+    private func handleStopCalloutPrev(in ordered: [Waypoint], currentIdx: Int) {
+        guard currentIdx > 0 else { return }
+        let wp = ordered[currentIdx - 1]
+        withAnimation(.smooth(duration: 0.25)) {
+            selectedWaypointID = wp.id
+            mapCamera = .center(wp.coordinate, zoom: zoomForCategory(wp.category ?? ""))
+        }
+    }
+
+    private func handleStopCalloutNext(in ordered: [Waypoint], currentIdx: Int) {
+        guard currentIdx < ordered.count - 1 else { return }
+        let wp = ordered[currentIdx + 1]
+        withAnimation(.smooth(duration: 0.25)) {
+            selectedWaypointID = wp.id
+            mapCamera = .center(wp.coordinate, zoom: zoomForCategory(wp.category ?? ""))
+        }
+    }
+
+    /// Callout's destructive primary action. Per user spec for kcq8: instant
+    /// delete, no Undo toast, no confirmation alert. (Different from the
+    /// sheet trash, which DOES get an Undo toast.)
+    private func handleStopCalloutRemove(_ wp: Waypoint) {
+        let id = wp.id
+        modelContext.delete(wp)
+        // Renumber remaining stops to keep .order contiguous.
+        if let trip = activeTrip {
+            let remaining = trip.orderedWaypoints
+            for (i, w) in remaining.enumerated() { w.order = i }
+        }
+        try? modelContext.save()
+        withAnimation(.smooth(duration: 0.2)) {
+            if selectedWaypointID == id { selectedWaypointID = nil }
+            if recentlyAddedWaypoint?.id == id { recentlyAddedWaypoint = nil }
+        }
+    }
+
+    /// Straight-line distance to the previous stop, formatted as "45 km".
+    /// Returns nil for stop 0 (no previous).
+    private func distanceFromPrevText(idx: Int, in ordered: [Waypoint]) -> String? {
+        guard idx > 0, idx < ordered.count else { return nil }
+        let a = ordered[idx - 1].coordinate
+        let b = ordered[idx].coordinate
+        let meters = SmartInsert.haversine(a, b)
+        return String(format: "%.0f km from previous", meters / 1000)
     }
 
     private func handleSheetWaypointDeleted(_ snapshot: DeletedStopSnapshot) {
