@@ -24,6 +24,7 @@ enum SampleTrip {
         let trip = Trip(name: "Dalton Highway — North", color: .amber)
         context.insert(trip)
 
+        var waypoints: [Waypoint] = []
         for (i, wp) in parksHighwayWaypoints.enumerated() {
             let w = Waypoint(
                 order: i,
@@ -33,7 +34,18 @@ enum SampleTrip {
             )
             w.trip = trip
             context.insert(w)
+            waypoints.append(w)
         }
+
+        // Optional dev seed: insert a block separator after stop index 2
+        // (Healy), splitting into "Cantwell → Healy" / "Nenana → Fairbanks".
+        if UserDefaults.standard.bool(forKey: "seedDemoSeparator"),
+           waypoints.count >= 4 {
+            let sep = BlockSeparator(afterWaypointID: waypoints[2].id)
+            sep.trip = trip
+            context.insert(sep)
+        }
+
         try? context.save()
     }
 }

@@ -220,32 +220,62 @@ struct TripBottomSheet: View {
     }
 
     private var waypointList: some View {
-        List {
-            ForEach(trip.orderedWaypoints, id: \.id) { wp in
-                waypointRow(wp)
+        let items = trip.listItems
+        let stopColorByID = stopColorByIDMap()
+        return List {
+            ForEach(items) { item in
+                row(for: item, stopColorByID: stopColorByID)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
-                    .contentShape(Rectangle())
-                    .onTapGesture { onTapWaypoint(wp) }
             }
-            .onMove(perform: reorder)
-            .onDelete(perform: delete)
+            .onMove(perform: reorderListItems)
+            .onDelete(perform: deleteListItems)
+
+            if trip.waypoints.count >= 2 {
+                addBlockRow
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14))
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.clear)
     }
 
-    private func waypointRow(_ wp: Waypoint) -> some View {
+    /// Map each waypoint's id to the color of the block it belongs to. Used to
+    /// color the small numbered badge on each stop row.
+    private func stopColorByIDMap() -> [UUID: Color] {
+        var map: [UUID: Color] = [:]
+        for b in trip.blocks {
+            let c = swiftUIColor(b.color)
+            for wp in b.waypoints { map[wp.id] = c }
+        }
+        return map
+    }
+
+    @ViewBuilder
+    private func row(for item: TripListItem, stopColorByID: [UUID: Color]) -> some View {
+        switch item {
+        case .stop(let wp):
+            waypointRow(wp, accent: stopColorByID[wp.id] ?? tripAccent)
+                .contentShape(Rectangle())
+                .onTapGesture { onTapWaypoint(wp) }
+        case let .separator(_, blockIndex, color, displayName):
+            separatorRow(blockIndex: blockIndex, color: swiftUIColor(color), displayName: displayName)
+        }
+    }
+
+    private func waypointRow(_ wp: Waypoint, accent: Color) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(tripAccent.opacity(0.18))
+                    .fill(accent.opacity(0.18))
                     .frame(width: 28, height: 28)
                 Text("\(wp.order + 1)")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(tripAccent)
+                    .foregroundStyle(accent)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(wp.label ?? "Untitled stop")
@@ -266,6 +296,50 @@ struct TripBottomSheet: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 10)
+    }
+
+    /// A draggable block-boundary row. Renders the block number in a pill,
+    /// the auto-name, and a subtle background tint matching the block color.
+    private func separatorRow(blockIndex: Int, color: Color, displayName: String) -> some View {
+        HStack(spacing: 10) {
+            Text("\(blockIndex + 1)")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(color, in: Circle())
+            Text(displayName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(color.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    private var addBlockRow: some View {
+        Button(action: addBlockSeparator) {
+            HStack(spacing: 10) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(.secondary)
+                Text("Add block separator")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - .trips mode
@@ -366,32 +440,91 @@ struct TripBottomSheet: View {
         withAnimation(.smooth(duration: 0.2)) { mode = .stops }
     }
 
-    // MARK: - Mutations (waypoints)
+    // MARK: - Mutations (waypoints + separators)
 
-    private func reorder(from source: IndexSet, to destination: Int) {
-        var current = trip.orderedWaypoints
-        current.move(fromOffsets: source, toOffset: destination)
-        for (i, wp) in current.enumerated() {
-            wp.order = i
-        }
+    private func addBlockSeparator() {
+        // Place the new separator AFTER the second-to-last stop so block 2
+        // visibly contains the last stop. Avoids the degenerate "separator
+        // after the last waypoint" position.
+        let stops = trip.orderedWaypoints
+        guard stops.count >= 2 else { return }
+        let anchor = stops[stops.count - 2]
+        let sep = BlockSeparator(afterWaypointID: anchor.id)
+        sep.trip = trip
+        modelContext.insert(sep)
         try? modelContext.save()
     }
 
-    private func delete(at offsets: IndexSet) {
-        let ordered = trip.orderedWaypoints
-        for idx in offsets {
-            guard idx < ordered.count else { continue }
-            let victim = ordered[idx]
-            modelContext.delete(victim)
-            onWaypointDeleted(victim)
+    /// Reorder a unified list of TripListItems. Walks the resulting sequence
+    /// and:
+    ///   - re-assigns waypoint.order to match the new stop sequence
+    ///   - sets each separator's afterWaypointID to the id of the waypoint
+    ///     immediately preceding it (or deletes the separator if no waypoint
+    ///     precedes it, which makes the separator degenerate)
+    private func reorderListItems(from source: IndexSet, to destination: Int) {
+        var items = trip.listItems
+        items.move(fromOffsets: source, toOffset: destination)
+
+        var stopIndex = 0
+        var lastWaypointID: UUID? = nil
+        for item in items {
+            switch item {
+            case .stop(let wp):
+                wp.order = stopIndex
+                stopIndex += 1
+                lastWaypointID = wp.id
+            case .separator(let sep, _, _, _):
+                if let prev = lastWaypointID {
+                    sep.afterWaypointID = prev
+                } else {
+                    // Separator at the very top (no preceding stop) → delete.
+                    modelContext.delete(sep)
+                }
+            }
         }
-        let remaining = trip.orderedWaypoints.filter { wp in
-            !offsets.contains(where: { ordered[$0].id == wp.id })
-        }
-        for (i, wp) in remaining.enumerated() {
-            wp.order = i
-        }
+        pruneDegenerateSeparators()
         try? modelContext.save()
+    }
+
+    private func deleteListItems(at offsets: IndexSet) {
+        let items = trip.listItems
+        for idx in offsets {
+            guard idx < items.count else { continue }
+            switch items[idx] {
+            case .stop(let wp):
+                modelContext.delete(wp)
+                onWaypointDeleted(wp)
+            case .separator(let sep, _, _, _):
+                modelContext.delete(sep)
+            }
+        }
+        // Renumber remaining stops; prune separators whose anchor vanished.
+        let remainingStops = trip.orderedWaypoints
+        for (i, wp) in remainingStops.enumerated() { wp.order = i }
+        pruneDegenerateSeparators()
+        try? modelContext.save()
+    }
+
+    /// Removes separators that have no anchor or whose anchor is the very
+    /// last waypoint (no following stops → degenerate block).
+    private func pruneDegenerateSeparators() {
+        let stops = trip.orderedWaypoints
+        let stopIDs = Set(stops.map(\.id))
+        let lastID = stops.last?.id
+        for sep in trip.separators {
+            guard let anchor = sep.afterWaypointID else {
+                modelContext.delete(sep)
+                continue
+            }
+            if !stopIDs.contains(anchor) || anchor == lastID {
+                modelContext.delete(sep)
+            }
+        }
+    }
+
+    private func swiftUIColor(_ c: TripColor) -> Color {
+        let t = c.swiftUIColor
+        return Color(red: t.red, green: t.green, blue: t.blue)
     }
 
     // MARK: - Computed
