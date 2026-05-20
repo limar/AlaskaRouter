@@ -25,6 +25,12 @@ Package.resolved
 # Spike data — regenerable from build scripts, too large for git
 spikes/B_fts5/data/
 
+# Tile packs — too large for GitHub's 100 MB/file cap (AlaskaRouter-76y3).
+# Distributed via GitHub Releases. See tools/build-pack/fetch-pack.sh to
+# pull the current release asset, or tools/build-pack/download_tiles.py to
+# regenerate from OpenTopoMap from scratch.
+*.pmtiles
+
 # Claude Code per-user (not shared); settings.json is shared and committed
 .claude/settings.local.json
 .claude/worktrees/
