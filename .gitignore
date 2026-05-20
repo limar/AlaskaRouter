@@ -30,6 +30,10 @@ spikes/B_fts5/data/
 # pull the current release asset, or tools/build-pack/download_tiles.py to
 # regenerate from OpenTopoMap from scratch.
 *.pmtiles
+# SHA-256 sidecars are release-time artifacts (created by release-pack.sh,
+# consumed by fetch-pack.sh against the release asset). No need to commit.
+*.pmtiles.sha256
+*.manifest.json.sha256
 
 # Claude Code per-user (not shared); settings.json is shared and committed
 .claude/settings.local.json
