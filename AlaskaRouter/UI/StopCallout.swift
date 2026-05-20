@@ -14,14 +14,15 @@ struct StopCallout: View {
     let distanceFromPrevText: String?      // "45 km from previous" (nil for stop 1)
     let canPrev: Bool
     let canNext: Bool
-    let canMoveEarlier: Bool
-    let canMoveLater: Bool
     let onPrev: () -> Void
     let onNext: () -> Void
-    let onMoveEarlier: () -> Void
-    let onMoveLater: () -> Void
     let onClose: () -> Void
     let onRemove: () -> Void
+    // NB: 'Move earlier / Move later' reorder buttons used to live here but
+    // were pulled because (a) they sat between Prev/Next and got misclicked,
+    // and (b) 'Up/Down' naming is wrong for diagonal routes (Up doesn't mean
+    // upward on screen). Tracked as AlaskaRouter-mhax for a proper redesign
+    // — likely an on-map drag or route-aligned arrow labels.
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -63,14 +64,6 @@ struct StopCallout: View {
                            label: "Prev",
                            enabled: canPrev,
                            action: onPrev)
-                actionItem(systemImage: "arrow.up",
-                           label: "Up",
-                           enabled: canMoveEarlier,
-                           action: onMoveEarlier)
-                actionItem(systemImage: "arrow.down",
-                           label: "Down",
-                           enabled: canMoveLater,
-                           action: onMoveLater)
                 actionItem(systemImage: "chevron.right",
                            label: "Next",
                            enabled: canNext,

@@ -146,12 +146,8 @@ struct RootView: View {
                         distanceFromPrevText: distanceFromPrevText(idx: idx, in: ordered),
                         canPrev: idx > 0,
                         canNext: idx < ordered.count - 1,
-                        canMoveEarlier: idx > 0,
-                        canMoveLater: idx < ordered.count - 1,
                         onPrev: { handleStopCalloutPrev(in: ordered, currentIdx: idx) },
                         onNext: { handleStopCalloutNext(in: ordered, currentIdx: idx) },
-                        onMoveEarlier: { handleStopCalloutMoveEarlier(in: ordered, currentIdx: idx) },
-                        onMoveLater: { handleStopCalloutMoveLater(in: ordered, currentIdx: idx) },
                         onClose: { handleStopCalloutClose() },
                         onRemove: { handleStopCalloutRemove(wp) }
                     )
@@ -482,29 +478,6 @@ struct RootView: View {
             selectedWaypointID = wp.id
             mapCamera = .center(wp.coordinate, zoom: zoomForCategory(wp.category ?? ""))
         }
-    }
-
-    /// Reorder this stop one slot earlier in the route. Updates the .order
-    /// of both swapped stops, persists, and keeps the selection on the moved
-    /// stop so the callout continues to show it.
-    private func handleStopCalloutMoveEarlier(in ordered: [Waypoint], currentIdx: Int) {
-        guard currentIdx > 0 else { return }
-        let here = ordered[currentIdx]
-        let prev = ordered[currentIdx - 1]
-        let oldHere = here.order
-        here.order = prev.order
-        prev.order = oldHere
-        try? modelContext.save()
-    }
-
-    private func handleStopCalloutMoveLater(in ordered: [Waypoint], currentIdx: Int) {
-        guard currentIdx < ordered.count - 1 else { return }
-        let here = ordered[currentIdx]
-        let next = ordered[currentIdx + 1]
-        let oldHere = here.order
-        here.order = next.order
-        next.order = oldHere
-        try? modelContext.save()
     }
 
     /// Callout's destructive primary action. Per user spec for kcq8: instant
