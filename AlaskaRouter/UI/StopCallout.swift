@@ -59,7 +59,7 @@ struct StopCallout: View {
 
             Divider().opacity(0.4)
 
-            HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 actionItem(systemImage: "chevron.left",
                            label: "Prev",
                            enabled: canPrev,
@@ -68,7 +68,6 @@ struct StopCallout: View {
                            label: "Next",
                            enabled: canNext,
                            action: onNext)
-                Spacer(minLength: 8)
                 actionItem(systemImage: "trash",
                            label: "Remove",
                            enabled: true,
@@ -78,6 +77,7 @@ struct StopCallout: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+        .frame(maxWidth: 260)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
