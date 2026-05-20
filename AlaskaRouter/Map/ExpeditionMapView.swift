@@ -22,6 +22,9 @@ private let styleURL: URL = {
     guard let pmtilesURL = Bundle.main.url(forResource: "alaska-pack", withExtension: "pmtiles") else {
         fatalError("Missing alaska-pack.pmtiles in bundle")
     }
+    guard let anchorLabelsURL = Bundle.main.url(forResource: "alaska-anchor-labels", withExtension: "geojson") else {
+        fatalError("Missing alaska-anchor-labels.geojson in bundle")
+    }
     let pmtilesRef = "pmtiles://\(pmtilesURL.absoluteString)"
     let glyphsBase = Bundle.main.bundleURL.appendingPathComponent("glyphs").absoluteString
         .replacingOccurrences(of: "file://", with: "file:///")
@@ -29,6 +32,7 @@ private let styleURL: URL = {
         var json = try String(contentsOf: templateURL, encoding: .utf8)
         json = json.replacingOccurrences(of: "__BASEMAP_URL__", with: pmtilesRef)
         json = json.replacingOccurrences(of: "__GLYPHS_URL_BASE__", with: glyphsBase)
+        json = json.replacingOccurrences(of: "__ANCHOR_LABELS_URL__", with: anchorLabelsURL.absoluteString)
         let resolved = FileManager.default.temporaryDirectory
             .appendingPathComponent("style-base-resolved.json")
         try json.write(to: resolved, atomically: true, encoding: .utf8)
@@ -231,6 +235,13 @@ struct ExpeditionMapView: View {
             } else {
                 cb(nil)
             }
+        }
+        // Clamp pinch-zoom to the pack's effective max so the user can't
+        // pinch past the highest available tile zoom (z=10 today) into ugly
+        // upscaled rectangles. Pinch-out / zoom-out stays unbounded — the
+        // world skeleton renders fine at z=0. AlaskaRouter-5h4y.
+        .unsafeMapViewControllerModifier { controller in
+            controller.mapView.maximumZoomLevel = TilePackManifest.shared.effectiveMaxZoom
         }
     }
 }

@@ -54,18 +54,12 @@ struct RootView: View {
         isSearchFieldFocused || !searchService.query.isEmpty
     }
 
-    /// How far above the screen bottom the floating controls should sit, given
-    /// the current bottom-sheet detent. Always clears the sheet's collapsed
-    /// header; at .overview the sheet is taller so we lift further.
-    private var sheetClearance: CGFloat {
-        // Disappears entirely when isSearchActive (no sheet shown) — use the
-        // collapsed-equivalent clearance so the controls don't jump.
-        switch bottomSheetDetent {
-        case .collapsed: return 110
-        case .overview:  return UIScreen.main.bounds.height * 0.45 + 14
-        case .full:      return 0   // unused: controls hidden at .full
-        }
-    }
+    /// Fixed clearance above the screen bottom for on-map controls + scale.
+    /// Anchored — the sheet expanding ABOVE them is fine; chasing the sheet
+    /// produced a "running cockroach" miss-click problem (AlaskaRouter-ir85).
+    /// Cleared above the .collapsed sheet header so the controls remain
+    /// reachable in the user's primary "map mode" interaction state.
+    private let mapControlsBottomClearance: CGFloat = 110
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -164,6 +158,25 @@ struct RootView: View {
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
 
+            // On-map controls (right edge, vertical) + scale (bottom-left).
+            // Pinned to a fixed bottom clearance, rendered BEFORE the sheet
+            // so the sheet covers them when it expands above .collapsed.
+            // (ir85: anchor them, let the sheet cover them — no chasing.)
+            VStack {
+                Spacer()
+                HStack(alignment: .bottom, spacing: 0) {
+                    ScaleIndicator(camera: mapCamera)
+                        .padding(.leading, 12)
+                        .padding(.bottom, mapControlsBottomClearance)
+                    Spacer()
+                    MapControls(camera: $mapCamera, onLocateMe: handleLocateMe)
+                        .padding(.trailing, 12)
+                        .padding(.bottom, mapControlsBottomClearance)
+                }
+            }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .allowsHitTesting(!isSearchActive)   // don't compete with the search dim layer
+
             if let trip = activeTrip, !isSearchActive {
                 TripBottomSheet(
                     trip: trip,
@@ -175,25 +188,6 @@ struct RootView: View {
                 .ignoresSafeArea(.container, edges: .bottom)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // On-map controls (right edge, vertical) + scale (bottom-left).
-            // Both auto-hide when the sheet is at full detent (covers the map).
-            if bottomSheetDetent != .full {
-                VStack {
-                    Spacer()
-                    HStack(alignment: .bottom, spacing: 0) {
-                        ScaleIndicator(camera: mapCamera)
-                            .padding(.leading, 12)
-                            .padding(.bottom, sheetClearance)
-                        Spacer()
-                        MapControls(camera: $mapCamera, onLocateMe: handleLocateMe)
-                            .padding(.trailing, 12)
-                            .padding(.bottom, sheetClearance)
-                    }
-                }
-                .ignoresSafeArea(.keyboard, edges: .bottom)
-                .allowsHitTesting(!isSearchActive)   // don't compete with the search dim layer
             }
 
             if let added = recentlyAddedWaypoint {
@@ -453,8 +447,11 @@ struct RootView: View {
     // MARK: - Bottom sheet tap
 
     private func handleSheetWaypointTap(_ wp: Waypoint) {
+        // Preserve the user's chosen zoom level — they're navigating between
+        // their own stops, not exploring a new place at an "appropriate" scale.
+        // See AlaskaRouter-q8nl. Same pattern as locate-me (j03u).
         withAnimation(.smooth(duration: 0.5)) {
-            mapCamera = .center(wp.coordinate, zoom: 12.0)
+            mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
             selectedWaypointID = wp.id
             previewedResult = nil
             // Leave bottomSheetDetent alone — user keeps control of the sheet's size.
@@ -517,9 +514,10 @@ struct RootView: View {
         guard let trip = activeTrip,
               let wp = trip.orderedWaypoints.first(where: { $0.id == id })
         else { return }
+        // Preserve the user's chosen zoom (q8nl).
         withAnimation(.smooth(duration: 0.2)) {
             selectedWaypointID = wp.id
-            mapCamera = .center(wp.coordinate, zoom: zoomForCategory(wp.category ?? ""))
+            mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
         }
     }
 
@@ -530,18 +528,21 @@ struct RootView: View {
     private func handleStopCalloutPrev(in ordered: [Waypoint], currentIdx: Int) {
         guard currentIdx > 0 else { return }
         let wp = ordered[currentIdx - 1]
+        // Preserve the user's chosen zoom — walking Prev/Next is a "scan my
+        // route at this scale" gesture, not a "fly me to each stop" gesture (q8nl).
         withAnimation(.smooth(duration: 0.25)) {
             selectedWaypointID = wp.id
-            mapCamera = .center(wp.coordinate, zoom: zoomForCategory(wp.category ?? ""))
+            mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
         }
     }
 
     private func handleStopCalloutNext(in ordered: [Waypoint], currentIdx: Int) {
         guard currentIdx < ordered.count - 1 else { return }
         let wp = ordered[currentIdx + 1]
+        // Preserve the user's chosen zoom (q8nl).
         withAnimation(.smooth(duration: 0.25)) {
             selectedWaypointID = wp.id
-            mapCamera = .center(wp.coordinate, zoom: zoomForCategory(wp.category ?? ""))
+            mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
         }
     }
 

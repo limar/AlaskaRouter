@@ -1,0 +1,73 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "purpose": "Low/mid-zoom orientation labels for AlaskaRouter. Drawn on top of OpenTopoMap raster, which is sparse on labels at z=0..5 (world skeleton tier). Three visibility tiers — see properties.tier and the label-* layers in style-base.json. AlaskaRouter-71rb."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "ALASKA", "tier": "region", "letterSpacing": 0.4 },
+      "geometry": { "type": "Point", "coordinates": [-156.0, 66.5] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "BERING SEA", "tier": "water", "letterSpacing": 0.3 },
+      "geometry": { "type": "Point", "coordinates": [-175.5, 59.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "GULF OF ALASKA", "tier": "water", "letterSpacing": 0.3 },
+      "geometry": { "type": "Point", "coordinates": [-147.0, 57.5] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "ALEUTIAN ISLANDS", "tier": "water", "letterSpacing": 0.3 },
+      "geometry": { "type": "Point", "coordinates": [-170.0, 53.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Brooks Range", "tier": "mountains" },
+      "geometry": { "type": "Point", "coordinates": [-150.0, 68.5] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Alaska Range", "tier": "mountains" },
+      "geometry": { "type": "Point", "coordinates": [-152.5, 63.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Wrangell Mtns", "tier": "mountains" },
+      "geometry": { "type": "Point", "coordinates": [-143.0, 62.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Anchorage", "tier": "city" },
+      "geometry": { "type": "Point", "coordinates": [-149.9003, 61.2181] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Fairbanks", "tier": "city" },
+      "geometry": { "type": "Point", "coordinates": [-147.7164, 64.8378] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Juneau", "tier": "city" },
+      "geometry": { "type": "Point", "coordinates": [-134.4197, 58.3019] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Nome", "tier": "city" },
+      "geometry": { "type": "Point", "coordinates": [-165.4064, 64.5011] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Bethel", "tier": "city" },
+      "geometry": { "type": "Point", "coordinates": [-161.7558, 60.7922] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Denali", "tier": "peak" },
+      "geometry": { "type": "Point", "coordinates": [-151.0074, 63.0695] }
+    }
+  ]
+}

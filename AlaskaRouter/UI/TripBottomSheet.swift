@@ -5,10 +5,18 @@
 // can't accidentally dismiss it; the trip is always present.
 //
 // Two modes:
-//   - .stops  : trip header (name + tappable rename + chevron-to-switch) plus
-//               the waypoint list (or empty-state hint if no stops yet).
+//   - .stops  : trip header (eyebrow + serif name + chevron-to-switch +
+//               rename pencil) plus a stat strip and the stops list inside
+//               a soft white inset card. Block separators are HEADER strips
+//               (square chip + serif name + "N stops" subline) — visually
+//               distinct from stop rows so they're never confused for stops.
+//               Stop rows are indented under their block header with a small
+//               white-fill colored-stroke numbered pip.
 //   - .trips  : list of all trips (tap row → switch active; trash → delete);
 //               new-trip row creates an empty trip with default name.
+//
+// Aligned to design/mocks/sheet.jsx — see AlaskaRouter-9634. Palette + serif
+// helpers live in SheetPalette.swift.
 
 import SwiftUI
 import SwiftData
@@ -65,7 +73,6 @@ struct TripBottomSheet: View {
                 grabHandle
                 summary
                 if detent != .collapsed {
-                    Divider().opacity(0.3)
                     switch mode {
                     case .stops: stopsBody
                     case .trips: tripsBody
@@ -75,12 +82,22 @@ struct TripBottomSheet: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: effectiveHeight, alignment: .top)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(.white.opacity(0.10), lineWidth: 0.5)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.thinMaterial)
             )
-            .shadow(color: .black.opacity(0.12), radius: 18, y: -2)
+            .overlay(
+                // Warm-paper tint — pulls .thinMaterial away from "iOS grey
+                // glass" toward "ranger-station atlas" (AlaskaRouter-9634).
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(SheetPalette.surfaceTint)
+                    .allowsHitTesting(false)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(SheetPalette.surfaceTopHairline, lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.10), radius: 18, y: -2)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .gesture(
                 DragGesture()
@@ -131,7 +148,7 @@ struct TripBottomSheet: View {
 
     private var grabHandle: some View {
         Capsule()
-            .fill(.secondary.opacity(0.45))
+            .fill(SheetPalette.dragHandle)
             .frame(width: 38, height: 5)
             .padding(.top, 8)
             .padding(.bottom, 6)
@@ -142,52 +159,107 @@ struct TripBottomSheet: View {
             }
     }
 
+    /// Header eyebrow + serif trip name + chevron-mode-toggle + rename pencil.
+    /// At .collapsed the summary line also shows the stop/distance counts so
+    /// the trip stat strip below (which only renders at .overview/.full) is
+    /// not the only place that info appears.
     private var summary: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Circle()
-                .fill(tripAccent)
-                .frame(width: 12, height: 12)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
+                Button(action: toggleMode) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        // Eyebrow — small uppercase label
+                        Text(mode == .stops ? "Active Trip" : "Trips")
+                            .font(.sheetSans(11, weight: .semibold))
+                            .tracking(1.2)
+                            .textCase(.uppercase)
+                            .foregroundStyle(SheetPalette.textEyebrow)
 
-            // Trip name + summary; tap → switches between modes.
-            Button(action: toggleMode) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(mode == .stops ? trip.name : "Trips")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Image(systemName: mode == .stops ? "chevron.down" : "chevron.up")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
+                        // Trip name (serif) + chevron
+                        HStack(spacing: 6) {
+                            Text(mode == .stops ? trip.name : "All trips")
+                                .font(.sheetSerif(20, weight: .semibold))
+                                .foregroundStyle(SheetPalette.textStrong)
+                                .lineLimit(1)
+                            Image(systemName: mode == .stops ? "chevron.down" : "chevron.up")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(SheetPalette.textMuted)
+                        }
+
+                        // Subline — at .collapsed this is the only place stats
+                        // show; at .overview/.full the strip below replaces this.
+                        if detent == .collapsed {
+                            Text(mode == .stops ? summaryLine : tripsSubtitle)
+                                .font(.sheetSans(12, weight: .regular))
+                                .foregroundStyle(SheetPalette.textMuted)
+                                .padding(.top, 1)
+                        }
                     }
-                    Text(mode == .stops ? summaryLine : tripsSubtitle)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-
-            // Pencil — rename the currently-active trip.
-            if mode == .stops {
-                Button(action: openRename) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                        .background(.thinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+
+                if mode == .stops {
+                    Button(action: openRename) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(SheetPalette.textMuted)
+                            .frame(width: 30, height: 30)
+                            .background(Color.black.opacity(0.05), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
-            Spacer(minLength: 0)
-
-            if mode == .stops {
-                tripStatChip(value: stopsCount, label: "stops")
-                tripStatChip(value: distanceText, label: "km")
+            // Stat strip — only at .overview / .full. The .collapsed state
+            // shows stats in the subline instead.
+            if detent != .collapsed && mode == .stops {
+                statStrip
+                    .padding(.top, 6)
             }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
+    }
+
+    /// Three-cell stat strip — Distance / Stops / Blocks. The mock has a
+    /// fourth "OFFLINE Ready" cell; we drop it for v1 because the app is
+    /// offline-by-design (the tile pack ships in the bundle), so a status
+    /// pill that always reads "Ready" is noise. Revisit when v2 starts
+    /// fetching tiles dynamically.
+    private var statStrip: some View {
+        HStack(spacing: 0) {
+            statCell(label: "Distance", value: "\(distanceText) km")
+            statDivider
+            statCell(label: "Stops", value: stopsCount)
+            statDivider
+            statCell(label: "Blocks", value: blocksCount)
+        }
+    }
+
+    private func statCell(label: String, value: String, color: Color = SheetPalette.textStrong) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.sheetSans(10, weight: .semibold))
+                .tracking(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(SheetPalette.textMuted)
+                .lineLimit(1)
+            Text(value)
+                .font(.sheetSerif(15, weight: .semibold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var statDivider: some View {
+        Rectangle()
+            .fill(SheetPalette.statDivider)
+            .frame(width: 1, height: 22)
+            .padding(.horizontal, 8)
     }
 
     // MARK: - .stops mode
@@ -206,19 +278,22 @@ struct TripBottomSheet: View {
             Spacer(minLength: 30)
             Image(systemName: "mappin.and.ellipse")
                 .font(.system(size: 38, weight: .light))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SheetPalette.textMuted)
             Text("No stops yet")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(.sheetSerif(16, weight: .semibold))
+                .foregroundStyle(SheetPalette.textStrong)
             Text("Use the search bar above to find a place and add it.")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(.sheetSans(13))
+                .foregroundStyle(SheetPalette.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
             Spacer(minLength: 0)
         }
     }
 
+    /// The stops list, wrapped in a soft white inset card (mock §"Stops list
+    /// with embedded block dividers"). Block separators are rendered as
+    /// HEADER strips, not stop-shaped rows — so they read as section titles.
     private var waypointList: some View {
         let items = trip.listItems
         let stopColorByID = stopColorByIDMap()
@@ -236,12 +311,13 @@ struct TripBottomSheet: View {
                 addBlockRow
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 14, trailing: 14))
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.clear)
+        .environment(\.defaultMinListRowHeight, 1)
     }
 
     /// Map each waypoint's id to the color of the block it belongs to. Used to
@@ -261,37 +337,97 @@ struct TripBottomSheet: View {
         case .stop(let wp):
             waypointRow(wp, accent: stopColorByID[wp.id] ?? tripAccent)
         case let .separator(_, blockIndex, color, displayName):
-            separatorRow(blockIndex: blockIndex, color: swiftUIColor(color), displayName: displayName)
+            blockHeaderRow(blockIndex: blockIndex, color: swiftUIColor(color), displayName: displayName)
         }
     }
 
+    /// Block HEADER strip — square color chip with white number + serif name
+    /// + "N stops" subline. Distinctly NOT shaped like a stop row, so users
+    /// don't confuse a block separator for a waypoint. (Was previously a
+    /// rounded pill, which the mock-alignment work in AlaskaRouter-9634
+    /// flagged as the root cause of "separators visibly resemble waystops.")
+    private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String) -> some View {
+        let count = stopCountInBlock(blockIndex: blockIndex)
+        return HStack(spacing: 10) {
+            // Square chip with number — clearly different from the round
+            // pip on a stop row.
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(color)
+                    .frame(width: 22, height: 22)
+                Text("\(blockIndex + 1)")
+                    .font(.sheetSans(11, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(displayName)
+                    .font(.sheetSerif(14, weight: .semibold))
+                    .foregroundStyle(SheetPalette.textStrong)
+                    .lineLimit(1)
+                Text(count == 1 ? "1 stop" : "\(count) stops")
+                    .font(.sheetSans(10.5))
+                    .tracking(0.4)
+                    .foregroundStyle(SheetPalette.textMuted)
+            }
+
+            Spacer(minLength: 0)
+
+            // Drag handle — block headers participate in reorder like any
+            // other list row (.onMove). Keeping the affordance visible so
+            // users see they can move a block boundary.
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(SheetPalette.blockHeaderBg)
+        .overlay(
+            // Top hairline divides this block from the previous block.
+            // Suppressed via opacity on the very first row (which sits at
+            // the top of the card).
+            VStack {
+                Rectangle()
+                    .fill(SheetPalette.cardBorder)
+                    .frame(height: 0.5)
+                Spacer()
+            }
+            .opacity(blockIndex == 0 ? 0 : 1)
+        )
+    }
+
+    /// Stop row — small white-fill numbered pip with colored stroke, serif
+    /// name, sans kind hint. Indented if the trip has any block separators.
     private func waypointRow(_ wp: Waypoint, accent: Color) -> some View {
-        HStack(spacing: 12) {
+        let isIndented = !trip.separators.isEmpty
+        return HStack(spacing: 10) {
+            // Numbered pip — white fill, 1.6pt colored stroke, tabular digit.
+            ZStack {
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 22, height: 22)
+                Circle()
+                    .stroke(accent, lineWidth: 1.6)
+                    .frame(width: 22, height: 22)
+                Text("\(wp.order + 1)")
+                    .font(.sheetSans(10, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(accent)
+            }
+
             Button(action: { onTapWaypoint(wp) }) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(0.18))
-                            .frame(width: 28, height: 28)
-                        Text("\(wp.order + 1)")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(accent)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(wp.label ?? "Untitled stop")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        HStack(spacing: 4) {
-                            Text(wp.category?.replacingOccurrences(of: "_", with: " ") ?? "stop")
-                            Text("·")
-                            Text(String(format: "%.3f, %.3f", wp.lat, wp.lon))
-                        }
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(wp.label ?? "Untitled stop")
+                        .font(.sheetSerif(15, weight: .semibold))
+                        .foregroundStyle(SheetPalette.textStrong)
+                        .lineLimit(1)
+                    Text(kindHint(for: wp))
+                        .font(.sheetSans(11.5))
+                        .foregroundStyle(SheetPalette.textMuted)
+                        .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -300,62 +436,56 @@ struct TripBottomSheet: View {
             // the safety net so no confirmation alert here.
             Button(action: { deleteWaypoint(wp) }) {
                 Image(systemName: "trash")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20).opacity(0.85))
-                    .frame(width: 32, height: 32)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(SheetPalette.destructive.opacity(0.85))
+                    .frame(width: 30, height: 30)
+                    .background(Color.black.opacity(0.04), in: Circle())
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
+            // Drag handle — the iOS-native .onMove integration uses this.
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
         }
-        .padding(.vertical, 10)
-    }
-
-    /// A draggable block-boundary row. Renders the block number in a pill,
-    /// the auto-name, and a subtle background tint matching the block color.
-    private func separatorRow(blockIndex: Int, color: Color, displayName: String) -> some View {
-        HStack(spacing: 10) {
-            Text("\(blockIndex + 1)")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(width: 24, height: 24)
-                .background(color, in: Circle())
-            Text(displayName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 10)
+        .padding(.leading, isIndented ? 22 : 4)
+        .padding(.trailing, 4)
         .padding(.vertical, 8)
-        .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(color.opacity(0.45), lineWidth: 1)
-        )
     }
 
     private var addBlockRow: some View {
         Button(action: addBlockSeparator) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: "plus.circle")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(SheetPalette.textMuted)
                 Text("Add block separator")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.sheetSans(12, weight: .semibold))
+                    .tracking(0.2)
+                    .foregroundStyle(SheetPalette.textMuted)
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(SheetPalette.cardBorder, style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func kindHint(for wp: Waypoint) -> String {
+        let cat = wp.category?.replacingOccurrences(of: "_", with: " ") ?? "stop"
+        return "\(cat) · \(String(format: "%.3f, %.3f", wp.lat, wp.lon))"
+    }
+
+    private func stopCountInBlock(blockIndex: Int) -> Int {
+        let blocks = trip.blocks
+        guard blockIndex >= 0, blockIndex < blocks.count else { return 0 }
+        return blocks[blockIndex].waypoints.count
     }
 
     // MARK: - .trips mode
@@ -384,16 +514,16 @@ struct TripBottomSheet: View {
             Button(action: { switchTo(t) }) {
                 HStack(spacing: 12) {
                     Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22, weight: .regular))
-                        .foregroundStyle(isActive ? tripAccent : .secondary)
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(isActive ? tripAccent : SheetPalette.textMuted)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(t.name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.primary)
+                            .font(.sheetSerif(15, weight: .semibold))
+                            .foregroundStyle(SheetPalette.textStrong)
                             .lineLimit(1)
                         Text("\(t.waypoints.count) stops")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .font(.sheetSans(11.5))
+                            .foregroundStyle(SheetPalette.textMuted)
                     }
                     Spacer(minLength: 0)
                 }
@@ -403,9 +533,10 @@ struct TripBottomSheet: View {
 
             Button(action: { tripPendingDelete = t }) {
                 Image(systemName: "trash")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20).opacity(0.85))
-                    .frame(width: 36, height: 36)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(SheetPalette.destructive.opacity(0.85))
+                    .frame(width: 34, height: 34)
+                    .background(Color.black.opacity(0.04), in: Circle())
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -417,14 +548,14 @@ struct TripBottomSheet: View {
         Button(action: createNewTrip) {
             HStack(spacing: 12) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20))
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(SheetPalette.destructive)
                 Text("New Trip")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .font(.sheetSerif(15, weight: .semibold))
+                    .foregroundStyle(SheetPalette.textStrong)
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -573,6 +704,11 @@ struct TripBottomSheet: View {
 
     private var stopsCount: String { "\(trip.waypoints.count)" }
 
+    private var blocksCount: String {
+        // Number of blocks = separators + 1 (the implicit first block).
+        return "\(trip.separators.count + 1)"
+    }
+
     private var distanceText: String {
         let coords = trip.orderedWaypoints.map(\.coordinate)
         guard coords.count >= 2 else { return "0" }
@@ -592,18 +728,6 @@ struct TripBottomSheet: View {
     private var tripsSubtitle: String {
         let n = allTrips.count
         return n == 1 ? "1 trip" : "\(n) trips"
-    }
-
-    private func tripStatChip(value: String, label: String) -> some View {
-        VStack(alignment: .trailing, spacing: 1) {
-            Text(value)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-            Text(label)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-        }
     }
 
     private func collapseFrom(_ d: TripSheetDetent) -> TripSheetDetent {

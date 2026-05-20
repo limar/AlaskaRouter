@@ -13,10 +13,136 @@
       "minzoom": 0,
       "maxzoom": 10,
       "attribution": "© OpenTopoMap (CC-BY-SA), © OpenStreetMap"
+    },
+    "anchor-labels": {
+      "type": "geojson",
+      "data": "__ANCHOR_LABELS_URL__"
     }
   },
   "layers": [
     { "id": "bg", "type": "background", "paint": { "background-color": "#f0e8d2" } },
-    { "id": "basemap", "type": "raster", "source": "basemap" }
+    { "id": "basemap", "type": "raster", "source": "basemap" },
+
+    {
+      "id": "label-region",
+      "type": "symbol",
+      "source": "anchor-labels",
+      "filter": ["==", ["get", "tier"], "region"],
+      "minzoom": 0,
+      "maxzoom": 6,
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 1, 14, 4, 26, 5, 32],
+        "text-letter-spacing": 0.4,
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "text-padding": 8
+      },
+      "paint": {
+        "text-color": "#3a3024",
+        "text-halo-color": "rgba(255,250,238,0.85)",
+        "text-halo-width": 1.6,
+        "text-halo-blur": 0.5,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.0, 1, 0.5, 2.5, 0.95, 5, 0.85, 6, 0.0]
+      }
+    },
+
+    {
+      "id": "label-water",
+      "type": "symbol",
+      "source": "anchor-labels",
+      "filter": ["==", ["get", "tier"], "water"],
+      "minzoom": 1,
+      "maxzoom": 6,
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 1, 10, 4, 14, 5, 16],
+        "text-letter-spacing": 0.3,
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "text-padding": 6
+      },
+      "paint": {
+        "text-color": "#34516e",
+        "text-halo-color": "rgba(255,255,255,0.6)",
+        "text-halo-width": 1.2,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.0, 2, 0.7, 5, 0.7, 6, 0.0]
+      }
+    },
+
+    {
+      "id": "label-mountains",
+      "type": "symbol",
+      "source": "anchor-labels",
+      "filter": ["==", ["get", "tier"], "mountains"],
+      "minzoom": 3,
+      "maxzoom": 8,
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 9, 5, 12, 7, 14],
+        "text-letter-spacing": 0.1,
+        "text-allow-overlap": false,
+        "text-padding": 6
+      },
+      "paint": {
+        "text-color": "#5a4a2e",
+        "text-halo-color": "rgba(255,250,238,0.9)",
+        "text-halo-width": 1.4,
+        "text-halo-blur": 0.3,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.0, 4, 0.85, 7, 0.85, 8, 0.0]
+      }
+    },
+
+    {
+      "id": "label-city",
+      "type": "symbol",
+      "source": "anchor-labels",
+      "filter": ["==", ["get", "tier"], "city"],
+      "minzoom": 3,
+      "maxzoom": 8,
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 5, 13, 7, 15],
+        "text-anchor": "top",
+        "text-offset": [0, 0.6],
+        "text-allow-overlap": false,
+        "text-padding": 4
+      },
+      "paint": {
+        "text-color": "#1a1a1a",
+        "text-halo-color": "rgba(255,250,238,0.95)",
+        "text-halo-width": 1.6,
+        "text-halo-blur": 0.3,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.0, 4, 0.95, 7, 0.95, 8, 0.0]
+      }
+    },
+
+    {
+      "id": "label-peak",
+      "type": "symbol",
+      "source": "anchor-labels",
+      "filter": ["==", ["get", "tier"], "peak"],
+      "minzoom": 4,
+      "maxzoom": 8,
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 6, 12, 7, 14],
+        "text-anchor": "bottom",
+        "text-offset": [0, -0.6],
+        "text-allow-overlap": false,
+        "text-padding": 4
+      },
+      "paint": {
+        "text-color": "#3a2a1a",
+        "text-halo-color": "rgba(255,250,238,0.9)",
+        "text-halo-width": 1.4,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.0, 5, 0.9, 7, 0.9, 8, 0.0]
+      }
+    }
   ]
 }
