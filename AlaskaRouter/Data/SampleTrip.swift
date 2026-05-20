@@ -68,6 +68,31 @@ enum SampleTrip {
             }
         }
 
+        // Optional dev seed for AlaskaRouter-3bot — three-leg back-and-forth
+        // (forward, reverse, forward-again). Stresses the multi-pass offset
+        // with three slots on the shared road. Combine with seedDemoReturnLeg
+        // for a four-pass variant.
+        if UserDefaults.standard.bool(forKey: "seedDemoTripleLeg"),
+           waypoints.count >= 2 {
+            // The new "forward again" leg starts AFTER whatever was already
+            // appended (either just the initial 5 stops, or 5 + reverse 4).
+            // Count what's in the trip now via trip.waypoints.
+            let currentMaxOrder = trip.waypoints.map(\.order).max() ?? (waypoints.count - 1)
+            var nextOrder = currentMaxOrder + 1
+            // Skip the first stop to avoid two-consecutive-Cantwell stops.
+            for source in waypoints.dropFirst() {
+                let w = Waypoint(
+                    order: nextOrder,
+                    coordinate: source.coordinate,
+                    label: source.label,
+                    category: source.category
+                )
+                w.trip = trip
+                context.insert(w)
+                nextOrder += 1
+            }
+        }
+
         try? context.save()
     }
 }

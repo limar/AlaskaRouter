@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-3bot
 title: Multi-pass legs overlap instead of rendering side-by-side
-status: todo
+status: completed
 type: bug
 priority: high
 created_at: 2026-05-20T19:41:45Z
-updated_at: 2026-05-20T19:42:40Z
+updated_at: 2026-05-20T20:47:59Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -47,12 +47,12 @@ Expect parallel ribbons on the Parks Highway between Cantwell and Fairbanks; obs
 
 ## Checklist
 
-- [ ] Reproduce with `seedDemoReturnLeg` and capture a screenshot of the overlap
-- [ ] Diagnose which of the four "where to investigate" paths is the root cause
-- [ ] Fix the cause (not paper over with extra offset)
-- [ ] Verify same-color case (single-block out-and-back)
-- [ ] Verify different-color case (return leg in a later block)
-- [ ] Verify three-pass case if achievable (back-and-forth-and-back)
+- [x] Reproduce with `seedDemoReturnLeg` and capture a screenshot of the overlap
+- [x] Diagnose which of the four "where to investigate" paths is the root cause — turned out to be #2 (offset constant 100× too small) compounded by missing cos(lat) compensation
+- [x] Fix the cause (not paper over with extra offset)
+- [x] Verify same-color case (single-block out-and-back) — visible at z=9 and z=10
+- [x] Verify different-color case (return leg in a later block) — strong amber + blue contrast
+- [x] Verify three-pass case (back-and-forth-and-back) — new seedDemoTripleLeg dev launch arg
 
 ## References
 
@@ -60,3 +60,54 @@ Expect parallel ribbons on the Parks Highway between Cantwell and Fairbanks; obs
 - `AlaskaRouter/Map/ExpeditionMapView.swift` (~line 112+) — segment rendering
 - `AlaskaRouter/Data/SampleTrip.swift` (~line 49) — `seedDemoReturnLeg` dev seeder
 - AlaskaRouter-9axu (completed) — original design + implementation
+
+## Root cause
+
+Two compounding bugs in `AlaskaRouter/Data/TripSegments.swift`:
+
+1. **Constant 100× too small.** `perpendicularOffset` divided the pt-offset by `70_000.0` to convert to coordinate degrees. The correct denominator at z=10 is ~728 (1° latitude = 256 × 2^10 / 360 = 728 screen px). The previous value made a 7pt offset render as 0.07 pixels at z=10 — visually identical to no offset at all.
+
+2. **Mercator longitude stretch not compensated.** The perpendicular rotation treated lat/lon as Cartesian. At lat 64° N, 1° longitude = ~0.44 of 1° latitude in screen pixels — so N–S segments (most of Parks Highway) received roughly half the visual offset of E–W segments. Asymmetric and confusing.
+
+3. **`passOffsetUnit = 7.0` too tight.** Even after fixing the constant, 7pt center-to-center was less than one wash width (14pt at z=10) — the washes would overlap so heavily the ribbons read as one. Bumped to 14pt so cores are clearly parallel and washes only just touch.
+
+## Fix
+
+`AlaskaRouter/Data/TripSegments.swift`:
+- `degreesPerPointAtZ10 = 1.0 / 728.0` (replaces the bogus `/ 70_000.0`)
+- Added `cosLat` compensation: tangent is computed in "screen-pixel-equivalent degrees" (lon scaled by cos(lat)), rotated 90°, then un-scaled when written back to coords.
+- `passOffsetUnit: Float = 14.0` (was 7.0); cap raised to 28pt to match.
+- Comments updated to reference 3bot, document the math, and warn that screen offset grows with zoom (deliberate trade).
+
+`AlaskaRouter/Data/SampleTrip.swift`:
+- New dev launch arg `seedDemoTripleLeg` — appends a second forward leg after the initial 5 stops (or after the reverse leg if `seedDemoReturnLeg` also set), producing 3-pass / 4-pass synthetic trips for stress-testing offset rendering.
+
+## Verification — matrix of 12 screenshots
+
+Each cell: `2leg|3leg × 1color|2color × z=7|9|10`. Center on Healy (mid-route), 9-stop (or 13-stop) Parks Highway out-and-back / out-and-back-and-out trip.
+
+| | z=7 (far) | z=9 (mid) | z=10 (close) |
+|---|---|---|---|
+| 2-leg 1-color | Two amber ribbons, close | Two parallel ribbons ✓ | Clearly separated ✓ |
+| 2-leg 2-color | Amber + blue parallel ✓ | Strong contrast ✓ | Vivid ✓ |
+| 3-leg 1-color | Three close ribbons | Three parallel ribbons ✓ | Clear "lanes" ✓ |
+| 3-leg 2-color | Mixed colors, 3 ribbons | Three distinguishable ribbons ✓ | Spread with mixed colors ✓ |
+
+Repro recipes:
+```bash
+# 2-leg 1-color
+launch -seedDemoTrip 1 -seedDemoReturnLeg 1 ...
+# 2-leg 2-color
+launch -seedDemoTrip 1 -seedDemoReturnLeg 1 -seedDemoSeparator 1 ...
+# 3-leg 1-color
+launch -seedDemoTrip 1 -seedDemoReturnLeg 1 -seedDemoTripleLeg 1 ...
+# 3-leg 2-color
+launch -seedDemoTrip 1 -seedDemoReturnLeg 1 -seedDemoTripleLeg 1 -seedDemoSeparator 1 ...
+```
+
+Note: a clean SwiftData store is required (the first-launch seed guard skips when DB has any trips). `xcrun simctl erase` between scenarios when iterating.
+
+## Known follow-ups (separate beans recommended if they bite)
+
+- **Zoom-adaptive offset width**: today the offset is a fixed coordinate-degree value, so screen separation grows linearly with zoom (1× at z=10, 4× at z=12, 0.25× at z=8). At very low zoom the ribbons merge into one fatter line; at very high zoom they're widely spread. Acceptable for v1 — the "planning zoom" is z=9..11 and that's where the fix is tuned. If feedback says "too wide at z=14", add a zoom-aware scale.
+- **Selected-waypoint sobresaliente halo** overlaps the ribbons heavily at z=10 (concentric ring icon). Not a 3bot concern, but worth noting since the matrix screenshots show it prominently. Track separately if it bugs.

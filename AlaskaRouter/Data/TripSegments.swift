@@ -21,35 +21,49 @@ struct TripSegment: Identifiable {
     let isExtraPass: Bool                // true if this is the 5th+ pass — render dashed
 }
 
-/// Perpendicular-offset a polyline by ~`offsetPt` pixels at a typical mid
-/// zoom (~z=12). MapLibreSwiftDSL doesn't expose lineOffset, so we shift the
-/// coordinates themselves. The offset is in coord-degrees, hand-tuned to
-/// match ~1.5× core line width at z=10..12 (where users typically plan).
-/// Slightly under-offset at low zoom and slightly over at very high zoom —
-/// acceptable for the "two-cars-avoiding-each-other" feel the user asked for.
+/// Perpendicular-offset a polyline by `offset` POINTS as measured at z=10
+/// (the typical Alaska planning zoom). MapLibreSwiftDSL doesn't expose
+/// lineOffset, so we shift the coordinates themselves — meaning the screen
+/// offset grows with zoom (subtle at z<8, more visible at z>=12). That's a
+/// deliberate trade for "two distinct ribbons" visibility on a wide road
+/// where the user's actually looking at parallel legs.
+///
+/// Math:
+///   - At z=10, 1° latitude ≈ 728 screen px (256 × 2^10 / 360).
+///   - So 1 pt offset ≈ 1/728 ° lat ≈ 0.00137°.
+///   - In the LON direction, the same screen-px offset needs to be
+///     1/cos(latitude) × bigger (Mercator longitude stretch).
+///
+/// Previous version used 70_000 — 100× too small — which made the ribbons
+/// effectively invisible at any practical zoom. See AlaskaRouter-3bot.
+private let degreesPerPointAtZ10: Double = 1.0 / 728.0
+
 private func perpendicularOffset(_ coords: [CLLocationCoordinate2D], byPoints offset: Float) -> [CLLocationCoordinate2D] {
     guard coords.count >= 2, offset != 0 else { return coords }
-    // ~7pt offset reads as ~1.5× core line width at zoom 10. The scaling
-    // factor below is tuned so 7pt → ~0.0001° lat (~11 m on the ground at
-    // 64° N) which renders to ~7 px at z=10. Tweak if visual is off.
-    let offsetDeg = Double(offset) / 70_000.0
+    let offsetDeg = Double(offset) * degreesPerPointAtZ10
     var result: [CLLocationCoordinate2D] = []
     result.reserveCapacity(coords.count)
     for i in 0 ..< coords.count {
         let prev = (i > 0) ? coords[i - 1] : coords[i]
         let next = (i < coords.count - 1) ? coords[i + 1] : coords[i]
+        // Convert the tangent into "screen-pixel-equivalent degrees" by
+        // compensating for the Mercator longitude stretch at this latitude.
+        // Without this, N-S segments get ~cos(lat) less visual offset than
+        // E-W segments (≈ 0.44× at 64°N — clearly visible asymmetry).
+        let cosLat = max(cos(coords[i].latitude * .pi / 180.0), 0.1)
         let dLat = next.latitude - prev.latitude
-        let dLon = next.longitude - prev.longitude
-        let len = (dLat * dLat + dLon * dLon).squareRoot()
-        guard len > 1e-9 else {
+        let dLonScreen = (next.longitude - prev.longitude) * cosLat
+        let len = (dLat * dLat + dLonScreen * dLonScreen).squareRoot()
+        guard len > 1e-12 else {
             result.append(coords[i])
             continue
         }
-        // 90° CCW rotation of the tangent: (dLat, dLon) → (-dLon, dLat).
-        // Approximate — doesn't compensate for the cos(latitude) lon-stretch
-        // because at Alaska latitudes the visual error is small enough.
-        let perpLat = -dLon / len * offsetDeg
-        let perpLon =  dLat / len * offsetDeg
+        // 90° CCW rotation of the screen-space tangent.
+        let perpLatScreen = -dLonScreen / len * offsetDeg
+        let perpLonScreen =  dLat / len * offsetDeg
+        // Convert back to coordinate space (un-stretch longitude).
+        let perpLat = perpLatScreen
+        let perpLon = perpLonScreen / cosLat
         result.append(.init(
             latitude: coords[i].latitude + perpLat,
             longitude: coords[i].longitude + perpLon
@@ -60,11 +74,14 @@ private func perpendicularOffset(_ coords: [CLLocationCoordinate2D], byPoints of
 
 extension Trip {
 
-    /// Width unit for between-pass offsets. Each additional pass sits this
-    /// many "units" away from its neighbor. Tuned for "subtle / two-cars-
-    /// avoiding-each-other" feel per user spec.
-    private static let passOffsetUnit: Float = 7.0
-    private static let passOffsetCap: Float = 14.0   // ±2W
+    /// Center-to-center spacing between adjacent passes, in POINTS measured
+    /// at z=10. 14pt ≈ one wash-line-width — so two ribbons sit just clear
+    /// of each other's wash overlap, cores clearly parallel. Tuned for the
+    /// "two distinct ribbons running side by side" feel; 3bot's previous
+    /// 7pt was visually indistinguishable from "single ribbon" even when
+    /// the underlying constant bug was fixed.
+    private static let passOffsetUnit: Float = 14.0
+    private static let passOffsetCap: Float = 28.0   // ±2W
     private static let extraPassDashedAfterSlot: Int = 4
 
     /// Build the segment list with per-pass offsets. Falls back to straight-
