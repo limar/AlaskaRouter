@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-19T07:16:34Z
-updated_at: 2026-05-20T18:58:02Z
+updated_at: 2026-05-20T19:40:26Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -49,3 +49,44 @@ The named v1 polish requirement covers a broader frontier than this pass touches
 4. **Tier styling polish** — letter-spacing on tracked all-caps labels is a single property today; per-feature `properties.letterSpacing` overrides exist in the GeoJSON but aren't yet wired through the style.
 5. **Italics for water labels** — atlases conventionally italicize hydrographic labels. Needs a Noto Sans Italic glyph bundle (currently only `Noto Sans Regular`).
 6. **Centroid + line-following labels for ranges/rivers** — Brooks Range etc would read better as gently curved labels following the feature's shape.
+
+## Open questions before continuing
+
+The first-pass anchor labels shipped, but the broader "Zoom-Out Tuning" v1 polish requirement needs discussion before another pass. Items below are blockers; bean stays in-progress until each has a steer.
+
+### Coverage breadth — Light steer
+
+When expanding from the current 13 anchor features, lean toward:
+- (a) "Landmarks visible from the road" — pragmatic for road-trip orientation, OR
+- (b) "Everything a serious paper atlas would name" — denser, more atmospheric
+
+### Mid-zoom (z=6..10) augmentation from `alaska-places.sqlite`
+
+12 k places sit in the bundle's FTS5 index. Need filtering criteria to pick a subset for label-rendering. Options:
+- Whitelist by category (`settlement_major` + `visitor_center` only?)
+- Population threshold (data column not yet present — would need an extraction pass)
+- Hand-curated subset (most work, best feel)
+
+### Italic glyphs for water labels
+
+Atlas convention italicizes hydrographic labels. Currently bundle only ships `Noto Sans Regular`. Cost of adding `Noto Sans Italic` ≈ 700 KB bundle size + a glyph-export run. Worth it for v1, or skip until v2?
+
+### Line-following labels for ranges and rivers
+
+"BROOKS RANGE" reads better gently curved along the ridge. Needs LineString geometry — either manual digitizing of ~10 key features or OSM relation extraction. Worth the data-prep for v1, or point-anchor only?
+
+### Collision decimation at the handoff zooms (z=6..8)
+
+Anchor labels and OpenTopoMap raster labels can collide. Three options:
+- (a) Trust MapLibre's `text-allow-overlap: false` (current; doesn't see raster labels because they're baked in)
+- (b) Shift anchor zoom ranges to leave a gap (e.g., anchors stop at z=5, raster takes over from z=6)
+- (c) Suppress specific raster labels via custom tile rendering (much more work)
+
+### Reference image for "good zoom-out"
+
+Is there a specific look in mind? Paper atlas style? Apple Maps satellite at low zoom? Anything I can match against rather than guess on taste?
+
+### Possibly out-of-bean (separate considerations)
+
+- Route line behavior at very low zooms — currently floored at z≤8 via "good pencil line", but the broader "Zoom-Out Tuning" requirement might want this revisited.
+- Whether to fade world-skeleton (z=0..5) tiles slightly to keep the route prominent at very low zooms.
