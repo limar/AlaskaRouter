@@ -1,6 +1,9 @@
 // Floating callout shown when a trip waypoint is selected (via map tap or
 // bottom-sheet tap). Follows the design-handoff mock's POI callout pattern,
-// trimmed for kcq8 essentials: identity + position + remove + prev/next.
+// trimmed for the v1 essentials and with a horizontal action toolbar at the
+// bottom — navigation (prev/next), reorder (up/down), and remove. The toolbar
+// replaces the earlier external chevrons + big Remove button to keep the
+// callout compact and to put all per-stop actions in one obvious place.
 
 import SwiftUI
 import CoreLocation
@@ -11,22 +14,17 @@ struct StopCallout: View {
     let distanceFromPrevText: String?      // "45 km from previous" (nil for stop 1)
     let canPrev: Bool
     let canNext: Bool
+    let canMoveEarlier: Bool
+    let canMoveLater: Bool
     let onPrev: () -> Void
     let onNext: () -> Void
+    let onMoveEarlier: () -> Void
+    let onMoveLater: () -> Void
     let onClose: () -> Void
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            chevron(systemName: "chevron.left", enabled: canPrev, action: onPrev)
-            body_card
-            chevron(systemName: "chevron.right", enabled: canNext, action: onNext)
-        }
-        .padding(.horizontal, 4)
-    }
-
-    private var body_card: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(positionLabel)
@@ -58,19 +56,32 @@ struct StopCallout: View {
                 .buttonStyle(.plain)
             }
 
-            Button(action: onRemove) {
-                HStack(spacing: 8) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Remove from trip")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .background(Color(red: 0.78, green: 0.32, blue: 0.20), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Divider().opacity(0.4)
+
+            HStack(spacing: 0) {
+                actionItem(systemImage: "chevron.left",
+                           label: "Prev",
+                           enabled: canPrev,
+                           action: onPrev)
+                actionItem(systemImage: "arrow.up",
+                           label: "Up",
+                           enabled: canMoveEarlier,
+                           action: onMoveEarlier)
+                actionItem(systemImage: "arrow.down",
+                           label: "Down",
+                           enabled: canMoveLater,
+                           action: onMoveLater)
+                actionItem(systemImage: "chevron.right",
+                           label: "Next",
+                           enabled: canNext,
+                           action: onNext)
+                Spacer(minLength: 8)
+                actionItem(systemImage: "trash",
+                           label: "Remove",
+                           enabled: true,
+                           destructive: true,
+                           action: onRemove)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -82,19 +93,33 @@ struct StopCallout: View {
         .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
     }
 
-    private func chevron(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func actionItem(
+        systemImage: String,
+        label: String,
+        enabled: Bool,
+        destructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(enabled ? .primary : .tertiary)
-                .frame(width: 36, height: 36)
-                .background(.thinMaterial, in: Circle())
-                .overlay(Circle().stroke(.white.opacity(0.10), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            VStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(itemColor(enabled: enabled, destructive: destructive))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .opacity(enabled ? 1.0 : 0.45)
+        .opacity(enabled ? 1.0 : 0.55)
+    }
+
+    private func itemColor(enabled: Bool, destructive: Bool) -> Color {
+        if destructive { return Color(red: 0.78, green: 0.32, blue: 0.20) }
+        return enabled ? .primary : .secondary
     }
 
     private var detailLine: String {
