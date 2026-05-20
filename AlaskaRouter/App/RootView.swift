@@ -37,6 +37,10 @@ struct RootView: View {
     // Routing layer state
     private let routingProvider: any RoutingProvider = OSRMProvider()
     @State private var networkMonitor = NetworkMonitor()
+    @State private var locationProvider = LocationProvider()
+    /// True between a locate-me tap and the first location fix arriving.
+    /// onChange uses this to decide whether to auto-focus on the new fix.
+    @State private var pendingLocateMeFocus = false
     @State private var snappedRouteCoords: [CLLocationCoordinate2D]?
     @State private var snappedRouteKey: String = ""        // tracks which trip-state the snap is for
     @State private var snapTask: Task<Void, Never>?
@@ -72,6 +76,7 @@ struct RootView: View {
                 previewCoord: previewedResult?.coord,
                 previewName: previewedResult?.name,
                 snappedRouteCoords: snappedRouteCoords,
+                userLocation: locationProvider.lastLocation?.coordinate,
                 onWaypointTap: handleMapWaypointTap
             )
             .ignoresSafeArea()
@@ -182,7 +187,7 @@ struct RootView: View {
                             .padding(.leading, 12)
                             .padding(.bottom, sheetClearance)
                         Spacer()
-                        MapControls(camera: $mapCamera)
+                        MapControls(camera: $mapCamera, onLocateMe: handleLocateMe)
                             .padding(.trailing, 12)
                             .padding(.bottom, sheetClearance)
                     }
@@ -243,6 +248,12 @@ struct RootView: View {
                 if let key = pendingSnapKey { fireSnap(forKey: key) }
             }
             scheduleSnapForCurrentTrip()
+            if LaunchArgs.autoLocateMe {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    handleLocateMe()
+                }
+            }
             if LaunchArgs.preloadDemoRoute, snappedRouteCoords == nil {
                 if let url = Bundle.main.url(forResource: "demo-route", withExtension: "geojson"),
                    let data = try? Data(contentsOf: url),
@@ -276,6 +287,15 @@ struct RootView: View {
         }
         .onChange(of: tripGeometryKey) { _, newKey in
             scheduleSnapForCurrentTrip(key: newKey)
+        }
+        // First location fix after a locate-me tap → focus the camera.
+        // (We don't use MapLibreSwiftUI's tracking mode for showsUserLocation
+        // anymore — the blue puck is rendered as our own SymbolStyleLayer,
+        // see WaypointIcons.userLocation. That keeps the dot rendering
+        // reliable regardless of the wrapper's tracking semantics.)
+        .onChange(of: locationProvider.lastLocation) { _, new in
+            guard pendingLocateMeFocus, let new else { return }
+            focusOnUserLocation(new.coordinate)
         }
     }
 
@@ -438,6 +458,51 @@ struct RootView: View {
             selectedWaypointID = wp.id
             previewedResult = nil
             // Leave bottomSheetDetent alone — user keeps control of the sheet's size.
+        }
+    }
+
+    // MARK: - Locate me (AlaskaRouter-j03u)
+
+    private func handleLocateMe() {
+        switch locationProvider.authorizationStatus {
+        case .notDetermined:
+            // First tap → request permission. The delegate will start updates
+            // when the user grants; the next tap will then focus.
+            locationProvider.requestWhenInUse()
+        case .restricted, .denied:
+            // Could surface a Settings deep-link here. For v1 we silently
+            // no-op; the user can grant via Settings and retry.
+            return
+        case .authorizedWhenInUse, .authorizedAlways:
+            locationProvider.startUpdating()
+            pendingLocateMeFocus = true
+            // If we already have a fix, focus immediately. Otherwise the
+            // .onChange below will fire when the first one arrives.
+            if let loc = locationProvider.lastLocation {
+                focusOnUserLocation(loc.coordinate)
+            }
+        @unknown default:
+            return
+        }
+    }
+
+    private func focusOnUserLocation(_ coord: CLLocationCoordinate2D) {
+        let z = currentMapZoom()
+        withAnimation(.smooth(duration: 0.4)) {
+            mapCamera = .center(coord, zoom: z)
+        }
+        pendingLocateMeFocus = false
+    }
+
+    /// Current camera zoom regardless of camera mode. Used so locate-me
+    /// preserves zoom whether we're already centered or tracking.
+    private func currentMapZoom() -> Double {
+        switch mapCamera.state {
+        case let .centered(_, zoom, _, _, _):                              return zoom
+        case let .trackingUserLocation(zoom, _, _, _):                     return zoom
+        case let .trackingUserLocationWithHeading(zoom, _, _):             return zoom
+        case let .trackingUserLocationWithCourse(zoom, _, _):              return zoom
+        default:                                                            return 12.0
         }
     }
 

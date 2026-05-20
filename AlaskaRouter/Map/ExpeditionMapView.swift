@@ -55,6 +55,10 @@ struct ExpeditionMapView: View {
     /// Snap-to-road geometry from the Routing layer. When present, replaces
     /// the straight-line fallback with the real road shape (solid, not dashed).
     let snappedRouteCoords: [CLLocationCoordinate2D]?
+    /// User's current GPS location (AlaskaRouter-j03u). When present, a blue
+    /// puck is drawn at this coord. Pixel-sized so it stays constant across
+    /// zooms (uses the WaypointIcons.userLocation UIImage).
+    let userLocation: CLLocationCoordinate2D?
     /// Map tap on a waypoint marker (AlaskaRouter-kcq8). `nil` means an empty
     /// area was tapped — the parent should clear selection.
     var onWaypointTap: ((UUID?) -> Void)? = nil
@@ -191,6 +195,17 @@ struct ExpeditionMapView: View {
                         .textOffset(CGVector(dx: 0, dy: 1.8))
                         .textAllowsOverlap(false)
                 }
+            }
+
+            // User's current GPS location — Apple-Maps-style blue puck.
+            if let userLocation {
+                let f = MLNPointFeature()
+                f.coordinate = userLocation
+                let src = ShapeSource(identifier: "user-location") { f }
+                SymbolStyleLayer(identifier: "user-location-icon", source: src)
+                    .iconImage(WaypointIcons.userLocation)
+                    .iconAllowsOverlap(true)
+                    .iconAnchor("center")
             }
 
             // Preview pin (investigating a search result, not yet added).

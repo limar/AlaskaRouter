@@ -58,6 +58,14 @@ enum LaunchArgs {
         UserDefaults.standard.bool(forKey: "tripsMode")
     }
 
+    /// Automatically fire the locate-me action shortly after launch. Used to
+    /// screenshot the GPS / blue-dot flow without manual tapping. Pair with
+    /// `xcrun simctl privacy booted grant location <bundle>` to skip the
+    /// permission prompt.
+    static var autoLocateMe: Bool {
+        UserDefaults.standard.bool(forKey: "autoLocateMe")
+    }
+
     /// Load the bundled demo-route.geojson as the initial snapped coords
     /// so screenshots show the real curvy snapped road line, not the
     /// straight-line dashed fallback. Dev-only.

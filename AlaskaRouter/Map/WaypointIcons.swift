@@ -19,6 +19,33 @@ enum WaypointIcons {
     static let committedSelected: UIImage = pngBacked(make(style: .committedSelected))
     static let preview: UIImage = pngBacked(make(style: .preview))
 
+    /// Apple-Maps-style blue puck for the user's current location. 24pt halo
+    /// + 14pt blue core with a thin white ring. Pixel-sized via iconImage()
+    /// so it stays constant on the map across zooms (AlaskaRouter-j03u).
+    static let userLocation: UIImage = pngBacked(makeUserLocation())
+
+    private static func makeUserLocation() -> UIImage {
+        let size: CGFloat = 28
+        let canvas = CGSize(width: size, height: size)
+        let renderer = UIGraphicsImageRenderer(size: canvas)
+        return renderer.image { ctx in
+            let c = ctx.cgContext
+            let center = CGPoint(x: size / 2, y: size / 2)
+            // Soft outer halo
+            c.setShadow(offset: .zero, blur: 5,
+                        color: UIColor(red: 0.10, green: 0.45, blue: 0.95, alpha: 0.45).cgColor)
+            c.setFillColor(UIColor(red: 0.10, green: 0.45, blue: 0.95, alpha: 0.18).cgColor)
+            c.fillEllipse(in: CGRect(x: center.x - 12, y: center.y - 12, width: 24, height: 24))
+            c.setShadow(offset: .zero, blur: 0, color: nil)
+            // White ring (outer)
+            c.setFillColor(UIColor.white.cgColor)
+            c.fillEllipse(in: CGRect(x: center.x - 8, y: center.y - 8, width: 16, height: 16))
+            // Blue core
+            c.setFillColor(UIColor(red: 0.10, green: 0.45, blue: 0.95, alpha: 1.0).cgColor)
+            c.fillEllipse(in: CGRect(x: center.x - 6.5, y: center.y - 6.5, width: 13, height: 13))
+        }
+    }
+
     /// `UIGraphicsImageRenderer` produces images whose `cgImage?.dataProvider?.data`
     /// is often unavailable (it's a render-target IOSurface, not raw bytes).
     /// MapLibreSwiftDSL keys icon registrations by `UIImage.sha256()`, which silently
