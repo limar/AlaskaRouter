@@ -93,56 +93,61 @@ struct ExpeditionMapView: View {
         17: 64,
     ]
 
-    /// Step 1 — render the trip's full route as ONE polyline at offset 0.
-    /// No multi-pass yet. Idempotent via a content-fingerprint layer ID;
-    /// any change to coords / color / snap-state forces remove+re-add.
+    /// Step 2 — render each PASS as one polyline at its absolute lineOffset.
+    /// A pass is a maximal run of consecutive trip legs with no direction
+    /// reversal. Single-pass trips → one centered ribbon. Multi-pass trips
+    /// → N parallel ribbons via native lineOffset.
+    ///
+    /// Idempotent via per-pass content-fingerprint layer IDs; any change
+    /// (coords, offset, color, snap-state) forces remove+re-add of that
+    /// pass's layer.
     fileprivate static func syncTripRouteLayer(
         style: MLNStyle,
         trip: Trip?,
         snappedRouteCoords: [CLLocationCoordinate2D]?
     ) {
-        // Compute the desired layer state.
+        let passes: [RoutePass] = trip?.routePasses(snappedCoords: snappedRouteCoords) ?? []
+        let color: TripColor = trip?.color ?? .amber
+
         struct DesiredLayer {
             let id: String
-            let coords: [CLLocationCoordinate2D]
+            let pass: RoutePass
             let color: TripColor
-            let isFallback: Bool
         }
-        let desired: DesiredLayer? = {
-            guard let trip = trip,
-                  let coords = trip.fullRouteCoords(snappedCoords: snappedRouteCoords),
-                  coords.count >= 2 else { return nil }
-            let usingSnap = (snappedRouteCoords?.count ?? 0) >= 2
-            // Content fingerprint — captures whatever could visually change.
+        let desired: [DesiredLayer] = passes.map { pass in
+            // Content fingerprint per pass — captures whatever could
+            // visually change about this pass.
             var hasher = Hasher()
-            hasher.combine(coords.count)
-            if let first = coords.first {
-                hasher.combine(Int((first.latitude * 1e5).rounded()))
-                hasher.combine(Int((first.longitude * 1e5).rounded()))
+            hasher.combine(pass.id)
+            hasher.combine(pass.coords.count)
+            if let f = pass.coords.first {
+                hasher.combine(Int((f.latitude * 1e5).rounded()))
+                hasher.combine(Int((f.longitude * 1e5).rounded()))
             }
-            if let last = coords.last {
-                hasher.combine(Int((last.latitude * 1e5).rounded()))
-                hasher.combine(Int((last.longitude * 1e5).rounded()))
+            if let l = pass.coords.last {
+                hasher.combine(Int((l.latitude * 1e5).rounded()))
+                hasher.combine(Int((l.longitude * 1e5).rounded()))
             }
-            let mid = coords[coords.count / 2]
+            let mid = pass.coords[pass.coords.count / 2]
             hasher.combine(Int((mid.latitude * 1e5).rounded()))
             hasher.combine(Int((mid.longitude * 1e5).rounded()))
-            hasher.combine(trip.color)
-            hasher.combine(usingSnap)
+            hasher.combine(Int((pass.lineOffsetPt * 1000).rounded()))
+            hasher.combine(color)
+            hasher.combine(pass.isStraightLineFallback)
             let h = UInt32(truncatingIfNeeded: hasher.finalize())
             return DesiredLayer(
-                id: String(format: "%@%08x", tripRouteLayerPrefix, h),
-                coords: coords,
-                color: trip.color,
-                isFallback: !usingSnap
+                id: String(format: "%@%d-%08x", tripRouteLayerPrefix, pass.id, h),
+                pass: pass,
+                color: color
             )
-        }()
+        }
 
-        let wantID = desired?.id
+        let wantIDs = Set(desired.map(\.id))
 
-        // Prune any of our layers that don't match the current want-id.
+        // Prune any of our layers that don't match the current want set.
+        // Snapshot the layer list before mutating.
         let toRemove = style.layers.filter {
-            $0.identifier.hasPrefix(tripRouteLayerPrefix) && $0.identifier != wantID
+            $0.identifier.hasPrefix(tripRouteLayerPrefix) && !wantIDs.contains($0.identifier)
         }
         for layer in toRemove {
             style.removeLayer(layer)
@@ -152,43 +157,43 @@ struct ExpeditionMapView: View {
             }
         }
 
-        // Add the wanted layer if not already present.
-        guard let desired = desired else { return }
-        if style.layer(withIdentifier: desired.id) != nil { return }
-
-        let srcID = tripRouteSourcePrefix + String(desired.id.dropFirst(tripRouteLayerPrefix.count))
-        let polyline = MLNPolylineFeature(
-            coordinates: desired.coords,
-            count: UInt(desired.coords.count)
-        )
-        let source = MLNShapeSource(identifier: srcID, shape: polyline, options: nil)
-        style.addSource(source)
-
-        let layer = MLNLineStyleLayer(identifier: desired.id, source: source)
-        let c = desired.color.swiftUIColor
-        layer.lineColor = NSExpression(
-            forConstantValue: UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
-        )
-        layer.lineWidth = NSExpression(
-            format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
-            tripRouteCoreWidthStops as NSDictionary
-        )
-        layer.lineOpacity = NSExpression(forConstantValue: 0.85)
-        layer.lineCap = NSExpression(forConstantValue: "round")
-        layer.lineJoin = NSExpression(forConstantValue: "round")
-        // Step 1: single layer, offset 0 (centered on the road).
-        if desired.isFallback {
-            layer.lineDashPattern = NSExpression(forConstantValue: [2.0, 1.5])
-        }
-
-        // Insert below the marker layers so waypoint icons stay on top.
+        // Add layers for desired passes that aren't already present.
         let belowLayer: MLNStyleLayer? = waypointLayerIDs
             .compactMap { style.layer(withIdentifier: $0) }
             .first
-        if let below = belowLayer {
-            style.insertLayer(layer, below: below)
-        } else {
-            style.addLayer(layer)
+
+        for d in desired {
+            if style.layer(withIdentifier: d.id) != nil { continue }
+            let srcID = tripRouteSourcePrefix + String(d.id.dropFirst(tripRouteLayerPrefix.count))
+            let polyline = MLNPolylineFeature(
+                coordinates: d.pass.coords,
+                count: UInt(d.pass.coords.count)
+            )
+            let source = MLNShapeSource(identifier: srcID, shape: polyline, options: nil)
+            style.addSource(source)
+
+            let layer = MLNLineStyleLayer(identifier: d.id, source: source)
+            let c = d.color.swiftUIColor
+            layer.lineColor = NSExpression(
+                forConstantValue: UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
+            )
+            layer.lineWidth = NSExpression(
+                format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
+                tripRouteCoreWidthStops as NSDictionary
+            )
+            layer.lineOpacity = NSExpression(forConstantValue: 0.85)
+            layer.lineCap = NSExpression(forConstantValue: "round")
+            layer.lineJoin = NSExpression(forConstantValue: "round")
+            layer.lineOffset = NSExpression(forConstantValue: d.pass.lineOffsetPt)
+            if d.pass.isStraightLineFallback {
+                layer.lineDashPattern = NSExpression(forConstantValue: [2.0, 1.5])
+            }
+
+            if let below = belowLayer {
+                style.insertLayer(layer, below: below)
+            } else {
+                style.addLayer(layer)
+            }
         }
     }
 
