@@ -5,7 +5,7 @@ status: todo
 type: bug
 priority: high
 created_at: 2026-05-20T19:41:45Z
-updated_at: 2026-05-21T05:02:44Z
+updated_at: 2026-05-21T11:13:34Z
 parent: AlaskaRouter-xtua
 blocked_by:
     - AlaskaRouter-39eu
@@ -164,3 +164,14 @@ can throw it away cleanly when done.
 ## Status
 
 Bean status: in-progress → blocked (blocked-by spike bean).
+
+
+---
+
+## Reset back to open
+
+Production integration attempt **reverted to `sober-geologist`** (commit b1ee027) after a strong regression. The spike's "4 hardcoded full-route layers" model worked beautifully in isolation but my naive scaling to real trip data (per-leg slicing, direction inference, snap fallback, content fingerprints) produced compounding bugs. Visual result was a single visible ribbon instead of the onion lanes.
+
+The lesson: the spike rendered ONE polyline repeated N times with hardcoded absolute offsets. Production needs to preserve that shape — render each pass as ONE continuous full-extent polyline with one absolute offset. Per-leg fragmentation was the wrong direction.
+
+Bean re-opens. The visual spec lives in 39eu and is still locked. What needs redesigning is the integration architecture.

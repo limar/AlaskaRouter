@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-39eu
 title: 'Spike: multi-pass route offset algorithm'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-05-21T05:02:01Z
-updated_at: 2026-05-21T08:57:01Z
+updated_at: 2026-05-21T11:13:34Z
 parent: AlaskaRouter-xtua
 ---
 
