@@ -74,6 +74,124 @@ struct ExpeditionMapView: View {
         "trip-marker-selected-icons",
     ]
 
+    // MARK: - Production route renderer (AlaskaRouter-3bot, step 1)
+
+    /// Layer ID prefix for the production trip route line. Layers with this
+    /// prefix that no longer match the current trip get pruned each frame.
+    private static let tripRouteLayerPrefix = "trip-route-"
+    private static let tripRouteSourcePrefix = "trip-route-src-"
+
+    /// Width-vs-zoom stops for the route line core, in screen points. W ≈
+    /// 10pt at z=10 (the spec-locked highlight width). Floor 4pt below z=8
+    /// so the route stays readable on zoom-out.
+    private static let tripRouteCoreWidthStops: [Double: Double] = [
+        0:  4,
+        8:  4,
+        10: 10,
+        13: 20,
+        15: 36,
+        17: 64,
+    ]
+
+    /// Step 1 — render the trip's full route as ONE polyline at offset 0.
+    /// No multi-pass yet. Idempotent via a content-fingerprint layer ID;
+    /// any change to coords / color / snap-state forces remove+re-add.
+    fileprivate static func syncTripRouteLayer(
+        style: MLNStyle,
+        trip: Trip?,
+        snappedRouteCoords: [CLLocationCoordinate2D]?
+    ) {
+        // Compute the desired layer state.
+        struct DesiredLayer {
+            let id: String
+            let coords: [CLLocationCoordinate2D]
+            let color: TripColor
+            let isFallback: Bool
+        }
+        let desired: DesiredLayer? = {
+            guard let trip = trip,
+                  let coords = trip.fullRouteCoords(snappedCoords: snappedRouteCoords),
+                  coords.count >= 2 else { return nil }
+            let usingSnap = (snappedRouteCoords?.count ?? 0) >= 2
+            // Content fingerprint — captures whatever could visually change.
+            var hasher = Hasher()
+            hasher.combine(coords.count)
+            if let first = coords.first {
+                hasher.combine(Int((first.latitude * 1e5).rounded()))
+                hasher.combine(Int((first.longitude * 1e5).rounded()))
+            }
+            if let last = coords.last {
+                hasher.combine(Int((last.latitude * 1e5).rounded()))
+                hasher.combine(Int((last.longitude * 1e5).rounded()))
+            }
+            let mid = coords[coords.count / 2]
+            hasher.combine(Int((mid.latitude * 1e5).rounded()))
+            hasher.combine(Int((mid.longitude * 1e5).rounded()))
+            hasher.combine(trip.color)
+            hasher.combine(usingSnap)
+            let h = UInt32(truncatingIfNeeded: hasher.finalize())
+            return DesiredLayer(
+                id: String(format: "%@%08x", tripRouteLayerPrefix, h),
+                coords: coords,
+                color: trip.color,
+                isFallback: !usingSnap
+            )
+        }()
+
+        let wantID = desired?.id
+
+        // Prune any of our layers that don't match the current want-id.
+        let toRemove = style.layers.filter {
+            $0.identifier.hasPrefix(tripRouteLayerPrefix) && $0.identifier != wantID
+        }
+        for layer in toRemove {
+            style.removeLayer(layer)
+            let srcID = tripRouteSourcePrefix + String(layer.identifier.dropFirst(tripRouteLayerPrefix.count))
+            if let src = style.source(withIdentifier: srcID) {
+                style.removeSource(src)
+            }
+        }
+
+        // Add the wanted layer if not already present.
+        guard let desired = desired else { return }
+        if style.layer(withIdentifier: desired.id) != nil { return }
+
+        let srcID = tripRouteSourcePrefix + String(desired.id.dropFirst(tripRouteLayerPrefix.count))
+        let polyline = MLNPolylineFeature(
+            coordinates: desired.coords,
+            count: UInt(desired.coords.count)
+        )
+        let source = MLNShapeSource(identifier: srcID, shape: polyline, options: nil)
+        style.addSource(source)
+
+        let layer = MLNLineStyleLayer(identifier: desired.id, source: source)
+        let c = desired.color.swiftUIColor
+        layer.lineColor = NSExpression(
+            forConstantValue: UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
+        )
+        layer.lineWidth = NSExpression(
+            format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
+            tripRouteCoreWidthStops as NSDictionary
+        )
+        layer.lineOpacity = NSExpression(forConstantValue: 0.85)
+        layer.lineCap = NSExpression(forConstantValue: "round")
+        layer.lineJoin = NSExpression(forConstantValue: "round")
+        // Step 1: single layer, offset 0 (centered on the road).
+        if desired.isFallback {
+            layer.lineDashPattern = NSExpression(forConstantValue: [2.0, 1.5])
+        }
+
+        // Insert below the marker layers so waypoint icons stay on top.
+        let belowLayer: MLNStyleLayer? = waypointLayerIDs
+            .compactMap { style.layer(withIdentifier: $0) }
+            .first
+        if let below = belowLayer {
+            style.insertLayer(layer, below: below)
+        } else {
+            style.addLayer(layer)
+        }
+    }
+
     // MARK: - Ring A spike (AlaskaRouter-39eu, throwaway)
 
     /// Installs the Ring A probe layers for native `lineOffset`. Gated by
@@ -273,70 +391,10 @@ struct ExpeditionMapView: View {
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {
             if let trip {
-                // Route geometry: snap-to-road from the Routing layer when
-                // available, straight-line between waypoints as the offline /
-                // pending-snap fallback (which is fine visually here — the
-                // wash + core treatment looks like a highlighter either way).
-
-                // Per-block translucent two-stroke pattern (design-handoff
-                // mock, design/mocks/map.jsx). A wide soft "wash" plus a
-                // tighter inner "core", both the block color, both round-
-                // capped, no casing or outline — the road shows through.
-                //
-                // Widths scale with zoom; below z=8 we floor at a "good
-                // pencil line" so the route stays readable when zoomed out.
-                // *** Tweak these stops to adjust the route-line appearance. ***
-                let washStops = NSExpression(forConstantValue: [
-                    0.0:  8.0,    // floor: minimum wash width (z=0..8)
-                    8.0:  8.0,
-                    10.0: 14.0,
-                    13.0: 26.0,
-                    15.0: 44.0,
-                    17.0: 72.0,
-                ])
-                let coreStops = NSExpression(forConstantValue: [
-                    0.0:  4.0,    // floor: minimum core width (z=0..8)
-                    8.0:  4.0,
-                    10.0: 7.0,
-                    13.0: 14.0,
-                    15.0: 24.0,
-                    17.0: 40.0,
-                ])
-                let widthCurve = NSExpression(forConstantValue: 1.5)
-
-                // Iterate SEGMENTS (one leg per consecutive waypoint pair)
-                // instead of whole blocks. Each segment carries a perpendicular
-                // pass-offset and may be flagged as an "extra pass" (dashed) —
-                // see Trip.passOffsetSegments + AlaskaRouter-9axu.
-                let segments = trip.passOffsetSegments(snappedCoords: snappedRouteCoords)
-                for seg in segments {
-                    let feature = MLNPolylineFeature(coordinates: seg.coords, count: UInt(seg.coords.count))
-                    let src = ShapeSource(identifier: "trip-route-seg-\(seg.id)") { feature }
-                    let c = seg.color.swiftUIColor
-                    let uic = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
-
-                    let washLayer = LineStyleLayer(identifier: "route-seg-\(seg.id)-wash", source: src)
-                        .lineColor(uic)
-                        .lineCap(.round).lineJoin(.round).lineOpacity(0.18)
-                        .lineWidth(interpolatedBy: .zoomLevel,
-                                   curveType: .exponential,
-                                   parameters: widthCurve,
-                                   stops: washStops)
-                    let coreLayer = LineStyleLayer(identifier: "route-seg-\(seg.id)", source: src)
-                        .lineColor(uic)
-                        .lineCap(.round).lineJoin(.round).lineOpacity(0.34)
-                        .lineWidth(interpolatedBy: .zoomLevel,
-                                   curveType: .exponential,
-                                   parameters: widthCurve,
-                                   stops: coreStops)
-                    if seg.isExtraPass {
-                        washLayer.lineDashPattern([2.0, 1.5])
-                        coreLayer.lineDashPattern([2.0, 1.5])
-                    } else {
-                        washLayer
-                        coreLayer
-                    }
-                }
+                // Route line: built in the unsafeMapViewControllerModifier
+                // below (the DSL doesn't expose native lineOffset). This
+                // body block only sets up markers + interaction sources.
+                // See AlaskaRouter-3bot rebuild (post-sober-geologist).
 
                 let ordered = trip.orderedWaypoints
                 let selectedSet = ordered.filter { $0.id == selectedWaypointID }
@@ -439,10 +497,21 @@ struct ExpeditionMapView: View {
         .unsafeMapViewControllerModifier { controller in
             controller.mapView.maximumZoomLevel = TilePackManifest.shared.effectiveMaxZoom
 
-            // Ring A spike for AlaskaRouter-39eu — probe whether MapLibre's
-            // native `MLNLineStyleLayer.lineOffset` is usable for the
-            // multi-pass offset rendering. THROWAWAY: gated by the
-            // -spikeRingA launch arg, no effect in normal app runs.
+            // Production route line (AlaskaRouter-3bot rebuild, step 1).
+            // Renders the full trip route as ONE polyline via native
+            // MLNLineStyleLayer.lineOffset (offset 0 for now — no
+            // multi-pass yet). Snap polyline used when available; straight-
+            // line dashed fallback otherwise.
+            if let style = controller.mapView.style {
+                ExpeditionMapView.syncTripRouteLayer(
+                    style: style,
+                    trip: trip,
+                    snappedRouteCoords: snappedRouteCoords
+                )
+            }
+
+            // Ring A spike (AlaskaRouter-39eu). Gated by -spikeRingA.
+            // Visible only in dev runs that opt in.
             if LaunchArgs.spikeRingA, let style = controller.mapView.style {
                 ExpeditionMapView.installRingASpike(into: style)
             }
