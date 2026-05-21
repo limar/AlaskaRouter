@@ -46,16 +46,38 @@ enum SampleTrip {
             context.insert(sep)
         }
 
-        // Optional dev seed for AlaskaRouter-9axu — append the same 5 stops
-        // in reverse order (excluding the last to avoid two consecutive
-        // Fairbanks stops). Produces a synthetic out-and-back trip where
-        // every segment overlaps with its return counterpart, exercising the
-        // multi-pass offset rendering.
+        // Optional dev seed for AlaskaRouter-9axu / -3bot — append the same
+        // 5 stops in reverse order (excluding the last to avoid two
+        // consecutive Fairbanks stops). Produces a synthetic out-and-back
+        // trip where every segment overlaps with its return counterpart,
+        // exercising the multi-pass offset rendering.
         if UserDefaults.standard.bool(forKey: "seedDemoReturnLeg"),
            waypoints.count >= 2 {
             let reverse = waypoints.dropLast().reversed()
             var nextOrder = waypoints.count
             for source in reverse {
+                let w = Waypoint(
+                    order: nextOrder,
+                    coordinate: source.coordinate,
+                    label: source.label,
+                    category: source.category
+                )
+                w.trip = trip
+                context.insert(w)
+                nextOrder += 1
+            }
+        }
+
+        // Optional dev seed for AlaskaRouter-3bot — three-leg back-and-forth
+        // (forward, reverse, forward-again). Combine with seedDemoReturnLeg.
+        // Stresses the multi-pass offset with three lanes on the shared road
+        // (two forward on one side, one backward on the other).
+        if UserDefaults.standard.bool(forKey: "seedDemoTripleLeg"),
+           waypoints.count >= 2 {
+            let currentMaxOrder = trip.waypoints.map(\.order).max() ?? (waypoints.count - 1)
+            var nextOrder = currentMaxOrder + 1
+            // Skip the first stop to avoid two consecutive Cantwell stops.
+            for source in waypoints.dropFirst() {
                 let w = Waypoint(
                     order: nextOrder,
                     coordinate: source.coordinate,
