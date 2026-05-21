@@ -79,6 +79,15 @@ enum LaunchArgs {
         UserDefaults.standard.bool(forKey: "seedDemoTrip")
     }
 
+    /// Ring A probes for the multi-pass offset spike (AlaskaRouter-39eu).
+    /// When set, ExpeditionMapView injects ad-hoc raw `MLNLineStyleLayer`
+    /// objects via the unsafeMapViewControllerModifier to test whether
+    /// MapLibre's native `lineOffset` is usable for our pipeline.
+    /// Throwaway — remove once Ring A is answered.
+    static var spikeRingA: Bool {
+        UserDefaults.standard.bool(forKey: "spikeRingA")
+    }
+
     /// After prefill query results land, auto-trigger this action for screenshot
     /// capture: `preview:<index>` opens the preview callout; `add:<index>` runs
     /// the fast-add flow. Index is into the results list.
