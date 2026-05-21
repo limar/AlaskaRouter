@@ -93,52 +93,49 @@ struct ExpeditionMapView: View {
         17: 64,
     ]
 
-    /// Step 2 — render each PASS as one polyline at its absolute lineOffset.
-    /// A pass is a maximal run of consecutive trip legs with no direction
-    /// reversal. Single-pass trips → one centered ribbon. Multi-pass trips
-    /// → N parallel ribbons via native lineOffset.
+    /// Step 4 — render each RIBBON as one polyline at its absolute
+    /// lineOffset and its block color. A ribbon is a maximal run of
+    /// consecutive legs sharing pass + block; one pass that crosses N
+    /// blocks emits N ribbons (same offset, different colors, meeting
+    /// at the block-boundary waypoint).
     ///
-    /// Idempotent via per-pass content-fingerprint layer IDs; any change
-    /// (coords, offset, color, snap-state) forces remove+re-add of that
-    /// pass's layer.
+    /// Idempotent via per-ribbon content-fingerprint layer IDs; any
+    /// change (coords / offset / color / snap-state) forces remove+re-add.
     fileprivate static func syncTripRouteLayer(
         style: MLNStyle,
         trip: Trip?,
         snappedRouteCoords: [CLLocationCoordinate2D]?
     ) {
-        let passes: [RoutePass] = trip?.routePasses(snappedCoords: snappedRouteCoords) ?? []
-        let color: TripColor = trip?.color ?? .amber
+        let ribbons: [RouteRibbon] = trip?.routeRibbons(snappedCoords: snappedRouteCoords) ?? []
 
         struct DesiredLayer {
             let id: String
-            let pass: RoutePass
-            let color: TripColor
+            let ribbon: RouteRibbon
         }
-        let desired: [DesiredLayer] = passes.map { pass in
-            // Content fingerprint per pass — captures whatever could
-            // visually change about this pass.
+        let desired: [DesiredLayer] = ribbons.map { ribbon in
+            // Content fingerprint per ribbon — captures whatever could
+            // visually change.
             var hasher = Hasher()
-            hasher.combine(pass.id)
-            hasher.combine(pass.coords.count)
-            if let f = pass.coords.first {
+            hasher.combine(ribbon.id)
+            hasher.combine(ribbon.coords.count)
+            if let f = ribbon.coords.first {
                 hasher.combine(Int((f.latitude * 1e5).rounded()))
                 hasher.combine(Int((f.longitude * 1e5).rounded()))
             }
-            if let l = pass.coords.last {
+            if let l = ribbon.coords.last {
                 hasher.combine(Int((l.latitude * 1e5).rounded()))
                 hasher.combine(Int((l.longitude * 1e5).rounded()))
             }
-            let mid = pass.coords[pass.coords.count / 2]
+            let mid = ribbon.coords[ribbon.coords.count / 2]
             hasher.combine(Int((mid.latitude * 1e5).rounded()))
             hasher.combine(Int((mid.longitude * 1e5).rounded()))
-            hasher.combine(Int((pass.offsetMultiplier * 1000).rounded()))
-            hasher.combine(color)
-            hasher.combine(pass.isStraightLineFallback)
+            hasher.combine(Int((ribbon.offsetMultiplier * 1000).rounded()))
+            hasher.combine(ribbon.color)
+            hasher.combine(ribbon.isStraightLineFallback)
             let h = UInt32(truncatingIfNeeded: hasher.finalize())
             return DesiredLayer(
-                id: String(format: "%@%d-%08x", tripRouteLayerPrefix, pass.id, h),
-                pass: pass,
-                color: color
+                id: String(format: "%@%d-%08x", tripRouteLayerPrefix, ribbon.id, h),
+                ribbon: ribbon
             )
         }
 
@@ -166,14 +163,14 @@ struct ExpeditionMapView: View {
             if style.layer(withIdentifier: d.id) != nil { continue }
             let srcID = tripRouteSourcePrefix + String(d.id.dropFirst(tripRouteLayerPrefix.count))
             let polyline = MLNPolylineFeature(
-                coordinates: d.pass.coords,
-                count: UInt(d.pass.coords.count)
+                coordinates: d.ribbon.coords,
+                count: UInt(d.ribbon.coords.count)
             )
             let source = MLNShapeSource(identifier: srcID, shape: polyline, options: nil)
             style.addSource(source)
 
             let layer = MLNLineStyleLayer(identifier: d.id, source: source)
-            let c = d.color.swiftUIColor
+            let c = d.ribbon.color.swiftUIColor
             layer.lineColor = NSExpression(
                 forConstantValue: UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
             )
@@ -184,17 +181,16 @@ struct ExpeditionMapView: View {
             layer.lineOpacity = NSExpression(forConstantValue: 0.85)
             layer.lineCap = NSExpression(forConstantValue: "round")
             layer.lineJoin = NSExpression(forConstantValue: "round")
-            // Offset zoom-interpolated alongside width so the pass's inner
-            // edge stays on the polyline center at every zoom (constant
-            // offset leaves a gap when the line thins out at low zoom).
-            if d.pass.offsetMultiplier != 0 {
-                let offsetStops = tripRouteCoreWidthStops.mapValues { $0 * d.pass.offsetMultiplier }
+            // Offset zoom-interpolated alongside width so the ribbon's
+            // inner edge stays on the polyline center at every zoom.
+            if d.ribbon.offsetMultiplier != 0 {
+                let offsetStops = tripRouteCoreWidthStops.mapValues { $0 * d.ribbon.offsetMultiplier }
                 layer.lineOffset = NSExpression(
                     format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
                     offsetStops as NSDictionary
                 )
             }
-            if d.pass.isStraightLineFallback {
+            if d.ribbon.isStraightLineFallback {
                 layer.lineDashPattern = NSExpression(forConstantValue: [2.0, 1.5])
             }
 
