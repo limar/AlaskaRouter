@@ -5,7 +5,7 @@ status: completed
 type: bug
 priority: high
 created_at: 2026-05-20T19:41:45Z
-updated_at: 2026-05-20T20:47:59Z
+updated_at: 2026-05-21T04:50:00Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -111,3 +111,29 @@ Note: a clean SwiftData store is required (the first-launch seed guard skips whe
 
 - **Zoom-adaptive offset width**: today the offset is a fixed coordinate-degree value, so screen separation grows linearly with zoom (1× at z=10, 4× at z=12, 0.25× at z=8). At very low zoom the ribbons merge into one fatter line; at very high zoom they're widely spread. Acceptable for v1 — the "planning zoom" is z=9..11 and that's where the fix is tuned. If feedback says "too wide at z=14", add a zoom-aware scale.
 - **Selected-waypoint sobresaliente halo** overlaps the ribbons heavily at z=10 (concentric ring icon). Not a 3bot concern, but worth noting since the matrix screenshots show it prominently. Track separately if it bugs.
+
+## Follow-up fix — uniform perpendicular offset
+
+After the initial 3bot fix shipped, user reported "blue garabato" — concentric loops around Healy on the real iPhone. Root cause:
+
+The original per-point perpendicular algorithm computes a perpendicular vector at EACH point of the sliced polyline (using the local tangent). On the no-snap case this works fine — each segment is 2 points, perp is constant, shifted line is a clean parallel. But on the WITH-snap case (OSRM-snapped polyline with ~3000 curvy points along Parks Highway), the per-point perpendicular flips at every bend. The shifted polyline self-intersects, producing knotted loops at sharp curves.
+
+The matrix screenshots didn't reveal this because they used straight-line geometry (no snap polyline loaded).
+
+### Fix
+
+Replaced per-point perpendicular with **uniform perpendicular**: the perpendicular vector is computed ONCE per segment from its first→last coord, then every point in the slice is translated by the same (lat, lon) delta. The shifted polyline is a translated copy of the original — by construction it can never self-intersect, no matter how curvy.
+
+Trade-off: on very-curvy segments, the ribbon doesn't perfectly hug each bend of the road (it sits perpendicular to the segment's OVERALL direction, not each local one). Acceptable for the use case — the user is looking at parallel ribbons to know "I went this way again", not to navigate at sub-meter precision.
+
+### Verified
+
+Re-ran the with-snap repro (`-preloadDemoRoute 1` + multi-pass seed at z=10):
+- Before fix: tangled blue loops around Healy
+- After fix: clean parallel ribbons following the road shape
+
+No-snap matrix unchanged (straight-line segments have only one tangent, so the algorithm produces identical output).
+
+### Known cosmetic residual
+
+At waypoint joints, consecutive segments have different overall-tangent directions, so their endpoints don't quite align (small jogs at each waypoint). Tracked separately if it bites. Could be smoothed by rendering a whole pass as a single MLNPolylineFeature with one slot, instead of N independent segments — modest refactor.

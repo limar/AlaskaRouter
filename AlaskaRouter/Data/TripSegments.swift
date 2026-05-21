@@ -38,38 +38,49 @@ struct TripSegment: Identifiable {
 /// effectively invisible at any practical zoom. See AlaskaRouter-3bot.
 private let degreesPerPointAtZ10: Double = 1.0 / 728.0
 
+/// Uniform perpendicular offset — every point shifts by the SAME (lat, lon)
+/// delta, computed once from the segment's START→END direction.
+///
+/// Why uniform and not per-point: the per-point variant (compute perpendicular
+/// from each point's local tangent) self-intersects on curvy polylines like
+/// OSRM-snapped highways. At a sharp bend the perpendicular flips, the shifted
+/// polyline doubles back on itself, and the user sees a tangle of loops
+/// instead of a parallel ribbon (AlaskaRouter-3bot before-state).
+///
+/// Uniform shift trades a small geometric inaccuracy on very-curvy segments
+/// (the ribbon doesn't perfectly hug each bend of the road) for visual
+/// stability — no self-intersection ever, no matter how wiggly the road.
+/// For our use case ("show me my second pass through this stretch") that's
+/// the right trade: the user is looking at the parallel ribbon to know
+/// "I went this way again", not to navigate at sub-meter precision.
+///
+/// Math:
+///   - At z=10, 1° latitude ≈ 728 screen px (256 × 2^10 / 360).
+///   - So 1 pt offset ≈ 1/728 ° lat ≈ 0.00137°.
+///   - In the LON direction, the same screen-px offset needs to be
+///     1/cos(latitude) × bigger (Mercator longitude stretch).
 private func perpendicularOffset(_ coords: [CLLocationCoordinate2D], byPoints offset: Float) -> [CLLocationCoordinate2D] {
     guard coords.count >= 2, offset != 0 else { return coords }
     let offsetDeg = Double(offset) * degreesPerPointAtZ10
-    var result: [CLLocationCoordinate2D] = []
-    result.reserveCapacity(coords.count)
-    for i in 0 ..< coords.count {
-        let prev = (i > 0) ? coords[i - 1] : coords[i]
-        let next = (i < coords.count - 1) ? coords[i + 1] : coords[i]
-        // Convert the tangent into "screen-pixel-equivalent degrees" by
-        // compensating for the Mercator longitude stretch at this latitude.
-        // Without this, N-S segments get ~cos(lat) less visual offset than
-        // E-W segments (≈ 0.44× at 64°N — clearly visible asymmetry).
-        let cosLat = max(cos(coords[i].latitude * .pi / 180.0), 0.1)
-        let dLat = next.latitude - prev.latitude
-        let dLonScreen = (next.longitude - prev.longitude) * cosLat
-        let len = (dLat * dLat + dLonScreen * dLonScreen).squareRoot()
-        guard len > 1e-12 else {
-            result.append(coords[i])
-            continue
-        }
-        // 90° CCW rotation of the screen-space tangent.
-        let perpLatScreen = -dLonScreen / len * offsetDeg
-        let perpLonScreen =  dLat / len * offsetDeg
-        // Convert back to coordinate space (un-stretch longitude).
-        let perpLat = perpLatScreen
-        let perpLon = perpLonScreen / cosLat
-        result.append(.init(
-            latitude: coords[i].latitude + perpLat,
-            longitude: coords[i].longitude + perpLon
-        ))
+    let start = coords.first!
+    let end = coords.last!
+    // Reference latitude for the cosLat correction — use the segment midpoint
+    // so very long N-S segments don't pick up an extreme value at either end.
+    let midLat = (start.latitude + end.latitude) * 0.5
+    let cosLat = max(cos(midLat * .pi / 180.0), 0.1)
+    let dLat = end.latitude - start.latitude
+    let dLonScreen = (end.longitude - start.longitude) * cosLat
+    let len = (dLat * dLat + dLonScreen * dLonScreen).squareRoot()
+    guard len > 1e-12 else { return coords }
+    // 90° CCW rotation of the screen-space tangent → perpendicular.
+    let perpLatScreen = -dLonScreen / len * offsetDeg
+    let perpLonScreen =  dLat / len * offsetDeg
+    // Convert back to coordinate space (un-stretch longitude).
+    let perpLat = perpLatScreen
+    let perpLon = perpLonScreen / cosLat
+    return coords.map {
+        .init(latitude: $0.latitude + perpLat, longitude: $0.longitude + perpLon)
     }
-    return result
 }
 
 extension Trip {
