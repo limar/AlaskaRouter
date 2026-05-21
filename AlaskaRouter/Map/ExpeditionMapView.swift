@@ -202,6 +202,47 @@ struct ExpeditionMapView: View {
         }
     }
 
+    // MARK: - Waypoint icon scaling (AlaskaRouter-h82l)
+
+    /// Symbol layer identifiers that should scale with zoom. Same scaling
+    /// applied to all so the visual relationship between default markers,
+    /// selected markers, and the search-preview pin stays consistent.
+    private static let scaledIconLayerIDs: Set<String> = [
+        "trip-marker-default-icons",
+        "trip-marker-selected-icons",
+        "preview-pin-icon",
+    ]
+
+    /// Zoom→multiplier stops for `iconScale`. 1.0 at z=12 keeps the
+    /// existing pixel-perfect look at the user's typical planning zoom.
+    /// Shrinks aggressively below z=8 so the markers stop obscuring the
+    /// route line on world-/state-view zooms. Grows slightly at very
+    /// high zoom so the markers stay visually present when leaning in.
+    /// *** Tweak these stops to adjust marker scaling. ***
+    private static let iconScaleStops: [Double: Double] = [
+        5:  0.30,    // world / state view — small dot-like presence
+        8:  0.55,    // route overview
+        10: 0.80,    // mid-zoom planning
+        12: 1.00,    // full size (matches the previous pixel-constant render)
+        15: 1.20,    // leaning-in
+    ]
+
+    /// Apply the zoom-interpolated `iconScale` to every trip-marker icon
+    /// layer. Runs in `unsafeMapViewControllerModifier` because
+    /// MapLibreSwiftDSL doesn't expose iconScale. Idempotent — same
+    /// expression assigned each frame; MapLibre handles diffing.
+    fileprivate static func syncWaypointIconScales(style: MLNStyle) {
+        let scaleExpr = NSExpression(
+            format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
+            iconScaleStops as NSDictionary
+        )
+        for id in scaledIconLayerIDs {
+            if let layer = style.layer(withIdentifier: id) as? MLNSymbolStyleLayer {
+                layer.iconScale = scaleExpr
+            }
+        }
+    }
+
     // MARK: - Ring A spike (AlaskaRouter-39eu, throwaway)
 
     /// Installs the Ring A probe layers for native `lineOffset`. Gated by
@@ -507,17 +548,18 @@ struct ExpeditionMapView: View {
         .unsafeMapViewControllerModifier { controller in
             controller.mapView.maximumZoomLevel = TilePackManifest.shared.effectiveMaxZoom
 
-            // Production route line (AlaskaRouter-3bot rebuild, step 1).
-            // Renders the full trip route as ONE polyline via native
-            // MLNLineStyleLayer.lineOffset (offset 0 for now — no
-            // multi-pass yet). Snap polyline used when available; straight-
-            // line dashed fallback otherwise.
+            // Production route line (AlaskaRouter-3bot rebuild).
+            // Renders the trip's ribbons via native MLNLineStyleLayer.lineOffset.
+            // Snap polyline used when available; straight-line dashed
+            // fallback otherwise.
             if let style = controller.mapView.style {
                 ExpeditionMapView.syncTripRouteLayer(
                     style: style,
                     trip: trip,
                     snappedRouteCoords: snappedRouteCoords
                 )
+                // Waypoint marker zoom-scaling (AlaskaRouter-h82l).
+                ExpeditionMapView.syncWaypointIconScales(style: style)
             }
 
             // Ring A spike (AlaskaRouter-39eu). Gated by -spikeRingA.
