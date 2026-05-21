@@ -17,10 +17,20 @@ struct RoutePass: Identifiable {
     /// Stable per-pass id (used in the layer-id fingerprint).
     let id: Int
     let coords: [CLLocationCoordinate2D]
-    /// Pass straight to `MLNLineStyleLayer.lineOffset` — in MapLibre's
-    /// convention "negative = left of travel direction." Opposite-direction
-    /// passes therefore end up on opposite absolute sides of the road.
-    let lineOffsetPt: Double
+    /// Multiplier applied to the zoom-interpolated highlight width to get
+    /// the pass's lineOffset value. The renderer computes
+    /// `lineOffset(zoom) = offsetMultiplier × lineWidth(zoom)`, which keeps
+    /// the pass's inner edge sitting on the polyline center across all
+    /// zooms (without this, low-zoom thin lines leave a gap).
+    ///
+    /// Values per the locked onion spec:
+    ///   - single pass             → 0      (no offset, centered)
+    ///   - 1st lane, left          → -0.5   (rank 0)
+    ///   - 2nd lane, left          → -1.5   (rank 1)
+    ///   - nth lane, left          → -(rank + 0.5)
+    /// Negative in MapLibre's convention means "left of travel direction";
+    /// opposite-direction passes therefore land on opposite absolute sides.
+    let offsetMultiplier: Double
     /// True when the pass was built from straight-line geometry (no OSRM
     /// snap). Renderer dashes these so the user can see the route is the
     /// offline-fallback approximation.
@@ -154,8 +164,7 @@ extension Trip {
             ))
         }
 
-        // 4. Build each pass's polyline + offset.
-        let W = Trip.highlightCoreWidthPt
+        // 4. Build each pass's polyline + offset multiplier.
         let multiPass = descriptors.count >= 2
         var out: [RoutePass] = []
         for (passIdx, d) in descriptors.enumerated() {
@@ -171,21 +180,15 @@ extension Trip {
             var coords = Array(baseCoords[lo...hi])
             if startIdx > endIdx { coords.reverse() }
 
-            // Offset: each pass moves to ITS left (negative in MapLibre's
-            // convention). Opposite-direction passes naturally land on
-            // opposite absolute sides of the road.
-            let offset: Double
-            if !multiPass {
-                offset = 0
-            } else {
-                let mag = (Double(d.rank) + 0.5) * W
-                offset = -mag
-            }
+            // Multiplier: 0 if single-pass (centered), else -(rank + 0.5)
+            // so each pass's inner edge tracks the polyline center across
+            // all zoom levels (renderer multiplies by zoom-interp lineWidth).
+            let multiplier: Double = multiPass ? -(Double(d.rank) + 0.5) : 0
 
             out.append(RoutePass(
                 id: passIdx,
                 coords: coords,
-                lineOffsetPt: offset,
+                offsetMultiplier: multiplier,
                 isStraightLineFallback: !useSnap
             ))
         }

@@ -131,7 +131,7 @@ struct ExpeditionMapView: View {
             let mid = pass.coords[pass.coords.count / 2]
             hasher.combine(Int((mid.latitude * 1e5).rounded()))
             hasher.combine(Int((mid.longitude * 1e5).rounded()))
-            hasher.combine(Int((pass.lineOffsetPt * 1000).rounded()))
+            hasher.combine(Int((pass.offsetMultiplier * 1000).rounded()))
             hasher.combine(color)
             hasher.combine(pass.isStraightLineFallback)
             let h = UInt32(truncatingIfNeeded: hasher.finalize())
@@ -184,7 +184,16 @@ struct ExpeditionMapView: View {
             layer.lineOpacity = NSExpression(forConstantValue: 0.85)
             layer.lineCap = NSExpression(forConstantValue: "round")
             layer.lineJoin = NSExpression(forConstantValue: "round")
-            layer.lineOffset = NSExpression(forConstantValue: d.pass.lineOffsetPt)
+            // Offset zoom-interpolated alongside width so the pass's inner
+            // edge stays on the polyline center at every zoom (constant
+            // offset leaves a gap when the line thins out at low zoom).
+            if d.pass.offsetMultiplier != 0 {
+                let offsetStops = tripRouteCoreWidthStops.mapValues { $0 * d.pass.offsetMultiplier }
+                layer.lineOffset = NSExpression(
+                    format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
+                    offsetStops as NSDictionary
+                )
+            }
             if d.pass.isStraightLineFallback {
                 layer.lineDashPattern = NSExpression(forConstantValue: [2.0, 1.5])
             }
