@@ -204,15 +204,6 @@ struct ExpeditionMapView: View {
 
     // MARK: - Waypoint icon scaling (AlaskaRouter-h82l)
 
-    /// Symbol layer identifiers that should scale with zoom. Same scaling
-    /// applied to all so the visual relationship between default markers,
-    /// selected markers, and the search-preview pin stays consistent.
-    private static let scaledIconLayerIDs: Set<String> = [
-        "trip-marker-default-icons",
-        "trip-marker-selected-icons",
-        "preview-pin-icon",
-    ]
-
     /// Zoom→multiplier stops for `iconScale`. 1.0 at z=12 keeps the
     /// existing pixel-perfect look at the user's typical planning zoom.
     /// Shrinks aggressively below z=8 so the markers stop obscuring the
@@ -231,25 +222,230 @@ struct ExpeditionMapView: View {
     /// layer. Runs in `unsafeMapViewControllerModifier` because
     /// MapLibreSwiftDSL doesn't expose iconScale. Idempotent — same
     /// expression assigned each frame; MapLibre handles diffing.
-    fileprivate static func syncWaypointIconScales(style: MLNStyle) {
+    /// Build and maintain the trip-marker, user-location, and preview-pin
+    /// symbol layers via raw MLN API. Replaces the previous DSL-built
+    /// marker layers which forced a deferred-write workaround for
+    /// iconScale (causing a visible flicker on every updateUIViewController).
+    ///
+    /// Once a layer is created here, the DSL never touches it (it's not in
+    /// parent.userLayers). iconScale is set on creation and stays put.
+    /// Subsequent calls update only the underlying source's features.
+    fileprivate static func syncMarkerLayers(
+        style: MLNStyle,
+        trip: Trip?,
+        selectedWaypointID: UUID?,
+        userLocation: CLLocationCoordinate2D?,
+        previewCoord: CLLocationCoordinate2D?,
+        previewName: String?
+    ) {
+        let ordered = trip?.orderedWaypoints ?? []
+        let selectedSet = ordered.filter { $0.id == selectedWaypointID }
+        let unselectedSet = ordered.filter { $0.id != selectedWaypointID }
+
+        // Default waypoint markers.
+        syncTripMarkerGroup(
+            style: style,
+            sourceID: "trip-markers-default",
+            iconLayerID: "trip-marker-default-icons",
+            numberLayerID: "trip-marker-default-number",
+            labelLayerID: "trip-marker-default-labels",
+            waypoints: unselectedSet,
+            iconImage: WaypointIcons.committedDefault,
+            numberFontSize: 11,
+            labelFontSize: 13,
+            labelOffsetY: 1.4,
+            labelHaloWidth: 1.6
+        )
+
+        // Selected (sobresaliente) marker.
+        syncTripMarkerGroup(
+            style: style,
+            sourceID: "trip-markers-selected",
+            iconLayerID: "trip-marker-selected-icons",
+            numberLayerID: "trip-marker-selected-number",
+            labelLayerID: "trip-marker-selected-labels",
+            waypoints: selectedSet,
+            iconImage: WaypointIcons.committedSelected,
+            numberFontSize: 12,
+            labelFontSize: 14,
+            labelOffsetY: 1.8,
+            labelHaloWidth: 1.8
+        )
+
+        // GPS user-location puck. Pixel-constant (no iconScale applied) so
+        // it behaves like Apple Maps' blue dot.
+        syncSinglePinLayer(
+            style: style,
+            sourceID: "user-location",
+            layerID: "user-location-icon",
+            iconImage: WaypointIcons.userLocation,
+            coordinate: userLocation,
+            extraAttributes: nil,
+            applyIconScale: false
+        )
+
+        // Preview pin (search result being investigated). Scales with zoom
+        // alongside the trip waypoint markers.
+        syncSinglePinLayer(
+            style: style,
+            sourceID: "preview-pin",
+            layerID: "preview-pin-icon",
+            iconImage: WaypointIcons.preview,
+            coordinate: previewCoord,
+            extraAttributes: previewCoord != nil ? ["name": previewName ?? ""] : nil,
+            applyIconScale: true
+        )
+    }
+
+    /// Marker group = source + (icon layer, number layer, label layer).
+    /// Source's shape is updated in place on subsequent calls; layers are
+    /// created once and left alone.
+    private static func syncTripMarkerGroup(
+        style: MLNStyle,
+        sourceID: String,
+        iconLayerID: String,
+        numberLayerID: String,
+        labelLayerID: String,
+        waypoints: [Waypoint],
+        iconImage: UIImage,
+        numberFontSize: Double,
+        labelFontSize: Double,
+        labelOffsetY: Double,
+        labelHaloWidth: Double
+    ) {
+        // No waypoints in this group → remove everything we own here.
+        if waypoints.isEmpty {
+            for id in [labelLayerID, numberLayerID, iconLayerID] {
+                if let layer = style.layer(withIdentifier: id) {
+                    style.removeLayer(layer)
+                }
+            }
+            if let src = style.source(withIdentifier: sourceID) {
+                style.removeSource(src)
+            }
+            return
+        }
+
+        let features: [MLNPointFeature] = waypoints.map { wp in
+            let f = MLNPointFeature()
+            f.coordinate = wp.coordinate
+            f.attributes = [
+                "name": wp.label ?? "",
+                "wpID": wp.id.uuidString,
+                "stopNumber": String(wp.order + 1),
+            ]
+            return f
+        }
+        let shape = MLNShapeCollectionFeature(shapes: features)
+
+        if let existing = style.source(withIdentifier: sourceID) as? MLNShapeSource {
+            // Just refresh the features; layers stay as-is.
+            existing.shape = shape
+            return
+        }
+
+        // First time: register icon image, create source + 3 layers.
+        let iconImageName = "marker-image-\(iconLayerID)"
+        if style.image(forName: iconImageName) == nil {
+            style.setImage(iconImage, forName: iconImageName)
+        }
+        let source = MLNShapeSource(identifier: sourceID, shape: shape, options: nil)
+        style.addSource(source)
+
         let scaleExpr = NSExpression(
             format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
             iconScaleStops as NSDictionary
         )
-        // The DSL coordinator's updateUIViewController order is:
-        //   1) applyModifiers(runUnsafe: true)   ← we're called HERE
-        //   2) updateLayers()                    ← DSL removes & re-adds layers
-        // If we set iconScale synchronously, the DSL's subsequent re-add
-        // overwrites our value (Symbol DSL doesn't carry iconScale). Dispatch
-        // back onto main so we run AFTER the DSL has done its work within
-        // the same RunLoop turn.
-        DispatchQueue.main.async {
-            for id in scaledIconLayerIDs {
-                if let layer = style.layer(withIdentifier: id) as? MLNSymbolStyleLayer {
-                    layer.iconScale = scaleExpr
-                }
+
+        // Icon layer
+        let icon = MLNSymbolStyleLayer(identifier: iconLayerID, source: source)
+        icon.iconImageName = NSExpression(forConstantValue: iconImageName)
+        icon.iconAllowsOverlap = NSExpression(forConstantValue: true)
+        icon.iconAnchor = NSExpression(forConstantValue: "center")
+        icon.iconScale = scaleExpr
+        style.addLayer(icon)
+
+        // Stop number (inside icon)
+        let numberDark = UIColor(red: 0.32, green: 0.16, blue: 0.10, alpha: 1.0)
+        let numberHalo = UIColor(red: 1.0, green: 0.97, blue: 0.88, alpha: 1.0)
+        let number = MLNSymbolStyleLayer(identifier: numberLayerID, source: source)
+        number.text = NSExpression(forKeyPath: "stopNumber")
+        number.textFontNames = NSExpression(forConstantValue: ["Noto Sans Regular"])
+        number.textFontSize = NSExpression(forConstantValue: numberFontSize)
+        number.textColor = NSExpression(forConstantValue: numberDark)
+        number.textHaloColor = NSExpression(forConstantValue: numberHalo)
+        number.textHaloWidth = NSExpression(forConstantValue: 1.2)
+        number.textAnchor = NSExpression(forConstantValue: "center")
+        number.textOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 0)))
+        number.textAllowsOverlap = NSExpression(forConstantValue: true)
+        style.addLayer(number)
+
+        // Name label (below icon)
+        let labelDark = UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0)
+        let labelHalo = UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0)
+        let label = MLNSymbolStyleLayer(identifier: labelLayerID, source: source)
+        label.text = NSExpression(forKeyPath: "name")
+        label.textFontNames = NSExpression(forConstantValue: ["Noto Sans Regular"])
+        label.textFontSize = NSExpression(forConstantValue: labelFontSize)
+        label.textColor = NSExpression(forConstantValue: labelDark)
+        label.textHaloColor = NSExpression(forConstantValue: labelHalo)
+        label.textHaloWidth = NSExpression(forConstantValue: labelHaloWidth)
+        label.textAnchor = NSExpression(forConstantValue: "top")
+        label.textOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: labelOffsetY)))
+        label.textAllowsOverlap = NSExpression(forConstantValue: false)
+        style.addLayer(label)
+    }
+
+    /// Single-feature pin (user location or preview). Updates the source in
+    /// place if it exists; otherwise creates source + a single symbol layer.
+    private static func syncSinglePinLayer(
+        style: MLNStyle,
+        sourceID: String,
+        layerID: String,
+        iconImage: UIImage,
+        coordinate: CLLocationCoordinate2D?,
+        extraAttributes: [String: Any]?,
+        applyIconScale: Bool
+    ) {
+        guard let coord = coordinate else {
+            if let layer = style.layer(withIdentifier: layerID) {
+                style.removeLayer(layer)
             }
+            if let src = style.source(withIdentifier: sourceID) {
+                style.removeSource(src)
+            }
+            return
         }
+
+        let feature = MLNPointFeature()
+        feature.coordinate = coord
+        if let attrs = extraAttributes {
+            feature.attributes = attrs
+        }
+
+        if let existing = style.source(withIdentifier: sourceID) as? MLNShapeSource {
+            existing.shape = feature
+            return
+        }
+
+        let iconImageName = "marker-image-\(layerID)"
+        if style.image(forName: iconImageName) == nil {
+            style.setImage(iconImage, forName: iconImageName)
+        }
+        let source = MLNShapeSource(identifier: sourceID, shape: feature, options: nil)
+        style.addSource(source)
+
+        let layer = MLNSymbolStyleLayer(identifier: layerID, source: source)
+        layer.iconImageName = NSExpression(forConstantValue: iconImageName)
+        layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+        layer.iconAnchor = NSExpression(forConstantValue: "center")
+        if applyIconScale {
+            layer.iconScale = NSExpression(
+                format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
+                iconScaleStops as NSDictionary
+            )
+        }
+        style.addLayer(layer)
     }
 
     // MARK: - Ring A spike (AlaskaRouter-39eu, throwaway)
@@ -450,128 +646,13 @@ struct ExpeditionMapView: View {
 
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {
-            if let trip {
-                // Route line: built in the unsafeMapViewControllerModifier
-                // below (the DSL doesn't expose native lineOffset). This
-                // body block only sets up markers + interaction sources.
-                // See AlaskaRouter-3bot rebuild (post-sober-geologist).
-
-                let ordered = trip.orderedWaypoints
-                let selectedSet = ordered.filter { $0.id == selectedWaypointID }
-                let unselectedSet = ordered.filter { $0.id != selectedWaypointID }
-
-                // Default-style markers (everyone except the selected one).
-                let unselectedFeatures = unselectedSet.map { wp -> MLNPointFeature in
-                    let f = MLNPointFeature()
-                    f.coordinate = wp.coordinate
-                    // stopNumber: 1-indexed position in the trip order; the
-                    // numbered-icon layer (AlaskaRouter-fooa) renders this
-                    // inside the icon.
-                    f.attributes = [
-                        "name": wp.label ?? "",
-                        "wpID": wp.id.uuidString,
-                        "stopNumber": String(wp.order + 1),
-                    ]
-                    return f
-                }
-                if !unselectedFeatures.isEmpty {
-                    let src = ShapeSource(identifier: "trip-markers-default") { unselectedFeatures }
-                    SymbolStyleLayer(identifier: "trip-marker-default-icons", source: src)
-                        .iconImage(WaypointIcons.committedDefault)
-                        .iconAllowsOverlap(true)
-                        .iconAnchor("center")
-                    // Stop number rendered IN the icon (AlaskaRouter-fooa).
-                    SymbolStyleLayer(identifier: "trip-marker-default-number", source: src)
-                        .textFontNames(["Noto Sans Regular"])
-                        .textFontSize(11)
-                        .textColor(UIColor(red: 0.32, green: 0.16, blue: 0.10, alpha: 1.0))
-                        .textHaloColor(UIColor(red: 1.0, green: 0.97, blue: 0.88, alpha: 1.0))
-                        .textHaloWidth(1.2)
-                        .text(featurePropertyNamed: "stopNumber")
-                        .textAnchor("center")
-                        .textOffset(CGVector(dx: 0, dy: 0))
-                        .textAllowsOverlap(true)
-                    SymbolStyleLayer(identifier: "trip-marker-default-labels", source: src)
-                        .textFontNames(["Noto Sans Regular"])
-                        .textFontSize(13)
-                        .textColor(UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0))
-                        .textHaloColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0))
-                        .textHaloWidth(1.6)
-                        .text(featurePropertyNamed: "name")
-                        .textAnchor("top")
-                        .textOffset(CGVector(dx: 0, dy: 1.4))
-                        .textAllowsOverlap(false)
-                }
-
-                // Selected (sobresaliente) marker — rendered on top, bigger.
-                let selectedFeatures = selectedSet.map { wp -> MLNPointFeature in
-                    let f = MLNPointFeature()
-                    f.coordinate = wp.coordinate
-                    f.attributes = [
-                        "name": wp.label ?? "",
-                        "wpID": wp.id.uuidString,
-                        "stopNumber": String(wp.order + 1),
-                    ]
-                    return f
-                }
-                if !selectedFeatures.isEmpty {
-                    let src = ShapeSource(identifier: "trip-markers-selected") { selectedFeatures }
-                    SymbolStyleLayer(identifier: "trip-marker-selected-icons", source: src)
-                        .iconImage(WaypointIcons.committedSelected)
-                        .iconAllowsOverlap(true)
-                        .iconAnchor("center")
-                    // Stop number rendered IN the (larger) selected icon —
-                    // 1pt larger than the default-marker number to match
-                    // the selected icon being bigger. AlaskaRouter-fooa.
-                    SymbolStyleLayer(identifier: "trip-marker-selected-number", source: src)
-                        .textFontNames(["Noto Sans Regular"])
-                        .textFontSize(12)
-                        .textColor(UIColor(red: 0.32, green: 0.16, blue: 0.10, alpha: 1.0))
-                        .textHaloColor(UIColor(red: 1.0, green: 0.97, blue: 0.88, alpha: 1.0))
-                        .textHaloWidth(1.4)
-                        .text(featurePropertyNamed: "stopNumber")
-                        .textAnchor("center")
-                        .textOffset(CGVector(dx: 0, dy: 0))
-                        .textAllowsOverlap(true)
-                    SymbolStyleLayer(identifier: "trip-marker-selected-labels", source: src)
-                        // We only bundle Noto Sans Regular glyphs (see AlaskaRouter/glyphs/).
-                        // Requesting "Noto Sans Bold" makes MapLibre fail the entire symbol —
-                        // BOTH icon and label disappear. Use the bundled font; distinction
-                        // comes from size + halo + the bigger selected icon.
-                        .textFontNames(["Noto Sans Regular"])
-                        .textFontSize(14)
-                        .textColor(UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0))
-                        .textHaloColor(UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0))
-                        .textHaloWidth(1.8)
-                        .text(featurePropertyNamed: "name")
-                        .textAnchor("top")
-                        .textOffset(CGVector(dx: 0, dy: 1.8))
-                        .textAllowsOverlap(false)
-                }
-            }
-
-            // User's current GPS location — Apple-Maps-style blue puck.
-            if let userLocation {
-                let f = MLNPointFeature()
-                f.coordinate = userLocation
-                let src = ShapeSource(identifier: "user-location") { f }
-                SymbolStyleLayer(identifier: "user-location-icon", source: src)
-                    .iconImage(WaypointIcons.userLocation)
-                    .iconAllowsOverlap(true)
-                    .iconAnchor("center")
-            }
-
-            // Preview pin (investigating a search result, not yet added).
-            if let pc = previewCoord {
-                let pf = MLNPointFeature()
-                pf.coordinate = pc
-                pf.attributes = ["name": previewName ?? ""]
-                let src = ShapeSource(identifier: "preview-pin") { pf }
-                SymbolStyleLayer(identifier: "preview-pin-icon", source: src)
-                    .iconImage(WaypointIcons.preview)
-                    .iconAllowsOverlap(true)
-                    .iconAnchor("center")
-            }
+            // ALL trip layers (route + waypoint markers + user-location +
+            // preview pin) are built in the unsafeMapViewControllerModifier
+            // below. The DSL doesn't expose lineOffset / iconScale, and the
+            // DSL coordinator's removes-and-re-adds-every-frame behavior
+            // forces a deferred-write workaround that flickers. Direct MLN
+            // API in the unsafe hook gives us layer ownership and lets us
+            // set those properties on creation, once, and forget.
         }
         // Map tap hit-tests against the two waypoint-marker layers. When a
         // marker is hit, fire onWaypointTap(UUID). Empty area → onWaypointTap(nil)
@@ -602,8 +683,17 @@ struct ExpeditionMapView: View {
                     trip: trip,
                     snappedRouteCoords: snappedRouteCoords
                 )
-                // Waypoint marker zoom-scaling (AlaskaRouter-h82l).
-                ExpeditionMapView.syncWaypointIconScales(style: style)
+                // All marker layers via raw MLN API so we can apply
+                // iconScale on layer creation (AlaskaRouter-h82l) without
+                // the DSL re-adding the layer every frame and clobbering it.
+                ExpeditionMapView.syncMarkerLayers(
+                    style: style,
+                    trip: trip,
+                    selectedWaypointID: selectedWaypointID,
+                    userLocation: userLocation,
+                    previewCoord: previewCoord,
+                    previewName: previewName
+                )
             }
 
             // Ring A spike (AlaskaRouter-39eu). Gated by -spikeRingA.
