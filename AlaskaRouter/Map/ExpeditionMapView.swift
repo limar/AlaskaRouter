@@ -236,9 +236,18 @@ struct ExpeditionMapView: View {
             format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
             iconScaleStops as NSDictionary
         )
-        for id in scaledIconLayerIDs {
-            if let layer = style.layer(withIdentifier: id) as? MLNSymbolStyleLayer {
-                layer.iconScale = scaleExpr
+        // The DSL coordinator's updateUIViewController order is:
+        //   1) applyModifiers(runUnsafe: true)   ← we're called HERE
+        //   2) updateLayers()                    ← DSL removes & re-adds layers
+        // If we set iconScale synchronously, the DSL's subsequent re-add
+        // overwrites our value (Symbol DSL doesn't carry iconScale). Dispatch
+        // back onto main so we run AFTER the DSL has done its work within
+        // the same RunLoop turn.
+        DispatchQueue.main.async {
+            for id in scaledIconLayerIDs {
+                if let layer = style.layer(withIdentifier: id) as? MLNSymbolStyleLayer {
+                    layer.iconScale = scaleExpr
+                }
             }
         }
     }
@@ -455,7 +464,14 @@ struct ExpeditionMapView: View {
                 let unselectedFeatures = unselectedSet.map { wp -> MLNPointFeature in
                     let f = MLNPointFeature()
                     f.coordinate = wp.coordinate
-                    f.attributes = ["name": wp.label ?? "", "wpID": wp.id.uuidString]
+                    // stopNumber: 1-indexed position in the trip order; the
+                    // numbered-icon layer (AlaskaRouter-fooa) renders this
+                    // inside the icon.
+                    f.attributes = [
+                        "name": wp.label ?? "",
+                        "wpID": wp.id.uuidString,
+                        "stopNumber": String(wp.order + 1),
+                    ]
                     return f
                 }
                 if !unselectedFeatures.isEmpty {
@@ -464,6 +480,17 @@ struct ExpeditionMapView: View {
                         .iconImage(WaypointIcons.committedDefault)
                         .iconAllowsOverlap(true)
                         .iconAnchor("center")
+                    // Stop number rendered IN the icon (AlaskaRouter-fooa).
+                    SymbolStyleLayer(identifier: "trip-marker-default-number", source: src)
+                        .textFontNames(["Noto Sans Regular"])
+                        .textFontSize(11)
+                        .textColor(UIColor(red: 0.32, green: 0.16, blue: 0.10, alpha: 1.0))
+                        .textHaloColor(UIColor(red: 1.0, green: 0.97, blue: 0.88, alpha: 1.0))
+                        .textHaloWidth(1.2)
+                        .text(featurePropertyNamed: "stopNumber")
+                        .textAnchor("center")
+                        .textOffset(CGVector(dx: 0, dy: 0))
+                        .textAllowsOverlap(true)
                     SymbolStyleLayer(identifier: "trip-marker-default-labels", source: src)
                         .textFontNames(["Noto Sans Regular"])
                         .textFontSize(13)
@@ -480,7 +507,11 @@ struct ExpeditionMapView: View {
                 let selectedFeatures = selectedSet.map { wp -> MLNPointFeature in
                     let f = MLNPointFeature()
                     f.coordinate = wp.coordinate
-                    f.attributes = ["name": wp.label ?? "", "wpID": wp.id.uuidString]
+                    f.attributes = [
+                        "name": wp.label ?? "",
+                        "wpID": wp.id.uuidString,
+                        "stopNumber": String(wp.order + 1),
+                    ]
                     return f
                 }
                 if !selectedFeatures.isEmpty {
@@ -489,6 +520,19 @@ struct ExpeditionMapView: View {
                         .iconImage(WaypointIcons.committedSelected)
                         .iconAllowsOverlap(true)
                         .iconAnchor("center")
+                    // Stop number rendered IN the (larger) selected icon —
+                    // 1pt larger than the default-marker number to match
+                    // the selected icon being bigger. AlaskaRouter-fooa.
+                    SymbolStyleLayer(identifier: "trip-marker-selected-number", source: src)
+                        .textFontNames(["Noto Sans Regular"])
+                        .textFontSize(12)
+                        .textColor(UIColor(red: 0.32, green: 0.16, blue: 0.10, alpha: 1.0))
+                        .textHaloColor(UIColor(red: 1.0, green: 0.97, blue: 0.88, alpha: 1.0))
+                        .textHaloWidth(1.4)
+                        .text(featurePropertyNamed: "stopNumber")
+                        .textAnchor("center")
+                        .textOffset(CGVector(dx: 0, dy: 0))
+                        .textAllowsOverlap(true)
                     SymbolStyleLayer(identifier: "trip-marker-selected-labels", source: src)
                         // We only bundle Noto Sans Regular glyphs (see AlaskaRouter/glyphs/).
                         // Requesting "Noto Sans Bold" makes MapLibre fail the entire symbol —
