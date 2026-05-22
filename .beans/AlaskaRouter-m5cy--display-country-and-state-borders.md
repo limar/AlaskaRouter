@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-m5cy
 title: Display country and state borders
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-20T20:20:52Z
-updated_at: 2026-05-20T20:21:45Z
+updated_at: 2026-05-21T15:11:55Z
 parent: AlaskaRouter-xtua
 ---
 

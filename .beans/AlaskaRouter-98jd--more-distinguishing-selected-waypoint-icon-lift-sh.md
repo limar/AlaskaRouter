@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-98jd
 title: More distinguishing Selected waypoint icon (lift, shadow, glow)
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-19T09:26:02Z
-updated_at: 2026-05-19T09:26:02Z
+updated_at: 2026-05-21T15:17:38Z
 parent: AlaskaRouter-xtua
 ---
 

@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-qfgt
 title: Vibrant road visibility at low zooms (z<4)
-status: todo
+status: scrapped
 type: feature
 priority: low
 created_at: 2026-05-19T07:17:13Z
-updated_at: 2026-05-19T07:17:13Z
+updated_at: 2026-05-21T15:13:50Z
 parent: AlaskaRouter-xtua
 ---
 

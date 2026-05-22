@@ -3,9 +3,9 @@
 title: Reorder stops visually on the map (proper UX for diagonal routes)
 status: todo
 type: feature
-priority: high
+priority: normal
 created_at: 2026-05-20T08:49:20Z
-updated_at: 2026-05-20T08:49:20Z
+updated_at: 2026-05-21T15:07:53Z
 parent: AlaskaRouter-xtua
 ---
 

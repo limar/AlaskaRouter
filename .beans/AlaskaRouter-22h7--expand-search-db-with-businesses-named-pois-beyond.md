@@ -3,9 +3,9 @@
 title: Expand search DB with businesses + named POIs (beyond current Alaska places set)
 status: todo
 type: feature
-priority: normal
+priority: high
 created_at: 2026-05-20T20:20:30Z
-updated_at: 2026-05-20T20:21:45Z
+updated_at: 2026-05-21T15:12:09Z
 parent: AlaskaRouter-xtua
 ---
 

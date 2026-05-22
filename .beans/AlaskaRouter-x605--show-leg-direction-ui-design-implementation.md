@@ -3,9 +3,9 @@
 title: Show leg direction (UI design + implementation)
 status: todo
 type: feature
-priority: high
+priority: low
 created_at: 2026-05-20T19:54:32Z
-updated_at: 2026-05-20T19:55:13Z
+updated_at: 2026-05-21T15:08:03Z
 parent: AlaskaRouter-xtua
 ---
 

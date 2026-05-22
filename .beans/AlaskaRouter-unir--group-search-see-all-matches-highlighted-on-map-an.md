@@ -3,9 +3,9 @@
 title: Group search — see all matches highlighted on map and pick
 status: todo
 type: feature
-priority: high
+priority: normal
 created_at: 2026-05-19T07:59:36Z
-updated_at: 2026-05-19T07:59:36Z
+updated_at: 2026-05-21T15:12:22Z
 parent: AlaskaRouter-xtua
 ---
 

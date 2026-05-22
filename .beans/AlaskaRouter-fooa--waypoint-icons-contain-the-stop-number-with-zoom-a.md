@@ -3,9 +3,9 @@
 title: Waypoint icons contain the stop number (with zoom-aware legibility floor)
 status: todo
 type: feature
-priority: normal
+priority: high
 created_at: 2026-05-20T19:42:55Z
-updated_at: 2026-05-20T19:43:32Z
+updated_at: 2026-05-21T15:13:00Z
 parent: AlaskaRouter-xtua
 blocked_by:
     - AlaskaRouter-h82l
