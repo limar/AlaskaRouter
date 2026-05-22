@@ -63,6 +63,12 @@ struct ExpeditionMapView: View {
     /// puck is drawn at this coord. Pixel-sized so it stays constant across
     /// zooms (uses the WaypointIcons.userLocation UIImage).
     let userLocation: CLLocationCoordinate2D?
+    /// A change-detector string for the live-tweaks store (AlaskaRouter-ykuf).
+    /// Held as a stored property so SwiftUI sees a value change when any
+    /// tweak slider moves; that schedules `updateUIViewController`, which
+    /// fires our unsafe hook with the new tweak values applied to icons.
+    let tweaksFingerprint: String
+
     /// Map tap on a waypoint marker (AlaskaRouter-kcq8). `nil` means an empty
     /// area was tapped — the parent should clear selection.
     var onWaypointTap: ((UUID?) -> Void)? = nil
@@ -239,19 +245,46 @@ struct ExpeditionMapView: View {
         previewName: String?
     ) {
         let ordered = trip?.orderedWaypoints ?? []
-        let selectedSet = ordered.filter { $0.id == selectedWaypointID }
-        let unselectedSet = ordered.filter { $0.id != selectedWaypointID }
+
+        // Coord-level deduplication (AlaskaRouter-ykuf). When the trip
+        // revisits the same geographic coord (out-and-back trips), only
+        // ONE marker is drawn per coord — the FIRST visit's. Without
+        // this dedup, multiple icons stack on the same pixel and their
+        // digit text overlaps into an unreadable smear.
+        //
+        // Exception: if the user has selected a non-first visit at a
+        // shared coord, we pick that visit (the selected one) for the
+        // visible marker so its "selected" styling shows.
+        //
+        // The displayed marker's number + block color always come from
+        // the chosen waypoint — per the locked spec, first-visit-wins
+        // unless selection overrides.
+        var groups: [String: [Waypoint]] = [:]
+        var orderedKeys: [String] = []
+        for wp in ordered {
+            let key = String(format: "%.6f|%.6f", wp.lat, wp.lon)
+            if groups[key] == nil {
+                orderedKeys.append(key)
+                groups[key] = []
+            }
+            groups[key]!.append(wp)
+        }
+        let dedupedWaypoints: [Waypoint] = orderedKeys.map { key in
+            let group = groups[key]!
+            return group.first(where: { $0.id == selectedWaypointID }) ?? group[0]
+        }
+
+        let selectedSet = dedupedWaypoints.filter { $0.id == selectedWaypointID }
+        let unselectedSet = dedupedWaypoints.filter { $0.id != selectedWaypointID }
 
         // Default waypoint markers.
         syncTripMarkerGroup(
             style: style,
             sourceID: "trip-markers-default",
             iconLayerID: "trip-marker-default-icons",
-            numberLayerID: "trip-marker-default-number",
             labelLayerID: "trip-marker-default-labels",
             waypoints: unselectedSet,
-            iconImage: WaypointIcons.committedDefault,
-            numberFontSize: 11,
+            selected: false,
             labelFontSize: 13,
             labelOffsetY: 1.4,
             labelHaloWidth: 1.6
@@ -262,11 +295,9 @@ struct ExpeditionMapView: View {
             style: style,
             sourceID: "trip-markers-selected",
             iconLayerID: "trip-marker-selected-icons",
-            numberLayerID: "trip-marker-selected-number",
             labelLayerID: "trip-marker-selected-labels",
             waypoints: selectedSet,
-            iconImage: WaypointIcons.committedSelected,
-            numberFontSize: 12,
+            selected: true,
             labelFontSize: 14,
             labelOffsetY: 1.8,
             labelHaloWidth: 1.8
@@ -297,25 +328,28 @@ struct ExpeditionMapView: View {
         )
     }
 
-    /// Marker group = source + (icon layer, number layer, label layer).
+    /// Marker group = source + (icon layer, label layer).
+    /// Each waypoint's icon is pre-rendered per (number, color, selected)
+    /// with the digit baked in (UIKit bold typography, since MapLibre's
+    /// glyph stack only has Regular weight — AlaskaRouter-ymw6). The
+    /// feature's "iconKey" attribute references the registered image.
+    ///
     /// Source's shape is updated in place on subsequent calls; layers are
     /// created once and left alone.
     private static func syncTripMarkerGroup(
         style: MLNStyle,
         sourceID: String,
         iconLayerID: String,
-        numberLayerID: String,
         labelLayerID: String,
         waypoints: [Waypoint],
-        iconImage: UIImage,
-        numberFontSize: Double,
+        selected: Bool,
         labelFontSize: Double,
         labelOffsetY: Double,
         labelHaloWidth: Double
     ) {
         // No waypoints in this group → remove everything we own here.
         if waypoints.isEmpty {
-            for id in [labelLayerID, numberLayerID, iconLayerID] {
+            for id in [labelLayerID, iconLayerID] {
                 if let layer = style.layer(withIdentifier: id) {
                     style.removeLayer(layer)
                 }
@@ -326,61 +360,53 @@ struct ExpeditionMapView: View {
             return
         }
 
+        // Single-color baseline for ykuf step 1.5. Per-block coloring
+        // arrives in the next step — we'll pass each waypoint's block
+        // color into WaypointIcons.dot(...) instead of this constant.
+        let dotColor = UIColor(red: 0.760, green: 0.255, blue: 0.047, alpha: 1.0)
+
         let features: [MLNPointFeature] = waypoints.map { wp in
+            let numberStr = String(wp.order + 1)
+            let (image, iconName) = WaypointIcons.dot(
+                number: numberStr,
+                color: dotColor,
+                selected: selected
+            )
+            if style.image(forName: iconName) == nil {
+                style.setImage(image, forName: iconName)
+            }
             let f = MLNPointFeature()
             f.coordinate = wp.coordinate
             f.attributes = [
                 "name": wp.label ?? "",
                 "wpID": wp.id.uuidString,
-                "stopNumber": String(wp.order + 1),
+                "stopNumber": numberStr,
+                "iconKey": iconName,
             ]
             return f
         }
         let shape = MLNShapeCollectionFeature(shapes: features)
 
         if let existing = style.source(withIdentifier: sourceID) as? MLNShapeSource {
-            // Just refresh the features; layers stay as-is.
+            // Refresh features only; layers were created on first call.
             existing.shape = shape
             return
         }
 
-        // First time: register icon image, create source + 3 layers.
-        let iconImageName = "marker-image-\(iconLayerID)"
-        if style.image(forName: iconImageName) == nil {
-            style.setImage(iconImage, forName: iconImageName)
-        }
         let source = MLNShapeSource(identifier: sourceID, shape: shape, options: nil)
         style.addSource(source)
 
-        let scaleExpr = NSExpression(
-            format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
-            iconScaleStops as NSDictionary
-        )
-
-        // Icon layer
+        // Icon layer — per-feature image lookup via the "iconKey" attribute.
+        // Constant size (no iconScale interpolation); the Dot's small
+        // footprint reads well across our z=5..15 range.
         let icon = MLNSymbolStyleLayer(identifier: iconLayerID, source: source)
-        icon.iconImageName = NSExpression(forConstantValue: iconImageName)
+        icon.iconImageName = NSExpression(forKeyPath: "iconKey")
         icon.iconAllowsOverlap = NSExpression(forConstantValue: true)
         icon.iconAnchor = NSExpression(forConstantValue: "center")
-        icon.iconScale = scaleExpr
         style.addLayer(icon)
 
-        // Stop number (inside icon)
-        let numberDark = UIColor(red: 0.32, green: 0.16, blue: 0.10, alpha: 1.0)
-        let numberHalo = UIColor(red: 1.0, green: 0.97, blue: 0.88, alpha: 1.0)
-        let number = MLNSymbolStyleLayer(identifier: numberLayerID, source: source)
-        number.text = NSExpression(forKeyPath: "stopNumber")
-        number.textFontNames = NSExpression(forConstantValue: ["Noto Sans Regular"])
-        number.textFontSize = NSExpression(forConstantValue: numberFontSize)
-        number.textColor = NSExpression(forConstantValue: numberDark)
-        number.textHaloColor = NSExpression(forConstantValue: numberHalo)
-        number.textHaloWidth = NSExpression(forConstantValue: 1.2)
-        number.textAnchor = NSExpression(forConstantValue: "center")
-        number.textOffset = NSExpression(forConstantValue: NSValue(cgVector: CGVector(dx: 0, dy: 0)))
-        number.textAllowsOverlap = NSExpression(forConstantValue: true)
-        style.addLayer(number)
-
-        // Name label (below icon)
+        // Name label below icon. (Digit is now inside the icon image, no
+        // separate number text layer.)
         let labelDark = UIColor(red: 0.10, green: 0.07, blue: 0.04, alpha: 1.0)
         let labelHalo = UIColor(red: 0.96, green: 0.93, blue: 0.84, alpha: 1.0)
         let label = MLNSymbolStyleLayer(identifier: labelLayerID, source: source)

@@ -25,6 +25,11 @@ struct RootView: View {
     @State private var isSearchFieldFocused: Bool = false
     @State private var showWelcome: Bool = WelcomeFlag.shouldShow
     @State private var sheetMode: SheetMode = LaunchArgs.startInTripsMode ? .trips : .stops
+    /// In-app live design tweaks (AlaskaRouter-ykuf). Observed here so a
+    /// tweak change re-renders body, propagating through to ExpeditionMapView
+    /// where the unsafe hook reads the latest values for the next frame.
+    @State private var tweaksStore = TweaksStore.shared
+    @State private var showTweaksPanel: Bool = false
     /// Observed only so SwiftUI re-renders when the active trip changes via
     /// TripStore.setActive. The actual resolution still happens in TripStore.
     @AppStorage("activeTripID") private var activeTripIDObserved: String = ""
@@ -47,6 +52,36 @@ struct RootView: View {
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
 
     private var activeTrip: Trip? { TripStore.resolveActive(from: trips) }
+
+    /// Computed string read from the @Observable TweaksStore. Body reading
+    /// this property gives SwiftUI a dependency edge so any tweak change
+    /// triggers a re-render → ExpeditionMapView's unsafe hook fires →
+    /// markers re-rendered with the new tweak values.
+    private var tweaksFingerprint: String {
+        String(
+            format: "d%.0f-s%.0f-w%.2f-r%.2f",
+            tweaksStore.dotDiameterDefault,
+            tweaksStore.dotDiameterSelected,
+            tweaksStore.dotFontWeight,
+            tweaksStore.dotFontSizeRatio
+        )
+    }
+
+    /// Live-design tweaks trigger (top-left corner, small wrench button).
+    private var tweaksTriggerButton: some View {
+        Button {
+            showTweaksPanel = true
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 32, height: 32)
+                .background(.thinMaterial, in: Circle())
+                .overlay(Circle().stroke(.white.opacity(0.10), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.08), radius: 4, y: 1)
+        }
+        .buttonStyle(.plain)
+    }
 
     /// "Search mode active" — field is focused OR there's a non-empty query.
     /// We hide the bottom sheet and dim/hold the map during this state.
@@ -71,6 +106,7 @@ struct RootView: View {
                 previewName: previewedResult?.name,
                 snappedRouteCoords: snappedRouteCoords,
                 userLocation: locationProvider.lastLocation?.coordinate,
+                tweaksFingerprint: tweaksFingerprint,
                 onWaypointTap: handleMapWaypointTap
             )
             .ignoresSafeArea()
@@ -190,6 +226,20 @@ struct RootView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
+            // Live-tweaks trigger (AlaskaRouter-ykuf). Tucked top-left so it
+            // doesn't compete with the search bar or on-map controls.
+            // Persistent — the app is a personal tool; tweaks ship with it.
+            VStack {
+                HStack {
+                    tweaksTriggerButton
+                        .padding(.leading, 12)
+                        .padding(.top, 8)
+                    Spacer()
+                }
+                Spacer()
+            }
+            .allowsHitTesting(!isSearchActive)
+
             if let added = recentlyAddedWaypoint {
                 VStack {
                     Spacer()
@@ -220,6 +270,10 @@ struct RootView: View {
             if showWelcome {
                 WelcomeOverlay(onDismiss: dismissWelcome)
             }
+        }
+        .sheet(isPresented: $showTweaksPanel) {
+            TweaksPanel(tweaks: tweaksStore)
+                .presentationDetents([.medium, .large])
         }
         .onAppear {
             if let prefill = LaunchArgs.prefillQuery {

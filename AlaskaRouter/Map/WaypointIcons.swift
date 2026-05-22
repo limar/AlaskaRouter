@@ -15,9 +15,139 @@ enum WaypointIconStyle {
 
 enum WaypointIcons {
 
-    static let committedDefault: UIImage = pngBacked(make(style: .committedDefault))
-    static let committedSelected: UIImage = pngBacked(make(style: .committedSelected))
+    // New "Dot" silhouette (AlaskaRouter-ykuf). Solid color disc + 2pt white
+    // stroke + subtle inner ring. The stop NUMBER is baked into the image
+    // using UIKit's system-bold font — we can't get bold via MapLibre's
+    // glyph stack today (only Noto Sans Regular is bundled — see
+    // AlaskaRouter-ymw6). Baking gives us full typography control and
+    // sidesteps that limitation.
+    //
+    // Cache: pre-rendered images keyed by "(selected, number, colorRGB)".
+    // Trip waypoints register their needed images with the style and
+    // reference them per-feature via the "iconKey" attribute.
     static let preview: UIImage = pngBacked(make(style: .preview))
+
+    /// Lazy per-(number, selected, color) cache of rendered dots. Each
+    /// distinct combo renders once and is reused across frames.
+    /// Accessed only from the MainActor (via the unsafe hook), hence
+    /// `nonisolated(unsafe)`.
+    nonisolated(unsafe) private static var dotCache: [String: UIImage] = [:]
+
+    /// Returns a Dot icon for the given stop number + block color +
+    /// selected state, along with the stable image NAME used to register
+    /// it with the map style. Reads sizes / typography from TweaksStore so
+    /// live in-app tweaking can adjust the design without rebuilding.
+    /// Cache key includes every tweak value — any change forces a fresh
+    /// render and a fresh registered image.
+    @MainActor
+    static func dot(number: String, color: UIColor, selected: Bool) -> (image: UIImage, name: String) {
+        let t = TweaksStore.shared
+        let diameter: CGFloat = selected ? t.dotDiameterSelected : t.dotDiameterDefault
+        let fontWeight = t.dotFontWeight
+        let fontSizeRatio = t.dotFontSizeRatio
+
+        // Color key + tweak fingerprint for stable cache key.
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let rgb = String(format: "%02x%02x%02x", Int(r * 255), Int(g * 255), Int(b * 255))
+        let name = String(
+            format: "dot-%@-%@-%@-d%d-w%d-s%d",
+            selected ? "sel" : "def",
+            number,
+            rgb,
+            Int(diameter),
+            Int(fontWeight * 100),
+            Int(fontSizeRatio * 100)
+        )
+        if let cached = dotCache[name] {
+            return (cached, name)
+        }
+        let img = pngBacked(renderDotImage(
+            diameter: diameter,
+            color: color,
+            number: number,
+            fontWeight: fontWeight,
+            fontSizeRatio: fontSizeRatio
+        ))
+        dotCache[name] = img
+        return (img, name)
+    }
+
+    private static func renderDotImage(
+        diameter: CGFloat,
+        color: UIColor,
+        number: String,
+        fontWeight: Double,
+        fontSizeRatio: Double
+    ) -> UIImage {
+        let pad: CGFloat = 4
+        let size = diameter + 2 * pad
+        let canvas = CGSize(width: size, height: size)
+        let renderer = UIGraphicsImageRenderer(size: canvas)
+        return renderer.image { ctx in
+            let c = ctx.cgContext
+            let center = CGPoint(x: size / 2, y: size / 2)
+            let r = diameter / 2
+            let strokeWidth: CGFloat = 2.0
+
+            // Drop shadow under the disc.
+            c.setShadow(offset: CGSize(width: 0, height: 1.2),
+                        blur: 2.4,
+                        color: UIColor.black.withAlphaComponent(0.22).cgColor)
+            c.setFillColor(color.cgColor)
+            c.fillEllipse(in: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
+            c.setShadow(offset: .zero, blur: 0, color: nil)
+
+            // White outer stroke (inside the disc edge).
+            c.setStrokeColor(UIColor.white.cgColor)
+            c.setLineWidth(strokeWidth)
+            let strokeRect = CGRect(
+                x: center.x - r + strokeWidth / 2,
+                y: center.y - r + strokeWidth / 2,
+                width: r * 2 - strokeWidth,
+                height: r * 2 - strokeWidth
+            )
+            c.strokeEllipse(in: strokeRect)
+
+            // Faint inner ring for dimension hint (matches mock's 9.2/11 ratio).
+            let innerR = r * 0.836
+            c.setStrokeColor(UIColor.white.withAlphaComponent(0.22).cgColor)
+            c.setLineWidth(0.7)
+            c.strokeEllipse(in: CGRect(
+                x: center.x - innerR, y: center.y - innerR,
+                width: innerR * 2, height: innerR * 2
+            ))
+
+            // Digit, centered, with weight + size controlled by TweaksStore.
+            // 2-digit numbers scale down by 0.76 of the 1-digit ratio so
+            // "36" still fits without crowding the disc edges.
+            let baseRatio = CGFloat(fontSizeRatio)
+            let digitRatio: CGFloat = number.count >= 2 ? baseRatio * 0.76 : baseRatio
+            let digitFontSize: CGFloat = diameter * digitRatio
+            let font = UIFont.systemFont(
+                ofSize: digitFontSize,
+                weight: UIFont.Weight(rawValue: CGFloat(fontWeight))
+            )
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: UIColor.white,
+                // Tabular numerics so "10" / "11" stay balanced on either
+                // side of the icon's vertical axis.
+                .kern: 0.0,
+            ]
+            let ns = number as NSString
+            let textSize = ns.size(withAttributes: attrs)
+            // Optical center-y nudges the digit up ~1pt because system
+            // fonts have descender bias that visually drops the digit low.
+            let textRect = CGRect(
+                x: center.x - textSize.width / 2,
+                y: center.y - textSize.height / 2 - diameter * 0.03,
+                width: textSize.width,
+                height: textSize.height
+            )
+            ns.draw(in: textRect, withAttributes: attrs)
+        }
+    }
 
     /// Apple-Maps-style blue puck for the user's current location. 24pt halo
     /// + 14pt blue core with a thin white ring. Pixel-sized via iconImage()
@@ -56,6 +186,54 @@ enum WaypointIcons {
         guard let png = image.pngData(),
               let cg = UIImage(data: png)?.cgImage else { return image }
         return UIImage(cgImage: cg, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    /// Render a "Dot" waypoint icon (AlaskaRouter-ykuf): solid-color disc +
+    /// 2pt white stroke + faint inner ring at ~84% of the radius. Digit is
+    /// rendered as a separate text layer; this image is just the silhouette.
+    /// `diameter` is the visible outer-edge size in points.
+    static func makeDot(diameter: CGFloat, color: UIColor) -> UIImage {
+        // Pad the canvas so the stroke and shadow have breathing room.
+        let pad: CGFloat = 4
+        let size = diameter + 2 * pad
+        let canvas = CGSize(width: size, height: size)
+        let renderer = UIGraphicsImageRenderer(size: canvas)
+        return renderer.image { ctx in
+            let c = ctx.cgContext
+            let center = CGPoint(x: size / 2, y: size / 2)
+            let r = diameter / 2
+            let strokeWidth: CGFloat = 2.0
+
+            // Drop shadow under the disc.
+            c.setShadow(offset: CGSize(width: 0, height: 1.2),
+                        blur: 2.4,
+                        color: UIColor.black.withAlphaComponent(0.22).cgColor)
+            c.setFillColor(color.cgColor)
+            c.fillEllipse(in: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
+            c.setShadow(offset: .zero, blur: 0, color: nil)
+
+            // White outer stroke (sits inside the disc edge so it doesn't
+            // bleed into the shadow).
+            c.setStrokeColor(UIColor.white.cgColor)
+            c.setLineWidth(strokeWidth)
+            let strokeRect = CGRect(
+                x: center.x - r + strokeWidth / 2,
+                y: center.y - r + strokeWidth / 2,
+                width: r * 2 - strokeWidth,
+                height: r * 2 - strokeWidth
+            )
+            c.strokeEllipse(in: strokeRect)
+
+            // Faint inner ring for hint of dimension (matches the mock's
+            // 9.2/11 = 0.836 proportion).
+            let innerR = r * 0.836
+            c.setStrokeColor(UIColor.white.withAlphaComponent(0.22).cgColor)
+            c.setLineWidth(0.7)
+            c.strokeEllipse(in: CGRect(
+                x: center.x - innerR, y: center.y - innerR,
+                width: innerR * 2, height: innerR * 2
+            ))
+        }
     }
 
     private static func make(style: WaypointIconStyle) -> UIImage {
