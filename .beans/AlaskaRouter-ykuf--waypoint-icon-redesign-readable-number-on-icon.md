@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ykuf
 title: Waypoint icon redesign — readable number-on-icon
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-22T12:52:08Z
-updated_at: 2026-05-23T08:08:20Z
+updated_at: 2026-05-23T08:44:12Z
 parent: AlaskaRouter-xtua
 blocking:
     - AlaskaRouter-fooa
@@ -65,12 +65,12 @@ The icon was designed pre-numbers as "cream disc + brown ring + warm-tomato cent
 
 ## Checklist
 
-- [ ] Pick a design direction (A / B / C / D / sketch)
-- [ ] Update WaypointIcons.swift to render the new icon
-- [ ] If digit color changes, update SymbolStyleLayer text props in ExpeditionMapView
-- [ ] Verify at z=5..15 — digit readable at mid zoom (z=9..12), gracefully fades or hides at low zoom
-- [ ] Verify default + selected variants both work
-- [ ] Verify against all block palette colors (if per-block coloring is in scope)
+- [x] Pick a design direction (A / B / C / D / sketch) — picked **Dot** (cream digit on block-colored fill)
+- [x] Update WaypointIcons.swift to render the new icon
+- [x] If digit color changes, update SymbolStyleLayer text props in ExpeditionMapView
+- [x] Verify at z=5..15 — digit readable at mid zoom (z=9..12), gracefully fades or hides at low zoom
+- [x] Verify default + selected variants both work
+- [x] Verify against all block palette colors (if per-block coloring is in scope)
 
 
 ## Step 4 — Show multi-pass numbers in the StopCallout
@@ -88,3 +88,19 @@ Design: keep \`STOP N OF M\` header unchanged. Below it, a secondary uppercase l
   - [x] Compute additional pass numbers in RootView (coords matching the selected waypoint, excluding self)
   - [x] Add \`additionalPassNumbers: [Int]\` to StopCallout
   - [x] Render \`ALSO STOP …\` secondary line under the position label
+
+
+## Summary of Changes
+
+Four-step redesign of the trip waypoint marker, shipped in four small commits with on-device verification at each step:
+
+1. **Dot icon + live-tweaks panel** (`e558291`) — replaced the cream-disc + brown-ring + tomato-pip combo with a single cream-bordered colored disc carrying the digit. Added `TweaksStore` (@Observable @MainActor singleton) + `TweaksPanel` (sheet) so diameter, font weight, and font-size ratio can be dialed in live without rebuilds. Converged values became the defaults: default 24pt, selected 27pt, weight 0.50, ratio 0.54.
+2. **Per-block Dot color** (`014ca97`) — Dot fill now comes from the waypoint's block color (threaded through `syncMarkerLayers` → `syncTripMarkerGroup`). Verified amber/teal segmentation on the Alaska trip.
+3. **Skipped "+" multi-pass badge on the marker** — the visual was noise without explanation; the user vetoed adding it.
+4. **`ALSO STOP …` line in the StopCallout** (`66f0f03`) — the map dedups markers by coord (first-visit wins), so out-and-back revisits became invisible. The callout now exposes them in a small secondary line under the position label, suppressed for single-visit stops. Coord-key rounding matches the marker dedup so the callout and the marker can't disagree about what's "the same place".
+
+The `WaypointIcons` cache keys include the tweak values, so tweak changes invalidate naturally — no manual clear needed.
+
+Related beans still open:
+- `AlaskaRouter-98jd` — more distinguishing selected-icon polish
+- `AlaskaRouter-fuu4` — selected waypoint floating icon with shadow
