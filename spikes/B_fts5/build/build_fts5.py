@@ -32,15 +32,18 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 FILTERED_PBF = DATA / "alaska-filtered.osm.pbf"
 GEOJSON = DATA / "alaska-filtered.geojson"
+GNIS_TXT = DATA / "DomesticNames_AK.txt"   # USGS GNIS; fetched by fetch_gnis.sh
 DB = DATA / "pois.sqlite"
 
 REGION = "Alaska"
 # Schema v3 (AlaskaRouter-22h7 milestone 1):
-# - Adds `source` column to place_meta ('osm' for current sole source; future
-#   values will include 'gnis' once USGS GNIS is merged in).
-# - Widens categorize() to handle the new tags from the expanded filter
+# - Adds `source` column to place_meta ('osm' or 'gnis').
+# - Widens categorize() to handle the new OSM tags from the expanded filter
 #   (bike/car/boat/motorcycle rentals, ferries, libraries, parks, marinas,
 #   coastal features, breweries, guide services, monuments, etc.).
+# - Merges USGS GNIS Alaska entries (~30 k natural-feature names). OSM wins
+#   on coord-collision dedup; GNIS fills the long tail of named peaks,
+#   lakes, capes, bays, glaciers, etc.
 SCHEMA_VERSION = 3
 
 # Round coords for dedupe: 1 decimal degree latitude ≈ 111 km. 4 fractional digits ≈ 11 m,
@@ -121,6 +124,88 @@ def categorize(tags: dict) -> str | None:
     return None
 
 
+# USGS GNIS feature_class → our category. The classes we deliberately omit are
+# either too noisy (`Stream` — 9.3 k Alaska creeks, mostly low-signal individually),
+# administrative (`Census`, `Civil`, `Military`, `Area`), or covered by OSM via a
+# more specific tag (`Crossing` overlaps `highway=ford`, `Reservoir` shrinks if we
+# include all dam-impounded ponds). Revisit `Stream` post-milestone-1 if users
+# report missing rivers; the major rivers are also tagged in OSM.
+GNIS_CATEGORY: dict[str, str] = {
+    # Mountain-family
+    "Summit": "peak", "Range": "peak", "Ridge": "peak",
+    "Cliff":  "peak", "Gap":   "peak", "Slope": "peak",
+    "Bench":  "peak", "Pillar":"peak", "Flat":  "peak",
+    "Basin":  "peak", "Valley":"peak",
+    # Ice & water
+    "Glacier": "glacier", "Crater": "volcano",
+    "Lake": "lake", "Reservoir": "lake",
+    "Falls": "waterfall", "Rapids": "waterfall",
+    "Spring": "spring",
+    # Coastal & shore
+    "Island": "island",
+    "Cape":  "viewpoint", "Bay":     "viewpoint", "Beach":   "viewpoint",
+    "Channel":"viewpoint","Gut":     "viewpoint", "Bar":     "viewpoint",
+    "Arch":  "viewpoint", "Isthmus": "viewpoint", "Sea":     "viewpoint",
+    "Bend":  "viewpoint", "Plain":   "viewpoint", "Canal":   "viewpoint",
+    # Settlements (OSM normally wins these via dedup)
+    "Populated Place": "settlement",
+}
+
+
+def gnis_candidates(path: Path) -> list[tuple]:
+    """Parse a USGS GNIS state .txt (pipe-delimited, header row) and yield
+    candidates in the same 8-tuple shape as the OSM pass. Filters out classes
+    not in GNIS_CATEGORY and rows with bad/zero coordinates."""
+    if not path.exists():
+        print(f"[gnis] {path} not present — skipping (run fetch_gnis.sh first)")
+        return []
+    print(f"[gnis] reading {path.name}")
+    out: list[tuple] = []
+    skipped_class: dict[str, int] = {}
+    skipped_coord = 0
+    with path.open("r", encoding="utf-8-sig") as f:
+        header = f.readline().rstrip("\n").split("|")
+        # Cache the indexes we care about; tolerate column-order drift between
+        # GNIS releases by looking them up by name.
+        i_id    = header.index("feature_id")
+        i_name  = header.index("feature_name")
+        i_class = header.index("feature_class")
+        i_lat   = header.index("prim_lat_dec")
+        # The Alaska file uses 'prim_long_dec' (full word "long"); other vintages
+        # have used 'prim_lon_dec'. Accept either.
+        i_lon   = header.index("prim_long_dec") if "prim_long_dec" in header \
+                  else header.index("prim_lon_dec")
+        for line in f:
+            row = line.rstrip("\n").split("|")
+            if len(row) <= max(i_id, i_name, i_class, i_lat, i_lon):
+                continue
+            fclass = row[i_class]
+            category = GNIS_CATEGORY.get(fclass)
+            if category is None:
+                skipped_class[fclass] = skipped_class.get(fclass, 0) + 1
+                continue
+            try:
+                lat = float(row[i_lat]); lon = float(row[i_lon])
+            except ValueError:
+                skipped_coord += 1; continue
+            if lat == 0.0 and lon == 0.0:
+                skipped_coord += 1; continue
+            name = row[i_name].strip()
+            if not name:
+                continue
+            try:
+                fid = int(row[i_id])
+            except ValueError:
+                fid = 0
+            importance = IMPORTANCE.get(category, 0.2)
+            # GNIS doesn't carry alt names in this file; keep alt_names empty.
+            out.append(("gnis", fid, lat, lon, category, importance, name, ""))
+    top_skipped = sorted(skipped_class.items(), key=lambda kv: -kv[1])[:6]
+    print(f"[gnis] kept={len(out):,}  bad_coords={skipped_coord:,}  "
+          f"top_skipped_classes={top_skipped}")
+    return out
+
+
 IMPORTANCE = {
     "settlement_major": 1.0,
     "airfield": 0.8,
@@ -132,6 +217,7 @@ IMPORTANCE = {
     "lodging": 0.5, "camping": 0.5, "ranger_station": 0.5, "river_crossing": 0.5,
     "hut": 0.45, "waterfall": 0.45, "hot_spring": 0.45,
     "spring": 0.4, "viewpoint": 0.4, "attraction": 0.4, "lighthouse": 0.4, "island": 0.4,
+    "lake": 0.4,                                # GNIS named lakes (3k+ in Alaska)
     "marina": 0.4,                              # ferry terminals + slipways + piers
     "store": 0.35,
     "food": 0.3, "outdoor_shop": 0.3, "vehicle_service": 0.3, "historic": 0.3,
@@ -309,15 +395,25 @@ def build_db():
         importance = IMPORTANCE.get(category, 0.2)
         candidates.append((osm_type, osm_id, lat, lon, category, importance, name, alts))
 
-    print(f"[db] passed-filter={len(candidates):,} no_name={skipped_no_name:,} no_cat={skipped_no_cat:,} no_geom={skipped_no_geom:,}")
+    print(f"[db] osm passed-filter={len(candidates):,} no_name={skipped_no_name:,} no_cat={skipped_no_cat:,} no_geom={skipped_no_geom:,}")
+    osm_count = len(candidates)
 
-    # Pass 2: dedupe on (name_lower, lat_rounded, lon_rounded). Keep highest importance.
+    # GNIS pass — fills in named natural features (peaks, lakes, glaciers,
+    # capes, bays, ridges). Appended AFTER OSM so that when an OSM row and
+    # a GNIS row tie on dedup key + importance, OSM's already-installed row
+    # wins. (Better tagged, has alt_names, etc.)
+    gnis_rows = gnis_candidates(GNIS_TXT)
+    candidates.extend(gnis_rows)
+
+    # Pass 2: dedupe on (name_lower, lat_rounded, lon_rounded). Keep highest
+    # importance; on tie, the first-inserted survives (Python dict semantics),
+    # which means OSM wins over GNIS at equal importance.
     dedup: dict[tuple[str, float, float], tuple] = {}
     for row in candidates:
         _, _, lat, lon, _, importance, name, _ = row
         key = (name.casefold(), round(lat, ROUND_COORD_DIGITS), round(lon, ROUND_COORD_DIGITS))
         prev = dedup.get(key)
-        if prev is None or row[5] > prev[5]:   # row[5] is importance
+        if prev is None or row[5] > prev[5]:   # row[5] is importance (strictly greater)
             dedup[key] = row
     deduped = list(dedup.values())
     collapsed = len(candidates) - len(deduped)
@@ -326,15 +422,22 @@ def build_db():
     # Pass 3: insert.
     cur.execute("BEGIN")
     for osm_type, osm_id, lat, lon, category, importance, name, alts in deduped:
+        # source is derived from the legacy osm_type slot: GNIS rows
+        # carry "gnis"; OSM rows carry {node,way,relation,unknown}.
+        source = "gnis" if osm_type == "gnis" else "osm"
         cur.execute(
             "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names, source) VALUES (?,?,?,?,?,?,?,?,?)",
-            (osm_type, osm_id, lat, lon, category, importance, name, alts, "osm"),
+            (osm_type, osm_id, lat, lon, category, importance, name, alts, source),
         )
         rid = cur.lastrowid
         cur.execute(
             "INSERT INTO places_word (rowid, name, alt_names, category, region) VALUES (?,?,?,?,?)",
             (rid, name, alts, category, REGION),
         )
+
+    # Per-source row counts (after dedup) for diagnostics.
+    n_osm  = sum(1 for r in deduped if r[0] != "gnis")
+    n_gnis = sum(1 for r in deduped if r[0] == "gnis")
 
     # Metadata.
     metadata = {
@@ -343,8 +446,14 @@ def build_db():
         "region": REGION,
         "source_pbf": FILTERED_PBF.name,
         "source_md5": file_md5(FILTERED_PBF),
+        "source_gnis": GNIS_TXT.name if GNIS_TXT.exists() else "",
+        "source_gnis_md5": file_md5(GNIS_TXT) if GNIS_TXT.exists() else "",
         "places_inserted": str(len(deduped)),
         "places_collapsed": str(collapsed),
+        "osm_count": str(n_osm),
+        "gnis_count": str(n_gnis),
+        "osm_pre_dedup": str(osm_count),
+        "gnis_pre_dedup": str(len(gnis_rows)),
     }
     for k, v in metadata.items():
         cur.execute("INSERT INTO metadata (key, value) VALUES (?, ?)", (k, v))

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# End-to-end FTS5 pipeline: filter OSM, export GeoJSON, build SQLite.
+# End-to-end FTS5 pipeline: filter OSM, fetch GNIS, export GeoJSON,
+# build SQLite. fetch_gnis.sh is idempotent — it skips when the
+# file is already on disk.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 ./filter_tags.sh
+./fetch_gnis.sh
 ./build_fts5.py
 echo
 echo "=== Done. DB ready: ../data/pois.sqlite ==="
