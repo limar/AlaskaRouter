@@ -28,8 +28,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data"
+ROOT = Path(__file__).resolve().parent      # tools/build-places/
+DATA = ROOT / "data"                         # tools/build-places/data/  (gitignored)
 FILTERED_PBF = DATA / "alaska-filtered.osm.pbf"
 GEOJSON = DATA / "alaska-filtered.geojson"
 GNIS_TXT = DATA / "DomesticNames_AK.txt"   # USGS GNIS; fetched by fetch_gnis.sh

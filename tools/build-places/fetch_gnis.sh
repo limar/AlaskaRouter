@@ -10,7 +10,7 @@
 # Output: data/DomesticNames_AK.txt (pipe-delimited, 21 columns; see header row).
 # Idempotent: skips download when the .txt already exists.
 set -euo pipefail
-cd "$(dirname "$0")/../data"
+cd "$(dirname "$0")/data"
 
 URL="https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_AK_Text.zip"
 ZIP="DomesticNames_AK_Text.zip"

@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 ./fetch_gnis.sh
 ./build_fts5.py
 echo
-echo "=== Done. DB ready: ../data/pois.sqlite ==="
+echo "=== Done. DB ready: tools/build-places/data/pois.sqlite ==="
+echo "    (cp it to AlaskaRouter/Resources/alaska-places.sqlite to ship.)"
 echo
-sqlite3 ../data/pois.sqlite "SELECT category, COUNT(*) FROM place_meta GROUP BY category ORDER BY COUNT(*) DESC LIMIT 40"
+sqlite3 data/pois.sqlite "SELECT category, COUNT(*) FROM place_meta GROUP BY category ORDER BY COUNT(*) DESC LIMIT 40"

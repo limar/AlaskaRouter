@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-20T20:20:30Z
-updated_at: 2026-05-23T09:36:32Z
+updated_at: 2026-05-23T12:34:16Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -56,7 +56,7 @@ After auditing the existing pipeline (`spikes/B_fts5/build/`) and confirming the
 
 - [x] **Step 1: Widen the OSM whitelist** — delivered. 12,617 → 17,067 entries (+35 %). New categories `park` (668), `marina` (496), `viewpoint` 125 → 2,805 (coastal natural features). Real libraries, ferry terminals, parks, breweries, guide services, monuments now indexed. Schema bumped to v3 with new `source` column (defaults to `osm`; ready to receive `gnis` rows in step 2). Confirmed still-missing items are matcher-gap (`Ferry Whittier`) or OSM-coverage-gap (`Last Frontier Motorcycle Adventures`, `Arctic Circle Sign`) — both for later milestones.
 - [x] **Step 2: Merge USGS GNIS Alaska** — delivered. 17,067 → 33,406 entries (+96 %). New `lake` category (3,433 entries). Major fills: `viewpoint` +5,012 (capes/bays/beaches/channels/gut/bar), `peak` +3,522 (summits/ridges/gaps), `island` +2,690, `glacier` +655. Brooks Range, Mt. McKinley, Wonder Lake, Atigun Pass, Hatcher Pass, Cantwell/Nenana/Susitna Glaciers, etc. all now findable. Skipped GNIS `Stream` class (9.3 k Alaska creeks, low individual signal) — Yukon River and other major rivers remain absent and will be revisited if missed in practice.
-- [ ] **Tooling: promote** the pipeline from `spikes/B_fts5/build/` to `tools/build-places/`, parallel to `tools/build-pack/`. Pipeline stays runnable; output path unchanged. (Pending — single mv + .gitignore update after milestone-1 verification.)
+- [x] **Tooling: promote** the pipeline from `spikes/B_fts5/build/` to `tools/build-places/`, parallel to `tools/build-pack/`. `git mv` of the four scripts, `mv` of the 500 MB gitignored `data/` tree, `.gitignore` updated, README added matching the build-pack style, script-internal paths fixed (data is now `./data/` not `../data/`), pipeline rerun verified — same 33,406 places. **Milestone 1 complete.**
 
 ### Milestone 2 — matcher (after milestone 1 verified)
 

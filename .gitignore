@@ -1,7 +1,7 @@
 # macOS
 .DS_Store
 
-# Xcode derived data — narrow path so we don't shadow the spikes/B_fts5/build/ scripts directory
+# Xcode derived data — narrow paths so we don't shadow scripts directories
 spikes/A_maplibre/build/
 spikes/C_icons/build/
 DerivedData/
@@ -22,8 +22,11 @@ AlaskaRouter.xcodeproj/
 Package.resolved
 .swiftpm/
 
-# Spike data — regenerable from build scripts, too large for git
-spikes/B_fts5/data/
+# Pipeline scratch data — regenerable from build scripts, too large for git.
+# The OSM PBF (~140 MB), filtered PBF, GeoJSON export, and GNIS .txt all live
+# here; tools/build-places/run.sh writes pois.sqlite into it and the user
+# manually copies the final DB to AlaskaRouter/Resources/alaska-places.sqlite.
+tools/build-places/data/
 
 # Tile packs — too large for GitHub's 100 MB/file cap (AlaskaRouter-76y3).
 # Distributed via GitHub Releases. See tools/build-pack/fetch-pack.sh to
