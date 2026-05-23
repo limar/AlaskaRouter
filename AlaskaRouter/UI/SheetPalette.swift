@@ -144,11 +144,13 @@ enum SheetPalette {
 
     /// Warm red — used for trash buttons (TripBottomSheet, StopCallout),
     /// the active-trip checkmark, the search "+" fast-add chip, and the
-    /// "Removed" toast accent. In dark mode the luminance is lifted so the
-    /// button stays divisible against the warm-sepia dark sheet.
+    /// "Removed" toast accent. In dark mode the luminance is pushed into
+    /// warm-coral territory because the warm-sepia sheet has very similar
+    /// hue to a "true" dark red — they fight each other for contrast.
+    /// The coral keeps the warm-brand feel while popping clearly.
     static let destructive: Color = adaptiveRGB(
         light: (199,  82,  51, 1.0),         // approx 0.78/0.32/0.20
-        dark:  (225,  90,  58, 1.0)
+        dark:  (245, 130, 100, 1.0)          // warm coral — lifts off warm-sepia
     )
 
     // MARK: - Numbered-pip outer ring (dark-mode only)

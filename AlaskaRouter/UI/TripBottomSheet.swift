@@ -458,7 +458,7 @@ struct TripBottomSheet: View {
             Button(action: { deleteWaypoint(wp) }) {
                 Image(systemName: "trash")
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(SheetPalette.destructive.opacity(0.85))
+                    .foregroundStyle(SheetPalette.destructive)
                     .frame(width: 30, height: 30)
                     .background(Color.black.opacity(0.04), in: Circle())
                     .contentShape(Rectangle())
@@ -534,9 +534,20 @@ struct TripBottomSheet: View {
         return HStack(spacing: 12) {
             Button(action: { switchTo(t) }) {
                 HStack(spacing: 12) {
-                    Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundStyle(isActive ? tripAccent : SheetPalette.textMuted)
+                    // Active trip: palette-rendered checkmark — explicit
+                    // WHITE inner + accent outer so the ✓ is visible in
+                    // dark mode (where a cutout would just show the sheet).
+                    // Inactive trip: thin outline circle in muted text.
+                    if isActive {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20, weight: .regular))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, tripAccent)
+                    } else {
+                        Image(systemName: "circle")
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundStyle(SheetPalette.textMuted)
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(t.name)
                             .font(.sheetSerif(15, weight: .semibold))
@@ -555,7 +566,7 @@ struct TripBottomSheet: View {
             Button(action: { tripPendingDelete = t }) {
                 Image(systemName: "trash")
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(SheetPalette.destructive.opacity(0.85))
+                    .foregroundStyle(SheetPalette.destructive)
                     .frame(width: 34, height: 34)
                     .background(Color.black.opacity(0.04), in: Circle())
                     .contentShape(Rectangle())
@@ -568,9 +579,11 @@ struct TripBottomSheet: View {
     private var newTripRow: some View {
         Button(action: createNewTrip) {
             HStack(spacing: 12) {
+                // Palette rendering: white inner + destructive outer.
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(SheetPalette.destructive)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, SheetPalette.destructive)
                 Text("New Trip")
                     .font(.sheetSerif(15, weight: .semibold))
                     .foregroundStyle(SheetPalette.textStrong)

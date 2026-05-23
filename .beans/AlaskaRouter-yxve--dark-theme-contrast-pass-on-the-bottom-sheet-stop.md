@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-05-23T17:54:03Z
-updated_at: 2026-05-23T17:59:53Z
+updated_at: 2026-05-23T18:12:31Z
 ---
 
 ## Problem (verbatim from user, 2026-05-23)
@@ -81,3 +81,20 @@ Use `.primary`, `.secondary`, `Color(.systemRed)`, etc. — they adapt natively.
 - [x] Add `pipOuterRing` token + 0.8pt cream ring outside the numbered pips. Clear in light mode, cream @ 0.55 in dark — block-color stroke now lifts off the dark sheet.
 - [ ] Verify on device: sheet readability, trash button visibility, callout readability (on-device test)
 - [ ] Spot-check light-mode against current visual (must not regress) — on-device test
+
+
+
+## Follow-up (2026-05-23, post-first-pass)
+
+User on-device feedback: text contrast fixed, but the **destructive buttons** are still hard to read. Two distinct sub-bugs:
+
+1. **Cut-out SF Symbols** (`plus.circle.fill`, `checkmark.circle.fill`) — the inner glyph is a *hole* in the filled circle. Applying `.foregroundStyle(destructive)` makes the whole symbol red; the glyph just shows whatever's *behind* it. In dark mode that's the dark sheet, so the glyph looks empty.
+2. **Trash icons** — single-color symbols. The dark-mode destructive at (225, 90, 58) had similar luminance to the warm-sepia sheet — both warm, both dim. Plus the existing `.opacity(0.85)` reduced contrast further.
+
+### Fixes
+
+- Switched cut-out symbols to **palette rendering** with explicit `.foregroundStyle(.white, destructive)` — the inner glyph is now an actual white layer, not a transparent hole.
+- Lifted dark-mode `destructive` from (225, 90, 58) → (245, 130, 100) — warm-coral territory. Keeps the warm-brand feel but separates from the warm-sepia sheet luminance-wise.
+- Dropped the `.opacity(0.85)` on the two trash icons in `TripBottomSheet`.
+
+Surfaces touched: `SearchResultsView` fast-add "+", `TripBottomSheet` active-trip checkmark, `TripBottomSheet` 'New Trip' "+", trash buttons on waypoint and trip rows.

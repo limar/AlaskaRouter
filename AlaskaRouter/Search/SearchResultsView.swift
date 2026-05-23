@@ -90,10 +90,14 @@ struct SearchResultsView: View {
             .buttonStyle(.plain)
 
             // Trailing "+" — fast-add (instant geographic-smart insert).
+            // Palette rendering (AlaskaRouter-yxve): the inner `+` is an
+            // explicit WHITE layer, not a cutout — otherwise in dark mode
+            // it shows the dark sheet through the cutout and looks empty.
             Button { onFastAdd(result) } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(SheetPalette.destructive)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, SheetPalette.destructive)
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
