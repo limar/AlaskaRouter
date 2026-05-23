@@ -6,12 +6,13 @@ the back end for the in-app search (FTS5 over `name`, `alt_names`, `category`,
 pack it doesn't need a GitHub-Releases fetch dance. Four scripts in this
 directory cover the rebuild lifecycle:
 
-| Script             | Role                                                             |
-|--------------------|------------------------------------------------------------------|
-| `run.sh`           | One-shot rebuild — orchestrates the three steps below.           |
-| `filter_tags.sh`   | `osmium tags-filter` over the raw Alaska OSM PBF.                |
-| `fetch_gnis.sh`    | Downloads the USGS GNIS Alaska state file (idempotent).          |
-| `build_fts5.py`    | Reads filtered OSM GeoJSON + GNIS, dedupes, writes the SQLite.   |
+| Script              | Role                                                              |
+|---------------------|-------------------------------------------------------------------|
+| `run.sh`            | One-shot rebuild — orchestrates the four steps below.             |
+| `filter_tags.sh`    | `osmium tags-filter` over the raw Alaska OSM PBF.                 |
+| `fetch_gnis.sh`     | Downloads the USGS GNIS Alaska state file (idempotent).           |
+| `fetch_wikidata.py` | SPARQL fetch of all Alaska items with coords from WDQS (idempotent). |
+| `build_fts5.py`     | Reads OSM GeoJSON + GNIS + Wikidata, dedupes, writes the SQLite.  |
 
 ## Quick reference
 
@@ -32,8 +33,10 @@ diff and probe the new DB before swapping it in.
 
 ## Sources
 
-The DB is built from two complementary sources, merged with a coord-key
-dedup (`name.lower` + lat/lon rounded to ~150 m).
+The DB is built from three complementary sources, merged with a coord-key
+dedup (`name.lower` + lat/lon rounded to ~150 m). OSM wins ties so its
+richer tagging (`alt_names`, sub-categorization) survives; GNIS and
+Wikidata fill the long tail.
 
 **1. OSM (OpenStreetMap)** — `tools/build-places/data/alaska-latest.osm.pbf`
 Strong on businesses, infrastructure, settlements, named landmarks. Filter
@@ -53,13 +56,24 @@ that OSM doesn't always tag. `fetch_gnis.sh` pulls the per-state file from
 USGS's S3 bucket and unzips it. The Stream class (~9 k Alaska creeks) is
 deliberately skipped to keep DB size sane.
 
+**3. Wikidata** — `tools/build-places/data/wikidata-ak.jsonl`
+21 k items located in Alaska with coordinates. Fills culturally and
+historically named places that neither OSM nor GNIS surface: indigenous
+communities (Savoonga, Hydaburg, Adak, Holy Cross), named landmarks
+(Sitka Historical Museum, Iditarod Trail Sled Dog Museum, Mount Juneau,
+Aleutian Islands Wilderness), multilingual entries. `fetch_wikidata.py`
+issues a single SPARQL query against the Wikidata Query Service (WDQS) —
+raw rows (no `GROUP_CONCAT`/`SAMPLE`) so it finishes inside WDQS's 60 s
+hard limit; dedupe-by-qid happens in Python. Retries on HTTP 429 with
+backoff per WDQS etiquette.
+
 ## Output schema (v3)
 
 ```sql
 place_meta (
   rowid, osm_type, osm_id, lat, lon,
   category, importance, name, alt_names,
-  source                                  -- 'osm' | 'gnis'
+  source                                  -- 'osm' | 'gnis' | 'wikidata'
 );
 places_word USING fts5(name, alt_names, category, region,
                        tokenize='unicode61 remove_diacritics 2',
@@ -68,8 +82,9 @@ metadata (key, value);                    -- schema_version, built_at,
                                           -- per-source counts + MD5s.
 ```
 
-The legacy `osm_type`/`osm_id` columns hold `'gnis'` + GNIS `feature_id`
-for GNIS rows. The `source` column is the canonical signal — read that.
+The legacy `osm_type`/`osm_id` columns hold `'gnis'`/GNIS feature_id for
+GNIS rows and `'wikidata'`/Q-id integer for Wikidata rows. The `source`
+column is the canonical signal — read that.
 
 ## Xcode integration
 

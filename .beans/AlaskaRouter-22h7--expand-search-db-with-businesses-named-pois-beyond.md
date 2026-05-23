@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-22h7
 title: Expand search DB with businesses + named POIs (beyond current Alaska places set)
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-20T20:20:30Z
-updated_at: 2026-05-23T14:39:48Z
+updated_at: 2026-05-23T14:41:14Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -109,3 +109,25 @@ Wikidata fills the long tail of culturally / historically named places:
   Wikidata alongside GNIS.
 
 **Milestone 1 (coverage) is now complete with all three sources merged.**
+
+
+## Summary of Changes
+
+Three-source places DB rebuild + a runtime-toggleable loose matcher in the app. Shipped as five focused commits:
+
+1. **Wider OSM filter** (`52f369d`) — 12,617 → 17,067 (+35 %). New OSM tag families: `amenity` rentals/ferry/library, `tourism` artwork/gallery, `man_made` monument/sign/cairn/pier, `natural` coastal features, `leisure` parks/marinas, `boundary` national_park, `craft` brewery/winery, `office` guide. Schema bumped to v3 with new `source` column.
+2. **USGS GNIS merge** (`100232b`) — 17,067 → 33,406 (+96 %). New `lake` category (3,433 entries). Fills the long-tail natural-feature gap (Brooks Range, Wonder Lake, Mt. McKinley, Atigun Pass, named glaciers/capes/bays). Skipped `Stream` class (9.3 k Alaska creeks — too noisy individually).
+3. **Pipeline promotion** (`7054864`) — `spikes/B_fts5/build/` → `tools/build-places/` parallel to `tools/build-pack/`. README mirrors the build-pack style.
+4. **Loose matcher** (`c64e92b`) — New `SearchStage` enum and four-stage pipeline gated behind `TweaksStore.useLooseMatcher` (default ON, toggleable in `TweaksPanel`'s new Search section). Synonym groups: bike↔motorcycle, sign↔wayside, ferry↔ferries, peak↔summit, gas↔fuel, etc. Droppable descriptors: ferry, sign, rental, the/of/at/in/and/to/a/an. Result rows get a per-stage indicator: "fuzzy ±N" (edit-distance), "synonym", "loose".
+5. **Wikidata** (`b635198`) — 33,406 → **42,913 places** (+28 %, cumulative **+240 % vs the pre-22h7 baseline of 12,617**). Fills indigenous communities (Savoonga, Hydaburg, Adak, Holy Cross, Kaktovik Village…), famous landmarks (Sitka Historical Museum, Iditarod Trail Sled Dog Museum, Aleutian Range, Mt. Juneau), and multilingual entries.
+
+DB size: 2.9 MB → 10.6 MB. Source breakdown after dedup: OSM 17,036, GNIS 16,308, Wikidata 9,569.
+
+### What still misses (deferred, not blocking)
+
+- `Last Frontier Motorcycle Adventures` — not in OSM, GNIS, **or** Wikidata. Would require step 3 (curated overlay) — the user explicitly declined to do manual curation at this milestone.
+- `Arctic Circle Sign` — works now via the loose matcher (synonym `sign↔wayside` finds "Arctic Circle Wayside"). Original literal entry still absent from all three sources.
+
+### Related beans still open
+
+- `AlaskaRouter-rwbc` — multi-region search (combine FTS5 DBs across packs). Architecturally distinct; deferred to v2.
