@@ -705,7 +705,8 @@ struct TripBottomSheet: View {
     private var stopsCount: String { "\(trip.waypoints.count)" }
 
     private var blocksCount: String {
-        // Number of blocks = separators + 1 (the implicit first block).
+        // Number of blocks = separators + 1 (block 0 has no separator above
+        // it; every separator after it starts a new block).
         return "\(trip.separators.count + 1)"
     }
 

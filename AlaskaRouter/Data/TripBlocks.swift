@@ -13,11 +13,15 @@ import CoreLocation
 /// and last stop labels.
 struct TripBlock: Identifiable {
     /// Stable identity for SwiftUI — the id of the leading separator, or a
-    /// fixed sentinel for the implicit first block.
+    /// fixed sentinel ("block-0") for the first block.
     let id: String
     let index: Int                  // 0-based block index in the trip
     let waypoints: [Waypoint]       // contiguous stops in this block, in route order
-    let leadingSeparator: BlockSeparator?  // nil for the implicit first block
+    /// nil for block 0. Subsequent blocks point at the separator that
+    /// produced them. Block 0 isn't "implicit" — it's a full first-class
+    /// block, just one without a separator above it by definition
+    /// (AlaskaRouter-pufj).
+    let leadingSeparator: BlockSeparator?
     let color: TripColor
     /// Auto-name: "First → Last", or just the single stop name if 1 stop.
     var displayName: String {
@@ -50,8 +54,10 @@ extension Trip {
     private static let blockPaletteRotation: [TripColor] =
         [.amber, .teal, .terracotta, .sage, .indigo, .slate]
 
-    /// Compute the rendering blocks. Always returns at least one (the implicit
-    /// first block containing every stop if the trip has no separators).
+    /// Compute the rendering blocks. Every non-empty trip has at least one
+    /// block — block 0 — which by definition has no separator above it.
+    /// Every waypoint is in exactly one block; callers can rely on
+    /// `blocksByWaypointID` lookups never missing (pufj invariant).
     var blocks: [TripBlock] {
         let stops = orderedWaypoints
         guard !stops.isEmpty else { return [] }

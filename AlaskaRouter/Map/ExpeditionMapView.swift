@@ -277,9 +277,11 @@ struct ExpeditionMapView: View {
         let selectedSet = dedupedWaypoints.filter { $0.id == selectedWaypointID }
         let unselectedSet = dedupedWaypoints.filter { $0.id != selectedWaypointID }
 
-        // Per-waypoint block color (AlaskaRouter-ykuf step 2). Each waypoint
-        // is in exactly one block; the Dot fills with that block's color.
-        // Fallback (no trip / no blocks) = the trip's main color, then amber.
+        // Per-waypoint block color (AlaskaRouter-ykuf step 2 + -pufj).
+        // Every waypoint is in exactly one block — `trip.blocks` always
+        // returns ≥1 block for any non-empty trip, and the implicit first
+        // block contains every stop up to the first separator. So we look
+        // up unconditionally; a miss means the schema invariant broke.
         let blocksByWaypointID: [UUID: TripColor] = {
             var m: [UUID: TripColor] = [:]
             if let trip = trip {
@@ -289,7 +291,6 @@ struct ExpeditionMapView: View {
             }
             return m
         }()
-        let fallbackColor: TripColor = trip?.color ?? .amber
 
         // Default waypoint markers.
         syncTripMarkerGroup(
@@ -299,7 +300,6 @@ struct ExpeditionMapView: View {
             labelLayerID: "trip-marker-default-labels",
             waypoints: unselectedSet,
             blocksByWaypointID: blocksByWaypointID,
-            fallbackColor: fallbackColor,
             selected: false,
             labelFontSize: 13,
             labelOffsetY: 1.4,
@@ -314,7 +314,6 @@ struct ExpeditionMapView: View {
             labelLayerID: "trip-marker-selected-labels",
             waypoints: selectedSet,
             blocksByWaypointID: blocksByWaypointID,
-            fallbackColor: fallbackColor,
             selected: true,
             labelFontSize: 14,
             labelOffsetY: 1.8,
@@ -361,7 +360,6 @@ struct ExpeditionMapView: View {
         labelLayerID: String,
         waypoints: [Waypoint],
         blocksByWaypointID: [UUID: TripColor],
-        fallbackColor: TripColor,
         selected: Bool,
         labelFontSize: Double,
         labelOffsetY: Double,
@@ -382,7 +380,16 @@ struct ExpeditionMapView: View {
 
         let features: [MLNPointFeature] = waypoints.map { wp in
             let numberStr = String(wp.order + 1)
-            let blockColor = blocksByWaypointID[wp.id] ?? fallbackColor
+            // Schema invariant (pufj): every waypoint is in exactly one block,
+            // so blocksByWaypointID is guaranteed to have an entry. If it
+            // doesn't, the block-derivation logic broke — fail loudly in
+            // DEBUG so we catch it; silently coast on amber in release so
+            // the user still sees a marker.
+            let blockColor: TripColor = {
+                if let c = blocksByWaypointID[wp.id] { return c }
+                assertionFailure("waypoint \(wp.id) not found in any block — schema invariant violated")
+                return .amber
+            }()
             let c = blockColor.swiftUIColor
             let dotColor = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
             let (image, iconName) = WaypointIcons.dot(
