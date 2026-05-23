@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-22h7
 title: Expand search DB with businesses + named POIs (beyond current Alaska places set)
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-20T20:20:30Z
-updated_at: 2026-05-21T15:12:09Z
+updated_at: 2026-05-23T09:20:59Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -46,3 +46,35 @@ Architecturally, the current `SearchService` should accept an array of databases
 ## Related
 
 - AlaskaRouter-cv05 — display Arctic Circle line on map (complementary; one is the line, this is the named photo-stop)
+
+
+## Plan (locked 2026-05-23)
+
+After auditing the existing pipeline (`spikes/B_fts5/build/`) and confirming the two reported misses (`Last Frontier Motorcycle Adventures` and `Arctic Circle Sign`) against the bundled `alaska-places.sqlite` (12,617 entries), the design splits into two milestones:
+
+### Milestone 1 — coverage
+
+- [x] **Step 1: Widen the OSM whitelist** — delivered. 12,617 → 17,067 entries (+35 %). New categories `park` (668), `marina` (496), `viewpoint` 125 → 2,805 (coastal natural features). Real libraries, ferry terminals, parks, breweries, guide services, monuments now indexed. Schema bumped to v3 with new `source` column (defaults to `osm`; ready to receive `gnis` rows in step 2). Confirmed still-missing items are matcher-gap (`Ferry Whittier`) or OSM-coverage-gap (`Last Frontier Motorcycle Adventures`, `Arctic Circle Sign`) — both for later milestones.
+- [ ] **Step 2: Merge USGS GNIS Alaska**. Public-domain US authoritative geographic names — ~30 k Alaska entries. Bulk download per-state CSV, add `source` column to `place_meta`, dedupe against OSM by `(name.lower, lat~150 m, lon~150 m)` keeping higher-importance row. Mostly fills natural-feature gaps (creeks, peaks, glaciers, capes).
+- [ ] **Tooling: promote** the pipeline from `spikes/B_fts5/build/` to `tools/build-places/`, parallel to `tools/build-pack/`. Pipeline stays runnable; output path unchanged.
+
+### Milestone 2 — matcher (after milestone 1 verified)
+
+- [ ] **Step 4: Drop-token relaxation + synonym injection** in `SearchService`. Drop-token: when stage 1 strict-AND yields zero, retry without the rarest token. Synonyms: small dictionary expanded inline (`sign ↔ marker, monument, wayside`; `rental ↔ rent, hire, adventures, outfitters`; `bike ↔ motorcycle, bicycle`; etc.).
+- [ ] **Gate behind a runtime feature flag** so before/after can be flipped live and a regression doesn't require a code revert. Probably exposed in `TweaksStore` so we can play with it in the Tweaks panel.
+
+### Out of scope this round
+
+- Manual curated overlay (step 3) — user not ready for manual curation.
+- Wikidata enrichment (step 5) — defer until milestones 1+2 land and we measure remaining gaps.
+- Multi-pack architecture — separate bean `AlaskaRouter-rwbc`, deferred to v2+.
+- Moving the DB out of git — keep bundled (`AlaskaRouter/Resources/alaska-places.sqlite`).
+
+### Source of truth for the search DB
+
+Confirmed pipeline: `spikes/B_fts5/build/run.sh` → `filter_tags.sh` (osmium tags-filter) → `build_fts5.py` (osmium export GeoJSON → SQLite FTS5). Categorizer + importance table + alt-names harvesting are in `build_fts5.py`.
+
+Schema:
+- `place_meta(rowid, osm_type, osm_id, lat, lon, category, importance, name, alt_names)` — adding `source TEXT NOT NULL DEFAULT 'osm'` in milestone 1.
+- `places_word` FTS5 virtual table over (`name`, `alt_names`, `category`, `region`).
+- `metadata` table — extending with per-source row counts + MD5s.

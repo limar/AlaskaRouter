@@ -16,6 +16,8 @@ Input:  data/alaska-filtered.osm.pbf  (produced by filter_tags.sh)
 Output: data/pois.sqlite
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import re
@@ -33,7 +35,13 @@ GEOJSON = DATA / "alaska-filtered.geojson"
 DB = DATA / "pois.sqlite"
 
 REGION = "Alaska"
-SCHEMA_VERSION = 2
+# Schema v3 (AlaskaRouter-22h7 milestone 1):
+# - Adds `source` column to place_meta ('osm' for current sole source; future
+#   values will include 'gnis' once USGS GNIS is merged in).
+# - Widens categorize() to handle the new tags from the expanded filter
+#   (bike/car/boat/motorcycle rentals, ferries, libraries, parks, marinas,
+#   coastal features, breweries, guide services, monuments, etc.).
+SCHEMA_VERSION = 3
 
 # Round coords for dedupe: 1 decimal degree latitude ≈ 111 km. 4 fractional digits ≈ 11 m,
 # 3 ≈ 110 m. We use ROUND_COORD_DIGITS=3 so two POIs within ~150 m collapse.
@@ -41,45 +49,75 @@ ROUND_COORD_DIGITS = 3
 
 
 def categorize(tags: dict) -> str | None:
+    # amenity
     if tags.get("amenity") == "fuel": return "fuel"
     if tags.get("amenity") == "drinking_water": return "water"
     if tags.get("amenity") == "ranger_station": return "ranger_station"
     if tags.get("amenity") == "charging_station": return "ev_charging"
-    if tags.get("tourism") in {"camp_site", "caravan_site"}: return "camping"
-    if tags.get("tourism") in {"alpine_hut", "wilderness_hut"}: return "hut"
+    if tags.get("amenity") in {"bicycle_rental", "motorcycle_rental",
+                                "car_rental", "boat_rental"}: return "vehicle_service"
+    if tags.get("amenity") == "ferry_terminal": return "marina"
+    if tags.get("amenity") in {"community_centre", "library",
+                                "toilets", "shower"}: return "facilities"
     if tags.get("amenity") == "shelter": return "hut"
-    if tags.get("tourism") == "information": return "visitor_center"
-    if tags.get("tourism") == "viewpoint": return "viewpoint"
-    if tags.get("tourism") in {"hotel", "motel", "guest_house", "hostel"}: return "lodging"
-    if tags.get("tourism") in {"attraction", "museum"}: return "attraction"
-    if tags.get("tourism") == "picnic_site": return "picnic"
-    if tags.get("shop") in {"convenience", "supermarket"}: return "store"
-    if tags.get("shop") in {"outdoor", "sports", "hunting", "fishing"}: return "outdoor_shop"
-    if tags.get("shop") in {"motorcycle", "car_repair", "car_parts"}: return "vehicle_service"
-    if tags.get("shop") == "hardware": return "hardware"
     if tags.get("amenity") in {"restaurant", "cafe", "fast_food", "bar", "pub"}: return "food"
     if tags.get("amenity") in {"bank", "atm"}: return "bank"
     if tags.get("amenity") in {"hospital", "clinic"}: return "medical"
     if tags.get("amenity") == "pharmacy": return "pharmacy"
     if tags.get("amenity") == "post_office": return "post"
-    if tags.get("amenity") in {"toilets", "shower"}: return "facilities"
     if tags.get("amenity") == "parking": return "parking"
+    # tourism
+    if tags.get("tourism") in {"camp_site", "caravan_site"}: return "camping"
+    if tags.get("tourism") in {"alpine_hut", "wilderness_hut"}: return "hut"
+    if tags.get("tourism") == "information": return "visitor_center"
+    if tags.get("tourism") == "viewpoint": return "viewpoint"
+    if tags.get("tourism") in {"hotel", "motel", "guest_house", "hostel"}: return "lodging"
+    if tags.get("tourism") in {"attraction", "museum", "artwork", "gallery"}: return "attraction"
+    if tags.get("tourism") == "picnic_site": return "picnic"
+    # shop
+    if tags.get("shop") in {"convenience", "supermarket"}: return "store"
+    if tags.get("shop") in {"outdoor", "sports", "hunting", "fishing"}: return "outdoor_shop"
+    if tags.get("shop") in {"motorcycle", "car_repair", "car_parts", "bicycle"}: return "vehicle_service"
+    if tags.get("shop") == "hardware": return "hardware"
+    # highway
     if tags.get("highway") == "ford": return "river_crossing"
     if tags.get("highway") == "services": return "services"
+    # natural
     if tags.get("natural") == "peak": return "peak"
+    if tags.get("natural") in {"cliff", "ridge", "saddle"}: return "peak"
     if tags.get("natural") == "glacier": return "glacier"
     if tags.get("natural") in {"hot_spring", "spring"}: return "spring"
     if tags.get("natural") == "cave_entrance": return "cave"
     if tags.get("natural") == "volcano": return "volcano"
+    if tags.get("natural") in {"bay", "beach", "reef", "strait",
+                                "arch", "fjord"}: return "viewpoint"
+    # waterway
     if tags.get("waterway") == "waterfall": return "waterfall"
+    # place
     if tags.get("place") in {"city", "town"}: return "settlement_major"
     if tags.get("place") in {"village", "hamlet", "suburb"}: return "settlement"
     if tags.get("place") in {"locality", "isolated_dwelling"}: return "locality"
     if tags.get("place") == "island": return "island"
-    if tags.get("aeroway") == "aerodrome": return "airfield"
+    # aeroway
+    if tags.get("aeroway") in {"aerodrome", "heliport"}: return "airfield"
+    # man_made
     if tags.get("man_made") == "lighthouse": return "lighthouse"
     if tags.get("man_made") == "tower": return "tower"
+    if tags.get("man_made") in {"monument", "sign", "obelisk",
+                                 "memorial", "cairn"}: return "historic"
+    if tags.get("man_made") == "pier": return "marina"
+    # historic
     if tags.get("historic") in {"monument", "memorial", "castle", "ruins", "wreck"}: return "historic"
+    # leisure
+    if tags.get("leisure") in {"park", "nature_reserve"}: return "park"
+    if tags.get("leisure") in {"marina", "slipway"}: return "marina"
+    # boundary (Denali NP, Wrangell-St Elias, etc.)
+    if tags.get("boundary") in {"national_park", "protected_area"}: return "park"
+    # craft
+    if tags.get("craft") in {"brewery", "winery", "distillery", "bakery"}: return "food"
+    if tags.get("craft") == "blacksmith": return "historic"
+    # office
+    if tags.get("office") == "guide": return "outdoor_shop"
     return None
 
 
@@ -88,11 +126,13 @@ IMPORTANCE = {
     "airfield": 0.8,
     "visitor_center": 0.75,
     "peak": 0.7, "glacier": 0.7, "volcano": 0.7,
+    "park": 0.7,                                # Denali, Wrangell-St Elias — high signal
     "fuel": 0.6,
     "settlement": 0.55,
     "lodging": 0.5, "camping": 0.5, "ranger_station": 0.5, "river_crossing": 0.5,
     "hut": 0.45, "waterfall": 0.45, "hot_spring": 0.45,
     "spring": 0.4, "viewpoint": 0.4, "attraction": 0.4, "lighthouse": 0.4, "island": 0.4,
+    "marina": 0.4,                              # ferry terminals + slipways + piers
     "store": 0.35,
     "food": 0.3, "outdoor_shop": 0.3, "vehicle_service": 0.3, "historic": 0.3,
     "ev_charging": 0.3, "medical": 0.3, "services": 0.3, "cave": 0.3,
@@ -212,9 +252,11 @@ def build_db():
       category TEXT NOT NULL,
       importance REAL NOT NULL,
       name TEXT NOT NULL,
-      alt_names TEXT NOT NULL
+      alt_names TEXT NOT NULL,
+      source   TEXT NOT NULL DEFAULT 'osm'
     );
     CREATE INDEX idx_place_meta_cat ON place_meta(category);
+    CREATE INDEX idx_place_meta_source ON place_meta(source);
 
     CREATE VIRTUAL TABLE places_word USING fts5(
       name, alt_names, category, region,
@@ -285,8 +327,8 @@ def build_db():
     cur.execute("BEGIN")
     for osm_type, osm_id, lat, lon, category, importance, name, alts in deduped:
         cur.execute(
-            "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names) VALUES (?,?,?,?,?,?,?,?)",
-            (osm_type, osm_id, lat, lon, category, importance, name, alts),
+            "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names, source) VALUES (?,?,?,?,?,?,?,?,?)",
+            (osm_type, osm_id, lat, lon, category, importance, name, alts, "osm"),
         )
         rid = cur.lastrowid
         cur.execute(
