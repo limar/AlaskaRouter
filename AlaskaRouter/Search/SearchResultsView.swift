@@ -97,7 +97,7 @@ struct SearchResultsView: View {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 22, weight: .regular))
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, SheetPalette.destructive)
+                    .foregroundStyle(.white, SheetPalette.accentWarm)
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }

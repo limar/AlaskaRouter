@@ -58,7 +58,7 @@ struct PreviewCallout: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .frame(maxWidth: .infinity)
-                .background(SheetPalette.destructive, in: Capsule())
+                .background(SheetPalette.accentWarm, in: Capsule())
             }
             .buttonStyle(.plain)
             .padding(.top, 2)

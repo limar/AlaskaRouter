@@ -583,11 +583,13 @@ struct TripBottomSheet: View {
     private var newTripRow: some View {
         Button(action: createNewTrip) {
             HStack(spacing: 12) {
-                // Palette rendering: white inner + destructive outer.
+                // Additive action — warm-brand accent (NOT destructive red).
+                // Same colored-disc-white-inner-glyph treatment as the
+                // search "+" so all additive affordances share one color.
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 20, weight: .regular))
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, SheetPalette.destructive)
+                    .foregroundStyle(.white, SheetPalette.accentWarm)
                 Text("New Trip")
                     .font(.sheetSerif(15, weight: .semibold))
                     .foregroundStyle(SheetPalette.textStrong)

@@ -140,17 +140,32 @@ enum SheetPalette {
         dark:  (240, 120,  40, 1.0)
     )
 
-    // MARK: - Destructive / warm-brand accent
+    // MARK: - Destructive vs additive accents — semantically split (yxve r4)
+    //
+    // We used to have ONE warm-coral token for both destructive (trash,
+    // Remove) and additive (+, "Add to trip"). Once both got the
+    // colored-disc-with-white-inner-glyph treatment, they became visually
+    // indistinguishable AND the warm coral stopped reading as "danger" —
+    // iOS users expect red for destructive. Split into two tokens with
+    // distinct hue families so the affordances stop fighting each other:
 
-    /// Warm red — used for trash buttons (TripBottomSheet, StopCallout),
-    /// the active-trip checkmark, the search "+" fast-add chip, and the
-    /// "Removed" toast accent. In dark mode the luminance is pushed into
-    /// warm-coral territory because the warm-sepia sheet has very similar
-    /// hue to a "true" dark red — they fight each other for contrast.
-    /// The coral keeps the warm-brand feel while popping clearly.
+    /// Proper red — destructive only. Trash buttons (TripBottomSheet),
+    /// StopCallout "Remove", "removed" toast. Both modes use a clearly-red
+    /// hue (no orange tilt) so the user reads "danger" at a glance.
     static let destructive: Color = adaptiveRGB(
-        light: (199,  82,  51, 1.0),         // approx 0.78/0.32/0.20
-        dark:  (245, 130, 100, 1.0)          // warm coral — lifts off warm-sepia
+        light: (200,  45,  45, 1.0),         // wine red, sits between Apple
+                                              //   systemRed and our brand warm
+        dark:  (235,  80,  80, 1.0)          // raspberry — high luminance on
+                                              //   dark, still unambiguously red
+    )
+
+    /// Warm-brand accent — additive / affirmative actions. The search "+"
+    /// fast-add chip, the "New Trip" + button, "Add to trip" capsule, the
+    /// "added" toast icon. Keeps the warm-paper character. (Previously
+    /// called `destructive` until the r4 split.)
+    static let accentWarm: Color = adaptiveRGB(
+        light: (199,  82,  51, 1.0),         // approx 0.78/0.32/0.20 — original
+        dark:  (245, 130, 100, 1.0)          // warm coral, dark-mode lifted
     )
 
     // MARK: - Numbered-pip outer ring (dark-mode only)

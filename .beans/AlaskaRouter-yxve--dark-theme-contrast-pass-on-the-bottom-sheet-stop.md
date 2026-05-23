@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-05-23T17:54:03Z
-updated_at: 2026-05-23T18:20:43Z
+updated_at: 2026-05-23T18:28:28Z
 ---
 
 ## Problem (verbatim from user, 2026-05-23)
@@ -114,3 +114,28 @@ Fix: extend the same pattern (`colored disc + white inner symbol`) to the destru
 - StopCallout 'Remove' button → red/coral disc around the trash icon (smaller, 28pt to match the action-item visual rhythm); 'Remove' label below gets bumped to bold weight for additional emphasis.
 
 Light mode now also benefits — destructive actions read more clearly across both themes.
+
+
+
+## Round 4 — split destructive (red) from additive (warm coral)
+
+User feedback after round 3: the trash and 'New Trip' buttons now look IDENTICAL — both warm-orange discs with white inner glyphs. Two problems:
+1. Trash no longer reads as 'remove' — iOS users expect RED for destructive.
+2. The + (additive) and trash (destructive) being the same color is semantically wrong AND confusing.
+
+The mistake was using ONE token (`destructive`) for two semantically distinct concepts. Split them:
+
+- **`SheetPalette.destructive`** is now a proper red — light (200, 45, 45), dark (235, 80, 80). True 'danger' hue, no orange tilt.
+- **`SheetPalette.accentWarm`** carries the previous warm-coral values — used for additive/affirmative actions (+, +, 'Add to trip'). Keeps the warm-paper brand identity.
+
+Re-routed call sites:
+- SearchResultsView fast-add '+'   → `accentWarm`
+- TripBottomSheet 'New Trip' '+'   → `accentWarm`
+- PreviewCallout 'Add to trip'     → `accentWarm`
+- TripBottomSheet trash (waypoint) → stays on `destructive` (now red)
+- TripBottomSheet trash (trip row) → stays on `destructive` (now red)
+- StopCallout Remove               → stays on `destructive` (now red)
+- AddedToTripToast 'removed'       → stays on `destructive` (now red)
+- TripBottomSheet active checkmark → unchanged (uses per-trip color)
+
+Now trash buttons say 'danger' and + buttons say 'add' at a glance.
