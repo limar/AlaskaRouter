@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-20T20:20:30Z
-updated_at: 2026-05-23T13:52:15Z
+updated_at: 2026-05-23T14:39:48Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -78,3 +78,34 @@ Schema:
 - `place_meta(rowid, osm_type, osm_id, lat, lon, category, importance, name, alt_names)` — adding `source TEXT NOT NULL DEFAULT 'osm'` in milestone 1.
 - `places_word` FTS5 virtual table over (`name`, `alt_names`, `category`, `region`).
 - `metadata` table — extending with per-source row counts + MD5s.
+
+
+## Step 5 — Wikidata (added in same session by user request)
+
+Wikidata's WDQS has  21,600 Alaska-located items with coordinates  — a different
+slice from OSM (businesses + landmarks) and GNIS (US natural-feature names).
+Wikidata fills the long tail of culturally / historically named places:
+  - Indigenous villages (Savoonga, Hydaburg, Chevak, Brevig Mission, Adak,
+    Holy Cross, Kaktovik Village, Egegik, Gustavus, Dillingham, Scammon Bay…)
+  - Famous landmarks (Aleutian Range, Aleutian Islands, Sitka Historical Museum,
+    Mount Juneau, Iditarod Trail Sled Dog Museum)
+  - Multilingual entries
+
+- [x] **fetch_wikidata.py** — SPARQL via WDQS, transitive `wdt:P131* wd:Q797`.
+  Raw rows (no aggregation) so the query finishes inside WDQS's 60s timeout;
+  Python dedupes per-item with set-of-types. Output: `data/wikidata-ak.jsonl`
+  (21,078 items). Idempotent. Retry-on-429 with backoff.
+- [x] **build_fts5.py wikidata_candidates()** — reads the .jsonl, maps types to
+  categories using word-boundary regex matching (the substring approach false-
+  matched 'ridge' inside 'bridge', etc.). Settlements explicit first (so
+  'borough seat' and 'unincorporated community' don't get dropped by the
+  admin-filter on 'borough' / 'unincorporated'). Skips items whose type can't
+  be cleanly bucketed.
+- [x] **Counts after the three-way merge:** 33,406 → **42,913 places** (+9,507
+  net new entries, +28 % on top of milestone 1; cumulative +240 % vs the pre-
+  22h7 baseline of 12,617). Source breakdown: OSM 17,036, GNIS 16,308,
+  Wikidata 9,569. DB size 8.2 → 10.6 MB.
+- [x] **run.sh** picks up `./fetch_wikidata.py` so a clean rebuild fetches
+  Wikidata alongside GNIS.
+
+**Milestone 1 (coverage) is now complete with all three sources merged.**

@@ -7,6 +7,7 @@ cd "$(dirname "$0")"
 
 ./filter_tags.sh
 ./fetch_gnis.sh
+./fetch_wikidata.py
 ./build_fts5.py
 echo
 echo "=== Done. DB ready: tools/build-places/data/pois.sqlite ==="

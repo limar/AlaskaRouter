@@ -33,6 +33,7 @@ DATA = ROOT / "data"                         # tools/build-places/data/  (gitign
 FILTERED_PBF = DATA / "alaska-filtered.osm.pbf"
 GEOJSON = DATA / "alaska-filtered.geojson"
 GNIS_TXT = DATA / "DomesticNames_AK.txt"   # USGS GNIS; fetched by fetch_gnis.sh
+WIKIDATA_JSONL = DATA / "wikidata-ak.jsonl"  # Wikidata; fetched by fetch_wikidata.py
 DB = DATA / "pois.sqlite"
 
 REGION = "Alaska"
@@ -150,6 +151,137 @@ GNIS_CATEGORY: dict[str, str] = {
     # Settlements (OSM normally wins these via dedup)
     "Populated Place": "settlement",
 }
+
+
+import re as _re
+
+_WORD_RE_CACHE: dict[str, "_re.Pattern[str]"] = {}
+
+
+def _has(text: str, *keywords: str) -> bool:
+    """Return True if any of the keywords appears in `text` as a whole word
+    (or word phrase). Single-word matching uses `\\b` regex boundaries so
+    'ridge' doesn't false-match 'bridge'; multi-word phrases match the
+    whole phrase with boundaries at the edges."""
+    for kw in keywords:
+        pat = _WORD_RE_CACHE.get(kw)
+        if pat is None:
+            pat = _re.compile(r"\b" + _re.escape(kw) + r"\b")
+            _WORD_RE_CACHE[kw] = pat
+        if pat.search(text) is not None:
+            return True
+    return False
+
+
+def wikidata_category(types: str) -> str | None:
+    """Map a Wikidata item's concatenated type labels (from `wdt:P31`) to
+    one of our categories. The labels are human-readable English strings
+    like "mountain | extinct volcano | summit", joined by " | ".
+
+    Returns None for items whose type doesn't map cleanly — we'd rather
+    drop than mis-categorize. Positive matches come first so terms like
+    "borough seat" or "unincorporated community" are recognized as
+    settlements before the more aggressive admin-drop pattern below
+    would otherwise reject them on "borough" / "unincorporated".
+
+    All matching is word-bounded — 'ridge' will NOT match 'bridge'."""
+    t = types.lower()
+    if not t:
+        return None
+    # Settlements — explicit positives first
+    if _has(t, "ghost town"): return "historic"      # famous Alaska ones
+    if _has(t, "borough seat"): return "settlement_major"
+    if _has(t, "capital city", "consolidated city"): return "settlement_major"
+    if _has(t, "city", "town"): return "settlement_major"
+    if _has(t, "village", "hamlet", "indigenous community",
+              "native village", "unincorporated community",
+              "human settlement", "populated place"):
+        return "settlement"
+    # Parks / protected areas (high signal)
+    if _has(t, "national park", "national preserve",
+              "national monument", "national forest",
+              "national wildlife refuge", "wilderness area",
+              "state park", "preserve", "wildlife refuge",
+              "marine sanctuary"):
+        return "park"
+    # Natural — mountains & landforms
+    if _has(t, "volcano", "crater", "caldera"): return "volcano"
+    if _has(t, "mountain", "peak", "summit",
+              "ridge", "cliff", "mountain range"): return "peak"
+    if _has(t, "glacier"): return "glacier"
+    if _has(t, "cave"): return "cave"
+    # Water
+    if _has(t, "lake"): return "lake"
+    if _has(t, "waterfall"): return "waterfall"
+    if _has(t, "river", "stream", "creek", "tributary"):
+        return "viewpoint"        # named rivers; treat as viewpoint
+    if _has(t, "hot spring", "geyser", "spring"): return "spring"
+    # Coast & islands
+    if _has(t, "island", "archipelago"): return "island"
+    if _has(t, "bay", "cove", "harbor", "harbour", "inlet",
+              "fjord", "lagoon", "sound", "strait", "channel",
+              "passage", "cape", "promontory", "headland",
+              "peninsula", "beach", "reef", "isthmus"):
+        return "viewpoint"
+    # Infrastructure
+    if _has(t, "airport", "airfield", "aerodrome",
+              "seaplane base", "heliport"):
+        return "airfield"
+    if _has(t, "lighthouse"): return "lighthouse"
+    # Cultural
+    if _has(t, "museum", "art gallery"): return "attraction"
+    if _has(t, "memorial", "monument", "statue",
+              "historic site", "archaeological",
+              "national historic landmark", "cultural heritage"):
+        return "historic"
+    # Final pass: explicit drop list for clearly non-spatial / admin types.
+    # Reaches here only if NO positive matcher fired above.
+    if _has(t, "neighborhood", "neighbourhood", "borough",
+              "census-designated", "subdivision", "election district",
+              "school district", "unincorporated area", "geographic region"):
+        return None
+    # Otherwise drop — too generic / risky to bucket as 'attraction'.
+    return None
+
+
+def wikidata_candidates(path: Path) -> list[tuple]:
+    """Read the wikidata-ak.jsonl produced by fetch_wikidata.py and yield
+    candidates in the same 8-tuple shape as the OSM / GNIS passes. Each
+    line is a single item ({qid, name, lat, lon, types})."""
+    if not path.exists():
+        print(f"[wikidata] {path.name} not present — skipping "
+              f"(run fetch_wikidata.py first)")
+        return []
+    print(f"[wikidata] reading {path.name}")
+    out: list[tuple] = []
+    skipped_no_cat = 0
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            category = wikidata_category(row.get("types", ""))
+            if category is None:
+                skipped_no_cat += 1
+                continue
+            name = row.get("name", "").strip()
+            if not name:
+                continue
+            try:
+                lat = float(row["lat"]); lon = float(row["lon"])
+            except (KeyError, ValueError):
+                continue
+            try:
+                qnum = int(str(row.get("qid", "Q0"))[1:])
+            except ValueError:
+                qnum = 0
+            importance = IMPORTANCE.get(category, 0.2)
+            # GNIS-style: empty alt_names. Wikidata could supply multilingual
+            # names if we extended the SPARQL — out of scope for v1.
+            out.append(("wikidata", qnum, lat, lon, category, importance, name, ""))
+    print(f"[wikidata] kept={len(out):,}  unmapped_type={skipped_no_cat:,}")
+    return out
 
 
 def gnis_candidates(path: Path) -> list[tuple]:
@@ -405,6 +537,13 @@ def build_db():
     gnis_rows = gnis_candidates(GNIS_TXT)
     candidates.extend(gnis_rows)
 
+    # Wikidata pass — culturally / historically named places that aren't in
+    # either OSM (businesses-and-landmarks) or GNIS (US natural-feature names):
+    # ghost towns, indigenous communities, museums, national-park boundaries,
+    # named historic sites. Appended LAST so OSM and GNIS both win dedup ties.
+    wikidata_rows = wikidata_candidates(WIKIDATA_JSONL)
+    candidates.extend(wikidata_rows)
+
     # Pass 2: dedupe on (name_lower, lat_rounded, lon_rounded). Keep highest
     # importance; on tie, the first-inserted survives (Python dict semantics),
     # which means OSM wins over GNIS at equal importance.
@@ -423,8 +562,13 @@ def build_db():
     cur.execute("BEGIN")
     for osm_type, osm_id, lat, lon, category, importance, name, alts in deduped:
         # source is derived from the legacy osm_type slot: GNIS rows
-        # carry "gnis"; OSM rows carry {node,way,relation,unknown}.
-        source = "gnis" if osm_type == "gnis" else "osm"
+        # carry "gnis", Wikidata rows carry "wikidata", OSM rows carry
+        # {node,way,relation,unknown}.
+        source = (
+            "gnis" if osm_type == "gnis"
+            else "wikidata" if osm_type == "wikidata"
+            else "osm"
+        )
         cur.execute(
             "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names, source) VALUES (?,?,?,?,?,?,?,?,?)",
             (osm_type, osm_id, lat, lon, category, importance, name, alts, source),
@@ -436,8 +580,9 @@ def build_db():
         )
 
     # Per-source row counts (after dedup) for diagnostics.
-    n_osm  = sum(1 for r in deduped if r[0] != "gnis")
-    n_gnis = sum(1 for r in deduped if r[0] == "gnis")
+    n_osm      = sum(1 for r in deduped if r[0] not in ("gnis", "wikidata"))
+    n_gnis     = sum(1 for r in deduped if r[0] == "gnis")
+    n_wikidata = sum(1 for r in deduped if r[0] == "wikidata")
 
     # Metadata.
     metadata = {
@@ -448,12 +593,16 @@ def build_db():
         "source_md5": file_md5(FILTERED_PBF),
         "source_gnis": GNIS_TXT.name if GNIS_TXT.exists() else "",
         "source_gnis_md5": file_md5(GNIS_TXT) if GNIS_TXT.exists() else "",
+        "source_wikidata": WIKIDATA_JSONL.name if WIKIDATA_JSONL.exists() else "",
+        "source_wikidata_md5": file_md5(WIKIDATA_JSONL) if WIKIDATA_JSONL.exists() else "",
         "places_inserted": str(len(deduped)),
         "places_collapsed": str(collapsed),
         "osm_count": str(n_osm),
         "gnis_count": str(n_gnis),
+        "wikidata_count": str(n_wikidata),
         "osm_pre_dedup": str(osm_count),
         "gnis_pre_dedup": str(len(gnis_rows)),
+        "wikidata_pre_dedup": str(len(wikidata_rows)),
     }
     for k, v in metadata.items():
         cur.execute("INSERT INTO metadata (key, value) VALUES (?, ?)", (k, v))
