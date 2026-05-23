@@ -277,6 +277,20 @@ struct ExpeditionMapView: View {
         let selectedSet = dedupedWaypoints.filter { $0.id == selectedWaypointID }
         let unselectedSet = dedupedWaypoints.filter { $0.id != selectedWaypointID }
 
+        // Per-waypoint block color (AlaskaRouter-ykuf step 2). Each waypoint
+        // is in exactly one block; the Dot fills with that block's color.
+        // Fallback (no trip / no blocks) = the trip's main color, then amber.
+        let blocksByWaypointID: [UUID: TripColor] = {
+            var m: [UUID: TripColor] = [:]
+            if let trip = trip {
+                for b in trip.blocks {
+                    for wp in b.waypoints { m[wp.id] = b.color }
+                }
+            }
+            return m
+        }()
+        let fallbackColor: TripColor = trip?.color ?? .amber
+
         // Default waypoint markers.
         syncTripMarkerGroup(
             style: style,
@@ -284,6 +298,8 @@ struct ExpeditionMapView: View {
             iconLayerID: "trip-marker-default-icons",
             labelLayerID: "trip-marker-default-labels",
             waypoints: unselectedSet,
+            blocksByWaypointID: blocksByWaypointID,
+            fallbackColor: fallbackColor,
             selected: false,
             labelFontSize: 13,
             labelOffsetY: 1.4,
@@ -297,6 +313,8 @@ struct ExpeditionMapView: View {
             iconLayerID: "trip-marker-selected-icons",
             labelLayerID: "trip-marker-selected-labels",
             waypoints: selectedSet,
+            blocksByWaypointID: blocksByWaypointID,
+            fallbackColor: fallbackColor,
             selected: true,
             labelFontSize: 14,
             labelOffsetY: 1.8,
@@ -342,6 +360,8 @@ struct ExpeditionMapView: View {
         iconLayerID: String,
         labelLayerID: String,
         waypoints: [Waypoint],
+        blocksByWaypointID: [UUID: TripColor],
+        fallbackColor: TripColor,
         selected: Bool,
         labelFontSize: Double,
         labelOffsetY: Double,
@@ -360,13 +380,11 @@ struct ExpeditionMapView: View {
             return
         }
 
-        // Single-color baseline for ykuf step 1.5. Per-block coloring
-        // arrives in the next step — we'll pass each waypoint's block
-        // color into WaypointIcons.dot(...) instead of this constant.
-        let dotColor = UIColor(red: 0.760, green: 0.255, blue: 0.047, alpha: 1.0)
-
         let features: [MLNPointFeature] = waypoints.map { wp in
             let numberStr = String(wp.order + 1)
+            let blockColor = blocksByWaypointID[wp.id] ?? fallbackColor
+            let c = blockColor.swiftUIColor
+            let dotColor = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1.0)
             let (image, iconName) = WaypointIcons.dot(
                 number: numberStr,
                 color: dotColor,
