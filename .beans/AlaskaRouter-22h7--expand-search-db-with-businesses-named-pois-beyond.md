@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-20T20:20:30Z
-updated_at: 2026-05-23T12:34:16Z
+updated_at: 2026-05-23T13:52:15Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -60,8 +60,8 @@ After auditing the existing pipeline (`spikes/B_fts5/build/`) and confirming the
 
 ### Milestone 2 — matcher (after milestone 1 verified)
 
-- [ ] **Step 4: Drop-token relaxation + synonym injection** in `SearchService`. Drop-token: when stage 1 strict-AND yields zero, retry without the rarest token. Synonyms: small dictionary expanded inline (`sign ↔ marker, monument, wayside`; `rental ↔ rent, hire, adventures, outfitters`; `bike ↔ motorcycle, bicycle`; etc.).
-- [ ] **Gate behind a runtime feature flag** so before/after can be flipped live and a regression doesn't require a code revert. Probably exposed in `TweaksStore` so we can play with it in the Tweaks panel.
+- [x] **Step 4: Drop-token relaxation + synonym injection** in `SearchService` — delivered. New `SearchStage` enum (.strict / .editDistance / .synonyms / .droppedTokens). Pipeline becomes: strict → (if loose) synonyms-expanded → (if loose & has droppable tokens) drop + synonyms → edit-distance. Synonym groups: bike↔motorcycle↔bicycle, mountain↔mount↔mtn, camp↔campsite↔campground, sign↔marker↔monument↔wayside↔memorial, rental↔rent↔hire↔rentals, ferry↔ferries, gas↔fuel↔petrol↔diesel, airport↔airfield↔airstrip, peak↔summit, lodge↔inn↔hostel↔motel↔hotel, bay↔cove, store↔shop↔market. Droppable descriptors: ferry, sign, marker, rental/rentals/rent/hire, the/of/at/in/and/to/a/an. FTS expression switches joiner to explicit `AND` when any group is parenthesized (FTS5 implicit-AND only works on bare token sequences). Verified at SQL level: "Arctic Circle Sign" → synonyms find "Arctic Circle Wayside"; "camping near Denali" → drop-token finds Denali campings; "rent a kayak" → drop-token finds Kayak Cove, Kayak Mountain.
+- [x] **Gate behind a runtime feature flag** — `TweaksStore.useLooseMatcher` (persisted, default ON). Toggle in `TweaksPanel`'s new Search section with a footnote explaining what it does. `SearchService.setQuery` snapshots the flag on the MainActor and passes it to the nonisolated search task. Result rows in `SearchResultsView` get a per-stage indicator: "fuzzy ±N" for edit-distance (unchanged), "synonym" for synonym-expanded, "loose" for drop-token; nothing shown for strict.
 
 ### Out of scope this round
 

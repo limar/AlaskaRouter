@@ -1,10 +1,23 @@
-// Two-stage retrieval search service for AlaskaRouter (ported from Spike B.5).
+// Multi-stage retrieval search service for AlaskaRouter (ported from Spike B.5,
+// extended for AlaskaRouter-22h7 milestone 2 with the loose-matcher pipeline).
 //
-// Stage 1 — strict prefix-AND on name tokens, with category hints as a SOFT
-//           BOOST in scoring (not a hard WHERE filter). Cheap, hits in ~1–3 ms.
-// Stage 2 — fallback when stage 1 returns nothing: relaxed prefix-OR of first
-//           3 chars per token, candidates re-ranked in Swift by Levenshtein
-//           against the place name + alt_names. Catches typos.
+// Stage `.strict`        — prefix-AND on name tokens, category hints as a SOFT
+//                          BOOST (not a hard WHERE filter). Cheap, ~1–3 ms.
+// Stage `.synonyms`      — (loose-mode only) same as strict but each token also
+//                          ORs in known synonyms. "bike Whittier" expands to
+//                          "(bike* OR bicycle* OR motorcycle*) whittier*",
+//                          "Arctic Circle Sign" picks up "Arctic Circle Wayside"
+//                          via sign↔wayside. Strictly broader; never narrows.
+// Stage `.droppedTokens` — (loose-mode only) drop descriptor tokens that don't
+//                          typically appear in proper names (ferry, sign, the,
+//                          of, …) and retry. Catches "Ferry Whittier" → "Alaska
+//                          Marine Highway - Whittier Terminal".
+// Stage `.editDistance`  — final fallback: relaxed prefix-OR of first 3 chars
+//                          per token, candidates re-ranked in Swift by
+//                          Levenshtein against name + alt_names. Catches typos.
+//
+// The two new stages between strict and edit-distance are gated by
+// `TweaksStore.useLooseMatcher` so we can A/B compare them live.
 //
 // Wraps the result in @Observable so SwiftUI can bind a TextField to a query
 // string and a List to results. Debounced per-keystroke (~150 ms).
@@ -14,6 +27,15 @@ import Observation
 import SQLite3
 import CoreLocation
 
+enum SearchStage: Int {
+    case strict        = 1   // prefix-AND, original behavior
+    case editDistance  = 2   // Levenshtein fallback. Note: kept at int 2 for
+                             //   backward compatibility with the existing
+                             //   SearchResultsView "fuzzy ±X" indicator.
+    case synonyms      = 3   // loose-mode: token∪{synonyms}
+    case droppedTokens = 4   // loose-mode: synonyms + descriptor-token drop
+}
+
 struct SearchResult: Identifiable, Hashable {
     let id: Int64                  // place_meta rowid
     let name: String
@@ -21,8 +43,8 @@ struct SearchResult: Identifiable, Hashable {
     let category: String
     let coord: CLLocationCoordinate2D
     let importance: Double
-    let stage: Int                 // 1 = strict, 2 = edit-distance rerank
-    let editDistance: Int          // 0 for stage-1 hits
+    let stage: Int                 // see SearchStage
+    let editDistance: Int          // 0 except for .editDistance hits
 
     static func == (lhs: SearchResult, rhs: SearchResult) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -61,10 +83,13 @@ final class SearchService {
             return
         }
         let dbRef = db
+        // Snapshot the matcher tweak on the MainActor; pass it through to the
+        // background search so the nonisolated query path stays MainActor-free.
+        let looseMode = TweaksStore.shared.useLooseMatcher
         pendingTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.debounceNsValue)
             guard !Task.isCancelled else { return }
-            let hits = await Self.runSearch(handle: dbRef.handle, query: parsedQ)
+            let hits = await Self.runSearch(handle: dbRef.handle, query: parsedQ, looseMode: looseMode)
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.results = hits }
         }
@@ -74,20 +99,102 @@ final class SearchService {
 
     // MARK: - Off-main-actor query
 
-    nonisolated private static func runSearch(handle: OpaquePointer, query: StructuredQuery) async -> [SearchResult] {
+    nonisolated private static func runSearch(
+        handle: OpaquePointer,
+        query: StructuredQuery,
+        looseMode: Bool
+    ) async -> [SearchResult] {
         let limit = 12
-        let stage1 = stage1Query(handle: handle, query: query, limit: limit)
-        if !stage1.isEmpty { return stage1 }
+
+        // (1) Strict — original behavior, identical regardless of looseMode.
+        let strict = stage1Query(handle: handle, query: query, limit: limit,
+                                 stage: .strict,
+                                 expandSynonyms: false, dropDroppable: false)
+        if !strict.isEmpty { return strict }
+
+        // (2) Synonyms — only when loose mode is on. Pure expansion (never
+        //     narrows), so safe to try before drop-token.
+        if looseMode {
+            let withSyns = stage1Query(handle: handle, query: query, limit: limit,
+                                       stage: .synonyms,
+                                       expandSynonyms: true, dropDroppable: false)
+            if !withSyns.isEmpty { return withSyns }
+
+            // (3) Drop descriptor tokens AND keep synonyms. Only fires when at
+            //     least one droppable token is present.
+            let hasDroppable = query.nameTokens.contains {
+                droppableDescriptors.contains($0.lowercased())
+            }
+            if hasDroppable {
+                let dropped = stage1Query(handle: handle, query: query, limit: limit,
+                                          stage: .droppedTokens,
+                                          expandSynonyms: true, dropDroppable: true)
+                if !dropped.isEmpty { return dropped }
+            }
+        }
+
+        // (4) Final fallback — edit distance (existing behavior).
         return stage2Query(handle: handle, query: query, limit: limit)
     }
 
-    nonisolated private static func stage1Query(handle: OpaquePointer, query: StructuredQuery, limit: Int) -> [SearchResult] {
+    // MARK: - Loose-matcher dictionaries
+
+    /// Bidirectional synonym groups. If the user's token matches any member
+    /// of a group, the FTS query expands to OR all members. Keep groups to
+    /// linguistic equivalents (bike↔motorcycle), not loose associations
+    /// (rental↔adventures) — broad groups erode precision.
+    nonisolated static let synonymGroups: [Set<String>] = [
+        ["bike", "bicycle", "motorcycle", "motorbike"],
+        ["mountain", "mount", "mtn"],
+        ["camp", "campsite", "campground", "camping"],
+        ["airport", "airfield", "airstrip"],
+        ["sign", "marker", "monument", "wayside", "memorial"],
+        ["rental", "rentals", "rent", "hire"],
+        ["ferry", "ferries"],
+        ["peak", "summit"],
+        ["gas", "fuel", "petrol", "diesel"],
+        ["lodge", "inn", "hostel", "motel", "hotel"],
+        ["store", "shop", "market"],
+        ["bay", "cove"],                          // intentional partial: coastal coves
+                                                  // are often labeled "Bay" in OSM
+    ]
+
+    /// Lookup table: token → its synonym group (including itself).
+    nonisolated static let synonymsByToken: [String: Set<String>] = {
+        var m: [String: Set<String>] = [:]
+        for group in synonymGroups {
+            for t in group { m[t] = group }
+        }
+        return m
+    }()
+
+    /// Tokens that typically describe a place's category rather than its
+    /// proper name. Dropped at stage `.droppedTokens` when strict + synonyms
+    /// both yielded nothing.
+    nonisolated static let droppableDescriptors: Set<String> = [
+        "ferry", "ferries",
+        "sign", "marker",
+        "rental", "rentals", "rent", "hire",
+        "the", "of", "at", "in", "and", "to", "a", "an",
+    ]
+
+    nonisolated private static func stage1Query(
+        handle: OpaquePointer,
+        query: StructuredQuery,
+        limit: Int,
+        stage: SearchStage,
+        expandSynonyms: Bool,
+        dropDroppable: Bool
+    ) -> [SearchResult] {
         guard !query.nameTokens.isEmpty || !query.categoryHints.isEmpty else { return [] }
 
-        var ftsArg: String? = nil
+        let ftsArg = buildFTSExpression(
+            tokens: query.nameTokens,
+            expandSynonyms: expandSynonyms,
+            dropDroppable: dropDroppable
+        )
         var whereClauses: [String] = []
-        if !query.nameTokens.isEmpty {
-            ftsArg = query.nameTokens.map { "\($0)*" }.joined(separator: " ")
+        if ftsArg != nil {
             whereClauses.append("places_word MATCH ?")
         }
         let catBoost: String
@@ -119,7 +226,39 @@ final class SearchService {
         """
         return runRowidSQL(handle: handle, sql: sql,
                            catParams: catParams, ftsArg: ftsArg, limit: limit,
-                           stage: 1)
+                           stage: stage.rawValue)
+    }
+
+    /// Build the FTS5 MATCH expression for a list of tokens.
+    /// - With both flags off: bare "tok1* tok2* …" (implicit AND — fast path).
+    /// - With `expandSynonyms`: each token in a synonym group expands to
+    ///   "(tok* OR syn1* OR syn2* …)" and the joiner becomes explicit `AND`
+    ///   (FTS5's implicit-AND only works for bare token sequences; once any
+    ///   parenthesized group is involved, every join must spell out AND).
+    /// - With `dropDroppable`: descriptor tokens are skipped entirely.
+    /// Returns nil if all tokens get dropped or the input is empty.
+    nonisolated private static func buildFTSExpression(
+        tokens: [String],
+        expandSynonyms: Bool,
+        dropDroppable: Bool
+    ) -> String? {
+        guard !tokens.isEmpty else { return nil }
+        var parts: [String] = []
+        var anyExpanded = false
+        for raw in tokens {
+            let tok = raw.lowercased()
+            if dropDroppable && droppableDescriptors.contains(tok) { continue }
+            if expandSynonyms, let group = synonymsByToken[tok], group.count > 1 {
+                let expanded = group.sorted().map { "\($0)*" }.joined(separator: " OR ")
+                parts.append("(\(expanded))")
+                anyExpanded = true
+            } else {
+                parts.append("\(tok)*")
+            }
+        }
+        if parts.isEmpty { return nil }
+        let sep = anyExpanded ? " AND " : " "
+        return parts.joined(separator: sep)
     }
 
     nonisolated private static func stage2Query(handle: OpaquePointer, query: StructuredQuery, limit: Int) -> [SearchResult] {
@@ -143,7 +282,7 @@ final class SearchService {
 
         var raw: [SearchResult] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let r = readRow(stmt: stmt, stage: 2, editDistance: 0)
+            let r = readRow(stmt: stmt, stage: SearchStage.editDistance.rawValue, editDistance: 0)
             raw.append(r)
         }
 
@@ -161,7 +300,8 @@ final class SearchService {
             var updated = r
             updated = SearchResult(
                 id: r.id, name: r.name, altNames: r.altNames, category: r.category,
-                coord: r.coord, importance: r.importance, stage: 2, editDistance: total
+                coord: r.coord, importance: r.importance,
+                stage: SearchStage.editDistance.rawValue, editDistance: total
             )
             return (updated, score)
         }

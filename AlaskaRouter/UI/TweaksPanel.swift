@@ -48,6 +48,15 @@ struct TweaksPanel: View {
                 }
 
                 Section {
+                    Toggle("Loose matcher", isOn: $tweaks.useLooseMatcher)
+                } header: {
+                    Text("Search")
+                } footer: {
+                    Text("When ON, search retries with synonyms (bike↔motorcycle, sign↔wayside, ferry↔ferries, …) and drops descriptor tokens (\"ferry\", \"sign\", \"the\", …) if the strict query returns nothing. Catches \"Ferry Whittier\" → Whittier Terminal, \"Arctic Circle Sign\" → Arctic Circle Wayside. Flip OFF to compare against the original strict behavior.")
+                        .font(.footnote)
+                }
+
+                Section {
                     Button("Reset to defaults", role: .destructive) {
                         tweaks.resetToDefaults()
                     }

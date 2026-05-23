@@ -65,9 +65,17 @@ struct SearchResultsView: View {
                             Text(String(format: "%.3f, %.3f",
                                         result.coord.latitude,
                                         result.coord.longitude))
-                            if result.stage == 2 {
+                            if result.stage == SearchStage.editDistance.rawValue {
                                 Text("·").foregroundStyle(.secondary)
                                 Text("fuzzy ±\(result.editDistance)")
+                                    .foregroundStyle(.orange.opacity(0.9))
+                            } else if result.stage == SearchStage.synonyms.rawValue {
+                                Text("·").foregroundStyle(.secondary)
+                                Text("synonym")
+                                    .foregroundStyle(.orange.opacity(0.9))
+                            } else if result.stage == SearchStage.droppedTokens.rawValue {
+                                Text("·").foregroundStyle(.secondary)
+                                Text("loose")
                                     .foregroundStyle(.orange.opacity(0.9))
                             }
                         }

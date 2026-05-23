@@ -37,12 +37,26 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(dotFontSizeRatio, forKey: K.dotFontSizeRatio) }
     }
 
+    // MARK: - Search Matcher (AlaskaRouter-22h7 milestone 2)
+
+    /// When true, the search pipeline gets two extra retry stages between
+    /// "strict prefix-AND" and the edit-distance fallback:
+    ///   (a) synonym-expanded — bike↔motorcycle, sign↔wayside, ferry↔ferries, …
+    ///   (b) drop-droppable — strip descriptor tokens ("ferry", "sign", "the", …)
+    ///       that aren't typically part of the proper name.
+    /// Toggle off to compare against the original strict behavior. Defaults
+    /// to ON because it strictly broadens recall (never removes a hit).
+    var useLooseMatcher: Bool {
+        didSet { UserDefaults.standard.set(useLooseMatcher, forKey: K.useLooseMatcher) }
+    }
+
     /// One-call reset to v1 defaults.
     func resetToDefaults() {
         dotDiameterDefault  = Defaults.dotDiameterDefault
         dotDiameterSelected = Defaults.dotDiameterSelected
         dotFontWeight       = Defaults.dotFontWeight
         dotFontSizeRatio    = Defaults.dotFontSizeRatio
+        useLooseMatcher     = Defaults.useLooseMatcher
     }
 
     // MARK: - Init / persistence
@@ -53,6 +67,7 @@ final class TweaksStore {
         dotDiameterSelected = (d.object(forKey: K.dotDiameterSelected) as? Double) ?? Defaults.dotDiameterSelected
         dotFontWeight       = (d.object(forKey: K.dotFontWeight)       as? Double) ?? Defaults.dotFontWeight
         dotFontSizeRatio    = (d.object(forKey: K.dotFontSizeRatio)    as? Double) ?? Defaults.dotFontSizeRatio
+        useLooseMatcher     = (d.object(forKey: K.useLooseMatcher)     as? Bool)   ?? Defaults.useLooseMatcher
     }
 
     private enum K {
@@ -60,6 +75,7 @@ final class TweaksStore {
         static let dotDiameterSelected = "tweak.dot.diameter.selected"
         static let dotFontWeight       = "tweak.dot.font.weight"
         static let dotFontSizeRatio    = "tweak.dot.font.sizeRatio"
+        static let useLooseMatcher     = "tweak.search.useLooseMatcher"
     }
 
     enum Defaults {
@@ -70,5 +86,6 @@ final class TweaksStore {
         static let dotDiameterSelected: Double = 27
         static let dotFontWeight: Double       = 0.50   // between .bold (0.4) and .heavy (0.56)
         static let dotFontSizeRatio: Double    = 0.54
+        static let useLooseMatcher: Bool       = true   // milestone 2 on by default; flip OFF to A/B
     }
 }
