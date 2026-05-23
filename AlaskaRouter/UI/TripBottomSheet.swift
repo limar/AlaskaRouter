@@ -455,12 +455,16 @@ struct TripBottomSheet: View {
 
             // Trash — instant delete; the Undo toast (AlaskaRouter-j5w1) is
             // the safety net so no confirmation alert here.
+            //
+            // Visual: filled destructive circle + WHITE trash on top (matches
+            // the "+" and "✓" pattern from yxve so all action affordances
+            // share one "colored disc, white inner symbol" language).
             Button(action: { deleteWaypoint(wp) }) {
                 Image(systemName: "trash")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(SheetPalette.destructive)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
-                    .background(Color.black.opacity(0.04), in: Circle())
+                    .background(SheetPalette.destructive, in: Circle())
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -565,10 +569,10 @@ struct TripBottomSheet: View {
 
             Button(action: { tripPendingDelete = t }) {
                 Image(systemName: "trash")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(SheetPalette.destructive)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
                     .frame(width: 34, height: 34)
-                    .background(Color.black.opacity(0.04), in: Circle())
+                    .background(SheetPalette.destructive, in: Circle())
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

@@ -105,13 +105,29 @@ struct StopCallout: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .semibold))
+            VStack(spacing: 4) {
+                // Destructive items (Remove): the icon sits inside a filled
+                // destructive disc with a white inner glyph. Same "colored
+                // disc + white inner" language as the search "+" and
+                // active-trip "✓" — visually heavier than Prev/Next which
+                // signals "this one is dangerous" while staying readable on
+                // both light and dark sheets.
+                if destructive {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(SheetPalette.destructive, in: Circle())
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(height: 28)
+                        .foregroundStyle(itemColor(enabled: enabled, destructive: false))
+                }
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10, weight: destructive ? .bold : .semibold))
+                    .foregroundStyle(itemColor(enabled: enabled, destructive: destructive))
             }
-            .foregroundStyle(itemColor(enabled: enabled, destructive: destructive))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
             .contentShape(Rectangle())

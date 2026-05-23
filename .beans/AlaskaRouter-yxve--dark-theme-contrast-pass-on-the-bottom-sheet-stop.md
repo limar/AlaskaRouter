@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-05-23T17:54:03Z
-updated_at: 2026-05-23T18:12:31Z
+updated_at: 2026-05-23T18:20:43Z
 ---
 
 ## Problem (verbatim from user, 2026-05-23)
@@ -98,3 +98,19 @@ User on-device feedback: text contrast fixed, but the **destructive buttons** ar
 - Dropped the `.opacity(0.85)` on the two trash icons in `TripBottomSheet`.
 
 Surfaces touched: `SearchResultsView` fast-add "+", `TripBottomSheet` active-trip checkmark, `TripBottomSheet` 'New Trip' "+", trash buttons on waypoint and trip rows.
+
+
+
+## Round 3 — destructive buttons get the same colored-disc treatment
+
+User feedback after round 2: +/✓ are 'top notch and beautiful' but trash and 'Remove' text 'still not divisible.'
+
+The root cause was the asymmetry: +/✓ have visual weight (colored disc + white inner glyph), trash/Remove are just colored monochrome shapes with no anchor — they fight the warm sepia sheet in dark mode.
+
+Fix: extend the same pattern (`colored disc + white inner symbol`) to the destructive buttons:
+
+- TripBottomSheet waypoint trash → red/coral disc background, white trash icon.
+- TripBottomSheet trip-row trash  → red/coral disc background, white trash icon.
+- StopCallout 'Remove' button → red/coral disc around the trash icon (smaller, 28pt to match the action-item visual rhythm); 'Remove' label below gets bumped to bold weight for additional emphasis.
+
+Light mode now also benefits — destructive actions read more clearly across both themes.
