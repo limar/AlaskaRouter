@@ -336,8 +336,19 @@ struct TripBottomSheet: View {
         switch item {
         case .stop(let wp):
             waypointRow(wp, accent: stopColorByID[wp.id] ?? tripAccent)
-        case let .separator(_, blockIndex, color, displayName):
-            blockHeaderRow(blockIndex: blockIndex, color: swiftUIColor(color), displayName: displayName)
+        case let .blockHeader(separator, blockIndex, color, displayName):
+            // Block 0's header is synthetic (separator == nil) — pin it at the
+            // top of the list and hide the drag handle so users can't try to
+            // reorder or delete it (pufj).
+            let isSynthetic = (separator == nil)
+            blockHeaderRow(
+                blockIndex: blockIndex,
+                color: swiftUIColor(color),
+                displayName: displayName,
+                isSynthetic: isSynthetic
+            )
+            .moveDisabled(isSynthetic)
+            .deleteDisabled(isSynthetic)
         }
     }
 
@@ -346,7 +357,7 @@ struct TripBottomSheet: View {
     /// don't confuse a block separator for a waypoint. (Was previously a
     /// rounded pill, which the mock-alignment work in AlaskaRouter-9634
     /// flagged as the root cause of "separators visibly resemble waystops.")
-    private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String) -> some View {
+    private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String, isSynthetic: Bool = false) -> some View {
         let count = stopCountInBlock(blockIndex: blockIndex)
         return HStack(spacing: 10) {
             // Square chip with number — clearly different from the round
@@ -374,11 +385,14 @@ struct TripBottomSheet: View {
             Spacer(minLength: 0)
 
             // Drag handle — block headers participate in reorder like any
-            // other list row (.onMove). Keeping the affordance visible so
-            // users see they can move a block boundary.
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
+            // other list row (.onMove). Block 0's synthetic header is fixed
+            // (no underlying separator to reorder), so the drag handle is
+            // suppressed for it.
+            if !isSynthetic {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -620,7 +634,11 @@ struct TripBottomSheet: View {
                 wp.order = stopIndex
                 stopIndex += 1
                 lastWaypointID = wp.id
-            case .separator(let sep, _, _, _):
+            case .blockHeader(let separator, _, _, _):
+                // Block 0's synthetic header (separator == nil) is fixed
+                // and shouldn't appear in the reorder set (`moveDisabled`
+                // suppresses it); skip defensively.
+                guard let sep = separator else { continue }
                 if let prev = lastWaypointID {
                     sep.afterWaypointID = prev
                 } else {
@@ -640,7 +658,10 @@ struct TripBottomSheet: View {
             switch items[idx] {
             case .stop(let wp):
                 deleteWaypoint(wp, renumberAfter: false)
-            case .separator(let sep, _, _, _):
+            case .blockHeader(let separator, _, _, _):
+                // `deleteDisabled` on the synthetic block-0 header means
+                // we should only ever see real separators here; nil = no-op.
+                guard let sep = separator else { continue }
                 modelContext.delete(sep)
             }
         }

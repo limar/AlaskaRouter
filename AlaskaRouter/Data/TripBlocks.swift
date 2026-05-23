@@ -34,15 +34,27 @@ struct TripBlock: Identifiable {
     }
 }
 
-/// One row in the bottom-sheet's unified list. Stops and separators interleave.
+/// One row in the bottom-sheet's unified list. Stops and block headers
+/// interleave. Every block — including block 0 — has a header row, even
+/// though block 0 has no underlying `BlockSeparator` (pufj). The optional
+/// `separator` distinguishes the cases:
+///   - `separator: nil` — block 0's synthetic header; fixed at top,
+///                        not reorderable, not deletable.
+///   - `separator: .some` — a real separator the user inserted; movable,
+///                          deletable, persists in SwiftData.
 enum TripListItem: Identifiable {
     case stop(Waypoint)
-    case separator(BlockSeparator, blockIndex: Int, color: TripColor, displayName: String)
+    case blockHeader(separator: BlockSeparator?, blockIndex: Int, color: TripColor, displayName: String)
 
-    var id: UUID {
+    /// Stable string ID across all items, prefixed so a separator's UUID
+    /// can never collide with a waypoint's. Block 0's synthetic header
+    /// uses the fixed `"block-0"` sentinel.
+    var id: String {
         switch self {
-        case .stop(let wp): return wp.id
-        case .separator(let s, _, _, _): return s.id
+        case .stop(let wp): return "stop-\(wp.id.uuidString)"
+        case .blockHeader(let sep, let idx, _, _):
+            if let sep = sep { return "sep-\(sep.id.uuidString)" }
+            return "block-\(idx)"
         }
     }
 }
@@ -107,14 +119,20 @@ extension Trip {
         return result
     }
 
-    /// The flat list of rows the bottom sheet should render (stops + separators).
-    /// Order: for each block, the leading separator (if any) then the block's stops.
+    /// The flat list of rows the bottom sheet should render (block headers
+    /// + stops). Order: for each block, a header row, then the block's stops.
+    /// Every block produces a header — block 0's header is synthetic
+    /// (`separator: nil`) because there's no preceding separator by
+    /// definition (pufj).
     var listItems: [TripListItem] {
         var out: [TripListItem] = []
         for b in blocks {
-            if let sep = b.leadingSeparator {
-                out.append(.separator(sep, blockIndex: b.index, color: b.color, displayName: b.displayName))
-            }
+            out.append(.blockHeader(
+                separator: b.leadingSeparator,
+                blockIndex: b.index,
+                color: b.color,
+                displayName: b.displayName
+            ))
             for wp in b.waypoints {
                 out.append(.stop(wp))
             }
