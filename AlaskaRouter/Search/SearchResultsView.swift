@@ -93,7 +93,7 @@ struct SearchResultsView: View {
             Button { onFastAdd(result) } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(Color(red: 0.78, green: 0.32, blue: 0.20))
+                    .foregroundStyle(SheetPalette.destructive)
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }

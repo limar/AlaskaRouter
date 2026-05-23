@@ -122,7 +122,9 @@ struct StopCallout: View {
     }
 
     private func itemColor(enabled: Bool, destructive: Bool) -> Color {
-        if destructive { return Color(red: 0.78, green: 0.32, blue: 0.20) }
+        // Adaptive warm-red (AlaskaRouter-yxve) — pops against both the
+        // light material and the dark-mode warm-sepia material.
+        if destructive { return SheetPalette.destructive }
         return enabled ? .primary : .secondary
     }
 

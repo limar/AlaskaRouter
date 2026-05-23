@@ -417,6 +417,10 @@ struct TripBottomSheet: View {
         let isIndented = !trip.separators.isEmpty
         return HStack(spacing: 10) {
             // Numbered pip — white fill, 1.6pt colored stroke, tabular digit.
+            // Dark mode adds a thin cream ring just outside the colored stroke
+            // (AlaskaRouter-yxve) so the block-color identity lifts off the
+            // warm-sepia sheet background; in light mode pipOuterRing is
+            // .clear so the extra Circle is a no-op.
             ZStack {
                 Circle()
                     .fill(Color.white)
@@ -424,6 +428,9 @@ struct TripBottomSheet: View {
                 Circle()
                     .stroke(accent, lineWidth: 1.6)
                     .frame(width: 22, height: 22)
+                Circle()
+                    .stroke(SheetPalette.pipOuterRing, lineWidth: 0.8)
+                    .frame(width: 24.4, height: 24.4)
                 Text("\(wp.order + 1)")
                     .font(.sheetSans(10, weight: .bold))
                     .monospacedDigit()

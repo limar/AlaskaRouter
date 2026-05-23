@@ -16,7 +16,7 @@ enum TripToastKind {
     var iconColor: Color {
         switch self {
         case .added:   return .green
-        case .removed: return Color(red: 0.78, green: 0.32, blue: 0.20)
+        case .removed: return SheetPalette.destructive
         }
     }
 
