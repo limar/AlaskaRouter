@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-yxve
 title: Dark theme contrast pass on the bottom sheet, stop callout, and trip list
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-05-23T17:54:03Z
-updated_at: 2026-05-23T18:28:28Z
+updated_at: 2026-05-23T18:33:26Z
 ---
 
 ## Problem (verbatim from user, 2026-05-23)
@@ -79,8 +79,8 @@ Use `.primary`, `.secondary`, `Color(.systemRed)`, etc. — they adapt natively.
 - [x] Refactor `SheetPalette` tokens to adaptive `Color(UIColor { trait in … })` — every token gets a dark variant (warm campfire-paper aesthetic).
 - [x] Route StopCallout, AddedToTripToast, PreviewCallout, SearchResultsView through `SheetPalette.destructive` — all 5 hardcoded warm-red sites collapsed to the one adaptive token.
 - [x] Add `pipOuterRing` token + 0.8pt cream ring outside the numbered pips. Clear in light mode, cream @ 0.55 in dark — block-color stroke now lifts off the dark sheet.
-- [ ] Verify on device: sheet readability, trash button visibility, callout readability (on-device test)
-- [ ] Spot-check light-mode against current visual (must not regress) — on-device test
+- [x] Verified on device: sheet text readable, destructive (red) and additive (coral) clearly distinct, callout Remove unambiguous.
+- [x] Light-mode spot-check: no regressions. Same warm-coral additive actions; trash now slightly more red than before (intentional).
 
 
 
@@ -139,3 +139,24 @@ Re-routed call sites:
 - TripBottomSheet active checkmark → unchanged (uses per-trip color)
 
 Now trash buttons say 'danger' and + buttons say 'add' at a glance.
+
+
+## Summary of Changes
+
+Took four rounds to land — captured here so the next palette pass has the lessons.
+
+**Round 1** (`7f0d75e`): refactor `SheetPalette` to adaptive `Color(UIColor { trait in … })` for every token. Designed a "warm campfire-lit paper" dark variant (basemap cream for strong text, warm beige for muted/eyebrow, dark warm wash for the surface tint). Routed the four inline copies of `Color(red: 0.78, …)` in `StopCallout`, `AddedToTripToast`, `PreviewCallout`, `SearchResultsView` through the central token. Added a `pipOuterRing` that's clear in light mode and cream @ 0.55 in dark — gives the numbered pip a contrast ring just outside the colored stroke.
+
+**Round 2** (`27d7bb1`): the `+` and `✓` symbols were invisible in dark mode because `plus.circle.fill` / `checkmark.circle.fill` are *cut-out* SF Symbols — the inner glyph is a HOLE, not a layer. Single-color `.foregroundStyle` makes the whole thing red and the cutout shows whatever's behind (dark sheet = invisible). Fix: SF Symbol *palette rendering* with `.foregroundStyle(.white, destructive)` so the inner glyph is an explicit white layer.
+
+**Round 3** (`d263e5f`): trash buttons were still hard to read because monochrome warm-coral on warm-sepia sheet has near-identical luminance. Applied the same "colored disc + white inner symbol" pattern to all destructive buttons — `TripBottomSheet` trash and `StopCallout` Remove now get a filled-disc background with a white trash icon, plus a bold "Remove" label below.
+
+**Round 4** (`726a999`): user feedback exposed a semantic-color bug — with all action buttons now using the same warm-coral disc, the destructive (trash) and additive (+) actions became visually identical. AND the warm-coral stopped reading as "danger." Split into two tokens:
+- `SheetPalette.destructive` (now true red — light wine, dark raspberry) for trash, Remove, "removed" toast
+- `SheetPalette.accentWarm` (the previous warm coral) for `+` buttons and "Add to trip"
+
+### What we learned
+
+- iOS users expect destructive = red. Don't try to brand-tint that.
+- Cut-out SF Symbols (`*.circle.fill`) need palette rendering when used over an adaptive background.
+- "Same warm-paper hue" reads as continuity in light mode but causes hue-luminance collision in dark mode — adaptive palette tokens with explicit hue separation between semantic categories are worth the upfront design.
