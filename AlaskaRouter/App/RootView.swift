@@ -135,16 +135,29 @@ struct RootView: View {
                     && !searchService.results.isEmpty
                     && previewedResult == nil
                 {
-                    SearchResultsView(
-                        results: searchService.results,
-                        parsed: searchService.parsed,
-                        onPreview: handlePreviewSelected,
-                        onFastAdd: handleFastAdd
-                    )
+                    // Wrap the results in a ScrollView so the panel scrolls
+                    // internally (AlaskaRouter-atvg). Without this, a tall
+                    // dropdown's intrinsic height overflowed the VStack's
+                    // available space and SwiftUI pushed the bar off-screen.
+                    // .scrollDismissesKeyboard(.interactively) lets the user
+                    // drag the list to dismiss the keyboard mid-scroll.
+                    ScrollView {
+                        SearchResultsView(
+                            results: searchService.results,
+                            parsed: searchService.parsed,
+                            onPreview: handlePreviewSelected,
+                            onFastAdd: handleFastAdd
+                        )
+                    }
+                    .scrollDismissesKeyboard(.interactively)
                 }
                 Spacer(minLength: 0)
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
+            // Deliberately NOT .ignoresSafeArea(.keyboard, edges: .bottom):
+            // we WANT SwiftUI's standard keyboard avoidance to shrink the
+            // VStack from the bottom when the keyboard appears. That bounds
+            // the ScrollView above, and the bar (at top of VStack) stays
+            // visible since the VStack's top is unaffected.
 
             // Preview callout (floating mid-screen near the previewed pin).
             if let preview = previewedResult {
@@ -368,6 +381,19 @@ struct RootView: View {
             pendingSnapKey = nil
             return
         }
+
+        // (kp9h) Try the persisted cache first. If the trip has a stored snap
+        // computed for the *same* geometry key, hydrate immediately — even if
+        // we're offline. This is the whole point of the persistence: a trip
+        // routed yesterday over LTE still renders along real roads at 5 AM
+        // out of Coldfoot when the bars are gone.
+        if let cached = trip.cachedSnappedCoords(for: effectiveKey) {
+            snappedRouteCoords = cached
+            snappedRouteKey = effectiveKey
+            pendingSnapKey = nil
+            return                          // no refetch needed
+        }
+
         let coords = trip.orderedWaypoints.map(\.coordinate)
         snapTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 500_000_000)   // 500 ms debounce
@@ -391,6 +417,14 @@ struct RootView: View {
                 snappedRouteCoords = result.coordinates
                 snappedRouteKey = key
                 pendingSnapKey = nil
+            }
+            // (kp9h) Persist for offline reopen. If the trip's geometry has
+            // changed during the in-flight network call (a fast user edit),
+            // the key won't match by now — skip the save so we don't write a
+            // stale snap.
+            if let trip = activeTrip, tripGeometryKey == key {
+                trip.setSnappedCoords(result.coordinates, geometryKey: key)
+                try? modelContext.save()
             }
         } catch {
             // Fall back to the dashed pendingSnap line; remember the key so

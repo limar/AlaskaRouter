@@ -23,6 +23,21 @@ final class Trip {
     @Relationship(deleteRule: .cascade, inverse: \BlockSeparator.trip)
     var separators: [BlockSeparator] = []
 
+    // MARK: - Snapped-route cache (AlaskaRouter-kp9h)
+    //
+    // The exact ORS/OSRM-routed polyline computed while online, persisted so
+    // the trip still renders along real roads when reopened OFFLINE. Three
+    // fields so we know:
+    //   - what we cached    (snappedRouteEncoded — JSON [[lat,lon],…])
+    //   - what it's for     (snappedRouteKey — matches RootView.tripGeometryKey
+    //                        at time of fetch; cache is invalid the moment
+    //                        the waypoint sequence changes)
+    //   - when we cached it (snappedRouteComputedAt — for staleness UI later)
+    // Empty / nil = no cached snap; renderer falls back to spline/straight.
+    var snappedRouteEncoded: String? = nil
+    var snappedRouteKey: String? = nil
+    var snappedRouteComputedAt: Date? = nil
+
     init(name: String, color: TripColor = .amber, createdAt: Date = .now, notes: String = "") {
         self.name = name
         self.colorRaw = color.rawValue
@@ -38,6 +53,59 @@ final class Trip {
     /// Waypoints sorted by their `order` for stable rendering.
     var orderedWaypoints: [Waypoint] {
         waypoints.sorted { $0.order < $1.order }
+    }
+
+    // MARK: - Snapped-route cache helpers (kp9h)
+
+    /// Decoded snapped polyline if the cache is non-empty AND its key matches
+    /// the caller's current `tripGeometryKey`. Returns nil otherwise — the
+    /// caller should then fall back to spline/straight and trigger a fresh
+    /// snap (which will refill the cache on success).
+    func cachedSnappedCoords(for currentGeometryKey: String) -> [CLLocationCoordinate2D]? {
+        guard let encoded = snappedRouteEncoded,
+              let storedKey = snappedRouteKey,
+              storedKey == currentGeometryKey
+        else { return nil }
+        return Trip.decodeSnap(encoded)
+    }
+
+    /// Write a fresh snap into the cache. Caller is responsible for SwiftData
+    /// `modelContext.save()` (or letting the context auto-save at suspend).
+    func setSnappedCoords(_ coords: [CLLocationCoordinate2D], geometryKey: String, at now: Date = .now) {
+        snappedRouteEncoded = Trip.encodeSnap(coords)
+        snappedRouteKey = geometryKey
+        snappedRouteComputedAt = now
+    }
+
+    /// Wipe the cache — call when waypoint sequence changes if the caller
+    /// wants the saved-state to immediately reflect "no snap available".
+    /// (The cache also self-invalidates by key mismatch, so calling this is
+    /// optional; it just avoids carrying a stale blob until the next snap.)
+    func clearSnappedCache() {
+        snappedRouteEncoded = nil
+        snappedRouteKey = nil
+        snappedRouteComputedAt = nil
+    }
+
+    /// Encode an array of CLLocationCoordinate2D as a JSON string of
+    /// [[lat,lon],…] pairs. Chosen for debuggability over compactness —
+    /// a 2000-point Alaska polyline encodes to ~50 KB JSON vs ~10 KB
+    /// Google-encoded; size is well within SwiftData's comfort zone and
+    /// the JSON survives schema migrations / inspection painlessly.
+    private static func encodeSnap(_ coords: [CLLocationCoordinate2D]) -> String? {
+        let pairs: [[Double]] = coords.map { [$0.latitude, $0.longitude] }
+        guard let data = try? JSONSerialization.data(withJSONObject: pairs) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func decodeSnap(_ encoded: String) -> [CLLocationCoordinate2D]? {
+        guard let data = encoded.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[Double]]
+        else { return nil }
+        return arr.compactMap { p in
+            guard p.count >= 2 else { return nil }
+            return CLLocationCoordinate2D(latitude: p[0], longitude: p[1])
+        }
     }
 }
 
