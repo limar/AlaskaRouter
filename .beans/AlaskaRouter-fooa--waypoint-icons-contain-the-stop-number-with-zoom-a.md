@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-fooa
 title: Waypoint icons contain the stop number (with zoom-aware legibility floor)
-status: todo
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-20T19:42:55Z
-updated_at: 2026-05-21T15:13:00Z
+updated_at: 2026-05-23T14:48:12Z
 parent: AlaskaRouter-xtua
 blocked_by:
     - AlaskaRouter-h82l

@@ -8,8 +8,11 @@
 //   - .collapsed: thin oval pill below the Dynamic Island, showing the active
 //                  trip name + chevron. Tap to re-expand.
 //
-// Top placement uses .ignoresSafeArea(.keyboard, edges: .bottom) so the bar
-// is not shoved up when the keyboard appears.
+// Layout: the parent in RootView is a top-anchored VStack with standard
+// keyboard avoidance — the VStack's bottom shrinks when the keyboard
+// appears but its top stays put, so the bar at the top of the stack is
+// unaffected. No need for this view to opt out of keyboard avoidance
+// itself.
 
 import SwiftUI
 
@@ -34,7 +37,6 @@ struct FloatingSearchBar: View {
         }
         .padding(.top, 8)
         .padding(.horizontal, 14)
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onChange(of: fieldFocused) { _, new in isFieldFocused = new }
         .onChange(of: isFieldFocused) { _, new in
             // Allow the parent to forcibly dismiss the keyboard.

@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-h82l
 title: Waypoint icons should scale with zoom (degrade to dots at low zoom)
-status: todo
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-20T11:29:03Z
-updated_at: 2026-05-21T15:13:06Z
+updated_at: 2026-05-23T14:48:36Z
 parent: AlaskaRouter-xtua
 ---
 
