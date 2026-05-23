@@ -11,6 +11,7 @@ import CoreLocation
 struct StopCallout: View {
     let waypoint: Waypoint
     let positionLabel: String              // "STOP 3 OF 5"
+    let additionalPassNumbers: [Int]       // other 1-based stop indices visiting this coord (ykuf step 4)
     let distanceFromPrevText: String?      // "45 km from previous" (nil for stop 1)
     let canPrev: Bool
     let canNext: Bool
@@ -32,6 +33,16 @@ struct StopCallout: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.secondary)
                         .tracking(1.2)
+                    if let alsoLabel = alsoPassesLabel {
+                        // Multi-pass disclosure: the same coord is revisited
+                        // later in the trip. The map shows ONE marker per
+                        // coord (first-visit wins); this line surfaces the
+                        // other passes so they're not invisible.
+                        Text(alsoLabel)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1.2)
+                    }
                     HStack(spacing: 6) {
                         Image(systemName: iconForCategory(waypoint.category))
                             .font(.system(size: 12, weight: .semibold))
@@ -113,6 +124,14 @@ struct StopCallout: View {
     private func itemColor(enabled: Bool, destructive: Bool) -> Color {
         if destructive { return Color(red: 0.78, green: 0.32, blue: 0.20) }
         return enabled ? .primary : .secondary
+    }
+
+    /// "ALSO STOP 9 · 12" (or "ALSO STOP 9" for a single revisit). Nil when
+    /// the coord is only visited once.
+    private var alsoPassesLabel: String? {
+        guard !additionalPassNumbers.isEmpty else { return nil }
+        let joined = additionalPassNumbers.map(String.init).joined(separator: " · ")
+        return "ALSO STOP \(joined)"
     }
 
     private var detailLine: String {

@@ -178,6 +178,7 @@ struct RootView: View {
                     StopCallout(
                         waypoint: wp,
                         positionLabel: "STOP \(idx + 1) OF \(ordered.count)",
+                        additionalPassNumbers: additionalPassNumbers(for: wp, in: ordered),
                         distanceFromPrevText: distanceFromPrevText(idx: idx, in: ordered),
                         canPrev: idx > 0,
                         canNext: idx < ordered.count - 1,
@@ -626,6 +627,24 @@ struct RootView: View {
         let b = ordered[idx].coordinate
         let meters = SmartInsert.haversine(a, b)
         return String(format: "%.0f km from previous", meters / 1000)
+    }
+
+    /// Other 1-based stop indices that share the selected waypoint's coord
+    /// (out-and-back trips revisit the same place — Cantwell as stop 1, 9,
+    /// 12). Excludes the selected waypoint itself. Same coord-key rounding
+    /// (6 decimals ≈ 11 cm) as the marker-dedup in ExpeditionMapView so the
+    /// callout and the marker agree on what counts as "the same place".
+    private func additionalPassNumbers(for selected: Waypoint, in ordered: [Waypoint]) -> [Int] {
+        let key = coordKey(selected)
+        var result: [Int] = []
+        for (i, wp) in ordered.enumerated() where wp.id != selected.id {
+            if coordKey(wp) == key { result.append(i + 1) }
+        }
+        return result
+    }
+
+    private func coordKey(_ wp: Waypoint) -> String {
+        String(format: "%.6f|%.6f", wp.lat, wp.lon)
     }
 
     private func handleSheetWaypointDeleted(_ snapshot: DeletedStopSnapshot) {

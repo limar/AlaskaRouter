@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ykuf
 title: Waypoint icon redesign — readable number-on-icon
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-22T12:52:08Z
-updated_at: 2026-05-22T12:52:56Z
+updated_at: 2026-05-23T08:08:20Z
 parent: AlaskaRouter-xtua
 blocking:
     - AlaskaRouter-fooa
@@ -71,3 +71,20 @@ The icon was designed pre-numbers as "cream disc + brown ring + warm-tomato cent
 - [ ] Verify at z=5..15 — digit readable at mid zoom (z=9..12), gracefully fades or hides at low zoom
 - [ ] Verify default + selected variants both work
 - [ ] Verify against all block palette colors (if per-block coloring is in scope)
+
+
+## Step 4 — Show multi-pass numbers in the StopCallout
+
+When a waypoint's coord is visited multiple times (out-and-back trips), the map shows ONE marker (first-visit). The callout for that marker should reveal the other pass numbers so the user knows the same place reappears later in the trip.
+
+Design: keep \`STOP N OF M\` header unchanged. Below it, a secondary uppercase line \`ALSO STOP X · Y\` (omitted when there's only one visit). Same typographic treatment as the position label — small, bold, tracked, secondary color — but clearly readable as additional context.
+
+### Tasks
+
+- [x] Step 1: new Dot waypoint icon + in-app tweaks panel
+- [x] Step 2: per-block Dot color
+- [x] Step 3: skipped (the "+" indicator on the marker — would add noise)
+- [x] Step 4: render additional pass numbers in StopCallout
+  - [x] Compute additional pass numbers in RootView (coords matching the selected waypoint, excluding self)
+  - [x] Add \`additionalPassNumbers: [Int]\` to StopCallout
+  - [x] Render \`ALSO STOP …\` secondary line under the position label
