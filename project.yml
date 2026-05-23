@@ -21,6 +21,7 @@ targets:
       - path: AlaskaRouter/Search
       - path: AlaskaRouter/UI
       - path: AlaskaRouter/Resources
+      - path: AlaskaRouter/Assets.xcassets
       - path: AlaskaRouter/glyphs
         type: folder
     settings:
