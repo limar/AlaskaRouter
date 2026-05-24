@@ -3,9 +3,9 @@
 title: Bundle Noto Sans Bold glyphs (or other) for richer typography
 status: todo
 type: task
-priority: high
+priority: deferred
 created_at: 2026-05-19T09:14:43Z
-updated_at: 2026-05-23T15:17:56Z
+updated_at: 2026-05-23T17:35:50Z
 parent: AlaskaRouter-xtua
 ---
 
