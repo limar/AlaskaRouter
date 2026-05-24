@@ -111,15 +111,13 @@ struct RootView: View {
             )
             .ignoresSafeArea()
 
-            // Tap-outside-to-dismiss layer. Only active while searching;
-            // intercepts taps that don't hit the bar or the result rows.
-            if isSearchActive {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture { dismissSearch() }
-                    .transition(.opacity)
-            }
+            // (No dim-layer overlay for tap-outside-dismiss — see
+            // AlaskaRouter-l556 / -eai0. The old `Color.black.opacity(0.001)
+            // .onTapGesture { dismissSearch() }` swallowed pinch/pan/rotate
+            // gestures, so the map became un-zoomable while the search bar
+            // was focused. Dismiss-on-map-tap is now handled in
+            // `handleMapWaypointTap` which runs from the map's native
+            // single-tap recognizer — taps work AND pinch/pan stay live.)
 
             VStack(spacing: 0) {
                 FloatingSearchBar(
@@ -475,13 +473,18 @@ struct RootView: View {
             previewedResult = nil
             barState = .collapsed
             searchService.setQuery("")
-            selectedWaypointID = new.id
             bottomSheetDetent = .overview
             sheetMode = .stops
-            recentlyAddedWaypoint = new
             mapCamera = .center(new.coordinate, zoom: zoomForCategory(result.category))
+            // wqt4: declutter — the user's tap is the action, the marker on
+            // the map + the new row in the sheet are the confirmation. We
+            // intentionally do NOT auto-select the new waypoint (avoids
+            // popping the StopCallout) and do NOT emit the "Added · Undo"
+            // toast (the action is reversible via the sheet's trash button).
+            // Will revisit when the selection visual is reworked into
+            // something easy on the eye.
+            _ = new
         }
-        scheduleToastDismiss(waypointID: new.id)
     }
 
     private func dismissPreview() {
@@ -503,15 +506,15 @@ struct RootView: View {
         withAnimation(.smooth(duration: 0.45)) {
             barState = .collapsed
             searchService.setQuery("")
-            selectedWaypointID = new.id
             bottomSheetDetent = .overview
             // Force the sheet back to the stops list so the user sees their
             // newly-added stop instead of the trip switcher.
             sheetMode = .stops
-            recentlyAddedWaypoint = new
             mapCamera = .center(new.coordinate, zoom: zoomForCategory(result.category))
+            // wqt4: declutter — no auto-select, no toast. See
+            // handleAddPreviewed for the full rationale.
+            _ = new
         }
-        scheduleToastDismiss(waypointID: new.id)
     }
 
     private func scheduleToastDismiss(waypointID: UUID) {
@@ -595,6 +598,14 @@ struct RootView: View {
     // MARK: - Stop callout (AlaskaRouter-kcq8)
 
     private func handleMapWaypointTap(_ id: UUID?) {
+        // (l556 / eai0) If search is active, a tap on the map dismisses
+        // search. This replaces the old dim-layer dismiss path which
+        // blocked pinch/pan/rotate. The map's native single-tap recognizer
+        // reaches us here for both empty-area taps AND waypoint taps; we
+        // dismiss search and then fall through to normal select/deselect
+        // so the user gets both effects in one gesture (the iOS-standard
+        // "search-bar-focused + tap = both happen" behavior).
+        if isSearchActive { dismissSearch() }
         guard let id else {
             // Empty area tap — dismiss any selection / callout.
             withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }

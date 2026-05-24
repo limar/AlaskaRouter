@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-wqt4
 title: Declutter Add Waypoint — drop toast, drop auto-select
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-24T09:55:55Z
-updated_at: 2026-05-24T09:55:55Z
+updated_at: 2026-05-24T10:09:15Z
 parent: AlaskaRouter-ka6b
 ---
 
@@ -34,4 +34,22 @@ User feedback (2026-05-24):
 - [ ] Drop the toast emit on \`.added\`
 - [ ] Drop the auto-select (or just drop the callout open)
 - [ ] Verify removal flow still emits the toast (Undo path must keep working)
+- [ ] On-device check
+
+
+## Fix applied (2026-05-24)
+
+`handleAddPreviewed` and `handleFastAdd` in RootView no longer:
+- set `selectedWaypointID = new.id` (which previously opened the StopCallout on the new waypoint)
+- set `recentlyAddedWaypoint = new` (which displayed the "Added · Undo" toast for ~4s)
+- call `scheduleToastDismiss(...)` (paired with the toast)
+
+The marker appearing on the map + the new row in the bottom sheet are now the only confirmations. The map camera still gently pans to the new waypoint so the user sees what they just added.
+
+Dormant code preserved (not deleted): the toast rendering block (`if let added = recentlyAddedWaypoint { ... }`), `scheduleToastDismiss`, and `undoAdd` all remain in the file as a no-op chain. Easy to re-enable if we change our minds. The `@State var recentlyAddedWaypoint` stays declared since it's referenced in a couple of cleanup spots that fire on deletion — harmless reads of a never-set value.
+
+- [x] Identify the add-waypoint code path
+- [x] Drop the toast emit (recentlyAddedWaypoint assignment)
+- [x] Drop the auto-select (selectedWaypointID assignment)
+- [x] Verify removal flow still emits its own toast (Undo path for delete is separate and intact)
 - [ ] On-device check

@@ -60,12 +60,26 @@ struct FloatingSearchBar: View {
                 .autocorrectionDisabled(true)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.default)
+            // Clear button (AlaskaRouter-7i4o) — only visible when there's
+            // text to clear. Tapping it empties the field and keeps focus
+            // so the user can immediately keep typing.
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                    fieldFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
             Spacer(minLength: 0)
-            // Mic + AK chip stay visible at all times. The user dismisses by
-            // tapping outside the bar (RootView's dim layer → dismissSearch).
-            Image(systemName: "mic.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
+            // The AK chip stays visible at all times — region indicator
+            // (one day it'll be tappable to switch the active region pack).
+            // The mic icon was removed in 7i4o: it was decorative (no
+            // speech-to-text wired) and duplicated the iOS keyboard mic.
             Circle()
                 .fill(Color.orange.opacity(0.85))
                 .frame(width: 24, height: 24)
