@@ -55,7 +55,14 @@ struct TripBottomSheet: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var allTrips: [Trip]
-    @GestureState private var dragOffset: CGFloat = 0
+    // Live drag offset, accumulated during a drag gesture and reset to 0 on
+    // release INSIDE the same withAnimation block that sets the new detent
+    // (AlaskaRouter-p9xr). Previously this was @GestureState, which auto-
+    // resets to 0 immediately on gesture end — that reset happened OUTSIDE
+    // the detent's withAnimation, so the sheet visibly snapped back to its
+    // pre-drag detent for one frame before animating to the new one. The
+    // jump-and-rebound the user reported.
+    @State private var dragOffset: CGFloat = 0
 
     // Rename alert
     @State private var renameAlertShown = false
@@ -101,15 +108,23 @@ struct TripBottomSheet: View {
             .frame(maxHeight: .infinity, alignment: .bottom)
             .gesture(
                 DragGesture()
-                    .updating($dragOffset) { value, state, _ in
-                        state = value.translation.height
+                    .onChanged { value in
+                        dragOffset = value.translation.height
                     }
                     .onEnded { value in
                         let dy = value.translation.height
-                        if dy > 70 {
-                            withAnimation(.smooth(duration: 0.3)) { detent = collapseFrom(detent) }
-                        } else if dy < -70 {
-                            withAnimation(.smooth(duration: 0.3)) { detent = expandFrom(detent) }
+                        let newDetent: TripSheetDetent =
+                            dy >  70 ? collapseFrom(detent) :
+                            dy < -70 ? expandFrom(detent)   :
+                            detent
+                        // Reset dragOffset and set the new detent in a single
+                        // animation transaction — SwiftUI interpolates the
+                        // `targetHeight - dragOffset` expression smoothly from
+                        // (old detent, current offset) to (new detent, 0)
+                        // without the pre-fix one-frame "snap-back" pop.
+                        withAnimation(.smooth(duration: 0.3)) {
+                            detent = newDetent
+                            dragOffset = 0
                         }
                     }
             )

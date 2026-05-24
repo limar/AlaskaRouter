@@ -63,13 +63,25 @@ struct ScaleIndicator: View {
             let feet = meters * 3.28084
             if feet < 5280 { return "\(Int(feet.rounded())) ft" }
             let miles = meters / 1609.34
-            if miles < 10 { return String(format: "%.1f mi", miles) }
+            if miles < 10 { return "\(prettyOneDecimal(miles)) mi" }
             return "\(Int(miles.rounded())) mi"
         } else {
             if meters < 1000 { return "\(Int(meters.rounded())) m" }
             let km = meters / 1000
-            if km < 10 { return String(format: "%.1f km", km) }
+            if km < 10 { return "\(prettyOneDecimal(km)) km" }
             return "\(Int(km.rounded())) km"
         }
+    }
+
+    /// Format a value with at most one decimal place, dropping the trailing
+    /// `.0` for whole numbers (AlaskaRouter-i3jz). `5.0` → "5", `5.5` → "5.5",
+    /// `0.5` → "0.5". Avoids the "5.0 km" noise the user reported at maximum
+    /// zoom where the indicator stabilizes on round numbers.
+    private func prettyOneDecimal(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded == rounded.rounded() {
+            return "\(Int(rounded))"
+        }
+        return String(format: "%.1f", rounded)
     }
 }

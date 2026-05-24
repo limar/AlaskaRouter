@@ -14,16 +14,27 @@ struct MapControls: View {
     var onLocateMe: (() -> Void)? = nil
 
     var body: some View {
+        // Read live zoom from the camera; gate the +/− buttons against it.
+        // The pinch gesture already clamps to TilePackManifest.effectiveMaxZoom
+        // (see ExpeditionMapView). The "+" button used to ignore that, letting
+        // the camera's local zoom drift past the map's actual clamp — which
+        // visibly desynced the scale indicator (AlaskaRouter-i3jz).
+        let currentZoom = currentZoomOrNil ?? 0
+        let maxZoom = TilePackManifest.shared.effectiveMaxZoom
+        let minZoom: Double = 0
+        let canZoomIn  = currentZoom < maxZoom - 0.01
+        let canZoomOut = currentZoom > minZoom + 0.01
+
         VStack(spacing: 10) {
             if onLocateMe != nil {
-                button(systemImage: "location", action: onLocateMe ?? {})
+                button(systemImage: "location", enabled: true, action: onLocateMe ?? {})
             }
-            button(systemImage: "plus", action: zoomIn)
-            button(systemImage: "minus", action: zoomOut)
+            button(systemImage: "plus",  enabled: canZoomIn,  action: zoomIn)
+            button(systemImage: "minus", enabled: canZoomOut, action: zoomOut)
         }
     }
 
-    private func button(systemImage: String, action: @escaping () -> Void) -> some View {
+    private func button(systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
@@ -34,6 +45,8 @@ struct MapControls: View {
                 .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1.0 : 0.45)
     }
 
     // MARK: - Zoom
@@ -43,10 +56,21 @@ struct MapControls: View {
 
     private func adjustZoom(by delta: Double) {
         guard let (center, zoom, pitch, direction) = currentCentered() else { return }
-        let newZoom = max(0, min(20, zoom + delta))
+        // Respect the pack's effective max zoom — same clamp the pinch gesture
+        // uses on MLNMapView.maximumZoomLevel. Without this clamp, the camera's
+        // local zoom drifts past the map's clamp; the scale indicator reads
+        // the drifted value and miscomputes meters-per-pixel (i3jz).
+        let maxZoom = TilePackManifest.shared.effectiveMaxZoom
+        let newZoom = max(0, min(maxZoom, zoom + delta))
+        if abs(newZoom - zoom) < 0.001 { return }    // no-op guard at limits
         withAnimation(.smooth(duration: 0.3)) {
             camera = .center(center, zoom: newZoom, pitch: pitch, direction: direction)
         }
+    }
+
+    private var currentZoomOrNil: Double? {
+        if case let .centered(_, zoom, _, _, _) = camera.state { return zoom }
+        return nil
     }
 
     private func currentCentered() -> (CLLocationCoordinate2D, Double, Double, CLLocationDirection)? {
