@@ -47,9 +47,19 @@ REGION = "Alaska"
 #   lakes, capes, bays, glaciers, etc.
 SCHEMA_VERSION = 3
 
-# Round coords for dedupe: 1 decimal degree latitude ≈ 111 km. 4 fractional digits ≈ 11 m,
-# 3 ≈ 110 m. We use ROUND_COORD_DIGITS=3 so two POIs within ~150 m collapse.
+# Round coords for the FAST pre-pass dedup: 1 decimal degree latitude ≈ 111 km.
+# 4 fractional digits ≈ 11 m, 3 ≈ 110 m. We use ROUND_COORD_DIGITS=3 so two
+# POIs within ~150 m collapse via the cheap dict-key path.
 ROUND_COORD_DIGITS = 3
+
+# Threshold (km) for the SLOWER second-pass name-based clustering: same name
+# within this great-circle distance is treated as one logical feature, even
+# when the cheap rounded-coord key didn't catch it (sources disagree by
+# 100–500 m on what "centroid" of a feature means; rounded keys then split).
+# AlaskaRouter-d1d6. 5 km is generous enough to absorb cross-source centroid
+# drift but tight enough that distinct "Smith Creek"-type features in
+# different towns stay distinct.
+NAME_CLUSTER_KM = 5.0
 
 
 def categorize(tags: dict) -> str | None:
@@ -544,9 +554,10 @@ def build_db():
     wikidata_rows = wikidata_candidates(WIKIDATA_JSONL)
     candidates.extend(wikidata_rows)
 
-    # Pass 2: dedupe on (name_lower, lat_rounded, lon_rounded). Keep highest
-    # importance; on tie, the first-inserted survives (Python dict semantics),
-    # which means OSM wins over GNIS at equal importance.
+    # Pass 2a: cheap dict-key dedupe on (name_lower, lat_rounded, lon_rounded).
+    # Catches the easy case — same name at the same ~150 m rounded coord.
+    # Keep highest importance; on ties, the first-inserted survives (Python
+    # dict semantics), which means OSM wins over GNIS over Wikidata.
     dedup: dict[tuple[str, float, float], tuple] = {}
     for row in candidates:
         _, _, lat, lon, _, importance, name, _ = row
@@ -554,9 +565,57 @@ def build_db():
         prev = dedup.get(key)
         if prev is None or row[5] > prev[5]:   # row[5] is importance (strictly greater)
             dedup[key] = row
-    deduped = list(dedup.values())
+    stage_a = list(dedup.values())
+    after_a = len(stage_a)
+
+    # Pass 2b: name-cluster dedupe (AlaskaRouter-d1d6). Group survivors by
+    # casefold name; within each group, run greedy spatial clustering with a
+    # 5 km haversine threshold. Same name within 5 km = same logical feature
+    # even if the cheap rounded-coord key missed it (cross-source centroid
+    # drift, unlucky rounding boundaries, etc).
+    #
+    # Per-cluster winner: max(importance). On ties, Python's max returns the
+    # FIRST occurrence — and we walk stage_a in its original order (OSM
+    # first, then GNIS, then Wikidata), so the source-priority tiebreak from
+    # 2a is preserved.
+    from math import radians, sin, cos, asin, sqrt
+    def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        return 2.0 * 6371.0 * asin(sqrt(a))
+
+    by_name: dict[str, list[tuple]] = {}
+    for row in stage_a:
+        by_name.setdefault(row[6].casefold(), []).append(row)
+
+    final: list[tuple] = []
+    for _, rows in by_name.items():
+        if len(rows) == 1:
+            final.append(rows[0])
+            continue
+        # Greedy clustering: each row joins the first existing cluster whose
+        # representative (the first row added to it) is within NAME_CLUSTER_KM.
+        clusters: list[list[tuple]] = []
+        for row in rows:
+            lat, lon = row[2], row[3]
+            placed = False
+            for cluster in clusters:
+                rep = cluster[0]
+                if haversine_km(lat, lon, rep[2], rep[3]) <= NAME_CLUSTER_KM:
+                    cluster.append(row)
+                    placed = True
+                    break
+            if not placed:
+                clusters.append([row])
+        # Winner per cluster: highest importance; ties → first encountered
+        # (OSM-first preference preserved by stage_a ordering).
+        for cluster in clusters:
+            final.append(max(cluster, key=lambda r: r[5]))
+
+    deduped = final
     collapsed = len(candidates) - len(deduped)
-    print(f"[db] deduped: {len(candidates):,} -> {len(deduped):,}  (collapsed {collapsed:,} duplicates)")
+    print(f"[db] deduped: {len(candidates):,} -> after-2a {after_a:,} -> after-2b {len(deduped):,}  (collapsed {collapsed:,} total)")
 
     # Pass 3: insert.
     cur.execute("BEGIN")
