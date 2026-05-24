@@ -502,17 +502,18 @@ struct RootView: View {
             into: trip,
             using: modelContext
         )
-        isSearchFieldFocused = false
+        // gxv0: keep search open for the "type, +, type, +" rapid-add
+        // workflow. The user stays focused on the search field; only the
+        // QUERY clears so they can type the next term immediately. Camera
+        // still pans to each newly-added waypoint as visual confirmation;
+        // sheet flips to stops mode so the new stops are visible when the
+        // user eventually dismisses search.
         withAnimation(.smooth(duration: 0.45)) {
-            barState = .collapsed
             searchService.setQuery("")
             bottomSheetDetent = .overview
-            // Force the sheet back to the stops list so the user sees their
-            // newly-added stop instead of the trip switcher.
             sheetMode = .stops
             mapCamera = .center(new.coordinate, zoom: zoomForCategory(result.category))
-            // wqt4: declutter — no auto-select, no toast. See
-            // handleAddPreviewed for the full rationale.
+            // wqt4: still no auto-select, no toast.
             _ = new
         }
     }
@@ -699,11 +700,13 @@ struct RootView: View {
         if recentlyAddedWaypoint?.id == snapshot.id {
             withAnimation(.smooth(duration: 0.2)) { recentlyAddedWaypoint = nil }
         }
-        // Show the Undo toast and schedule auto-dismiss.
-        withAnimation(.smooth(duration: 0.2)) {
-            recentlyDeletedSnapshot = snapshot
-        }
-        scheduleDeletedToastDismiss(snapshotID: snapshot.id)
+        // rr71: dropped the "Removed from trip — Undo" toast emission.
+        // The trash button is now immediate-delete with no undo overlay;
+        // the user re-adds via search if it was a mistake. The dormant
+        // toast view block + undoDelete + scheduleDeletedToastDismiss stay
+        // in the file in case we want the undo back later — they're a
+        // no-op chain since recentlyDeletedSnapshot is never populated.
+        _ = snapshot
     }
 
     private func scheduleDeletedToastDismiss(snapshotID: UUID) {

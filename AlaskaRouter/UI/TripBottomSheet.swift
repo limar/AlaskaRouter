@@ -427,9 +427,11 @@ struct TripBottomSheet: View {
     }
 
     /// Stop row — small white-fill numbered pip with colored stroke, serif
-    /// name, sans kind hint. Indented if the trip has any block separators.
+    /// name, sans kind hint. Always indented under its block header — every
+    /// block (including block 0) has a header per pufj, so all stops sit
+    /// uniformly indented relative to the header above them
+    /// (AlaskaRouter-4rly fixed the conditional-indent bug here).
     private func waypointRow(_ wp: Waypoint, accent: Color) -> some View {
-        let isIndented = !trip.separators.isEmpty
         return HStack(spacing: 10) {
             // Numbered pip — white fill, 1.6pt colored stroke, tabular digit.
             // Dark mode adds a thin cream ring just outside the colored stroke
@@ -489,7 +491,7 @@ struct TripBottomSheet: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
         }
-        .padding(.leading, isIndented ? 22 : 4)
+        .padding(.leading, 22)   // uniform indent under the block header (4rly)
         .padding(.trailing, 4)
         .padding(.vertical, 8)
     }
