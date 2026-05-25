@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T15:37:59Z
+updated_at: 2026-05-25T15:57:02Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -185,3 +185,68 @@ Built a 3-variant A/B harness behind a TweaksStore picker so the user can iterat
 Open the wrench panel (top-left), scroll to **Place markers (vyfe spike)**, flip the picker between 0/1/2, close the panel. The next pan/zoom triggers a hook fire and the icons swap live.
 
 Pick the winner and let me know — I'll delete the other two variants + the picker, and lock the style.
+
+
+## Iteration 5 — SF Symbol glyphs per category, 4 variants (2026-05-25)
+
+User feedback after iteration 4:
+> "I loved the aircraft glyph you used above, why won't we draw it like that on the map instead of a cross? Let's draw corresponding glyphs for everything they exist for. Settlement → house. Airfield → aircraft. Fuel → canister. Ranger station → uniformed head or human figure. Volcano → volcano. Viewpoint → eye."
+> "The circle shape should be bigger I hardly can see it."
+> "If we cannot have them as outline, let's fallback on translucent — maybe tweakable halo around them."
+
+### Approach pivot
+
+Dropped the 4-shape geometric set entirely. Each point category now maps to a category-specific **SF Symbol** baked into a 22×22 bitmap (was 16×16 — bumped per user's visibility complaint). Apple's symbol library covers everything we need:
+
+| Category | SF Symbol |
+|---|---|
+| settlement_major | `building.2.fill` |
+| settlement, locality, hut | `house.fill` |
+| airfield | `airplane` |
+| marina | `ferry.fill` |
+| fuel | `fuelpump.fill` |
+| ev_charging | `bolt.fill` |
+| vehicle_service | `wrench.fill` |
+| food, picnic | `fork.knife` |
+| lodging | `bed.double.fill` |
+| camping | `tent.fill` |
+| visitor_center | `info.circle.fill` |
+| ranger_station | `shield.lefthalf.filled` |
+| post, bank | envelope / creditcard |
+| medical | `cross.case.fill` |
+| pharmacy | `pills.fill` |
+| store, outdoor_shop, hardware | cart / mountain.2 / hammer |
+| viewpoint | `binoculars.fill` |
+| attraction | `star.fill` |
+| historic | `building.columns.fill` |
+| lighthouse | `lightbulb.fill` |
+| peak | `triangle.fill` |
+| volcano | `flame.fill` |
+| spring, water | `drop.fill` |
+| tower | `antenna.radiowaves.left.and.right` |
+| river_crossing | `water.waves` |
+| parking | `parkingsign.circle.fill` |
+
+Each symbol has both a filled (`house.fill`) and outline (`house`) variant; the renderer picks based on the chosen visual variant.
+
+### 4 visual variants (live A/B picker)
+
+| Tweak | What |
+|---|---|
+| 0 — Filled (baseline) | saturated colored SF Symbol, no halo |
+| 1 — Outline + cream halo *(default)* | outline SF Symbol in category color + cream halo via `CGContext.setShadow(blur:1.8, color: cream)` |
+| 2 — Translucent (no halo) | filled SF Symbol at 0.65 alpha |
+| 3 — Translucent + cream halo | filled SF Symbol at 0.65 alpha + cream halo |
+
+The halo is implemented via `CGContext.setShadow(offset: .zero, blur: 1.8, color: cream)` before drawing the tinted symbol. Soft cream rim around every glyph-edge pixel — matches the labels' cream halo aesthetic.
+
+### Files
+
+- `PlaceIcons.swift` — rewritten. New `sfSymbol(for:)` mapping; new `renderGlyph(category:color:outline:withHalo:)` drawing path. 22-px canvas, 14-pt symbol point size, semibold weight for outline / regular for filled.
+- `TweaksPanel.swift` — picker bumped to 4 options.
+
+### Implementation notes for future work
+
+- SF Symbol bitmaps tint cleanly via `image.withTintColor(color, renderingMode: .alwaysOriginal)`.
+- `CGContext.setShadow` is the simplest way to halo arbitrary alpha-shaped imagery — works for both outline AND filled symbols.
+- Areal categories (`glacier`, `park`, `lake`, `island`, `waterfall`) still return nil from `image(for:)` and remain label-only.

@@ -58,15 +58,16 @@ struct TweaksPanel: View {
 
                 Section {
                     Picker("Marker style", selection: $tweaks.placeMarkerStyle) {
-                        Text("0 — Filled (iter 3)").tag(0)
+                        Text("0 — Filled (baseline)").tag(0)
                         Text("1 — Outline + cream halo").tag(1)
-                        Text("2 — Smaller + translucent").tag(2)
+                        Text("2 — Translucent (no halo)").tag(2)
+                        Text("3 — Translucent + cream halo").tag(3)
                     }
                     .pickerStyle(.inline)
                 } header: {
                     Text("Place markers (vyfe spike)")
                 } footer: {
-                    Text("Visual A/B for the place-marker icons. Pick a variant, then close this sheet — the map re-registers icons on the next pan/zoom. \"0\" is the heavy filled iteration 3; \"1\" is the candidate (stroked colored shape on a cream halo, matching the labels' aesthetic); \"2\" is a faded smaller filled. Lock the winner when you've decided.")
+                    Text("Visual A/B for the place-marker icons. All variants use SF Symbol glyphs per category (airplane, fuelpump, mountain, flame for volcano, eye/binoculars for viewpoint, …). \"0\" is filled, saturated. \"1\" is outline + cream rim — matches the labels' aesthetic. \"2\" is filled-but-translucent (no rim). \"3\" is translucent + cream halo (the 'tweakable halo' option). Pick a variant, close this sheet — the map re-registers icons on the next pan/zoom.")
                         .font(.footnote)
                 }
 

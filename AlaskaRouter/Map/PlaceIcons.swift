@@ -1,33 +1,25 @@
-// Small monochrome map markers for the places overlay (AlaskaRouter-vyfe).
+// Place-marker icons rendered via SF Symbols (AlaskaRouter-vyfe iteration 5).
 //
-// Four geometric shapes — triangle, square, cross, dot — each in a category-
-// specific warm color, baked at runtime via CoreGraphics. Registered with the
-// MapLibre style under `place-<category>` names; the style-base.json layers
-// reference them via an icon-image match expression on the feature's category.
+// Categories map to an SF Symbol (e.g. peak → mountain.2.fill, airfield →
+// airplane, fuel → fuelpump.fill, ranger_station → shield.lefthalf.filled,
+// volcano → flame.fill, viewpoint → binoculars.fill, settlement → house.fill).
+// Each symbol gets baked into a 22×22 bitmap and registered with MapLibre's
+// style.setImage(_:forName:) under "place-<category>".
 //
-// Design intent (from user feedback after the first vyfe iteration):
-//   "small and monochromatic (like those black mini-triangles for mountain
-//    peaks). A color and a small geometrical form. Labels actually are doing
-//    a great job of explaining what it is."
+// Four visual variants behind a TweaksStore A/B picker:
+//   0 — Filled (saturated, no halo)              — baseline / heavy
+//   1 — Outline + cream halo (CANDIDATE)         — outline SF + cream rim
+//   2 — Translucent, no halo                     — filled SF @ 0.65 alpha
+//   3 — Translucent + cream halo                 — filled SF @ 0.65 alpha + rim
 //
-// "Areal" categories (glacier, park, lake, island, waterfall) intentionally
-// have NO icon — they're visually identifiable on the OpenTopoMap raster, and
-// adding a marker on a 50 km² lake would be confusing. For those, the label
-// alone is the tap target (anchored at the centroid).
+// Halo is implemented via CGContext.setShadow(offset:zero, blur, color: cream),
+// which puts a soft cream rim around every non-transparent pixel of the glyph.
 //
-// MapLibre symbol-layer collision treats icon+text as one unit by default:
-// if either part can't place (text-optional=false, icon-optional=false), the
-// whole symbol is dropped. That gives us the "icon and label appear or
-// disappear together" guarantee the user asked for.
+// Areal categories (glacier, park, lake, island, waterfall) return nil from
+// `image(for:)` — those features remain label-only on the map, since they're
+// visually identifiable from the basemap shape itself.
 
 import UIKit
-
-enum PlaceShape {
-    case triangle
-    case square
-    case cross
-    case dot
-}
 
 enum PlaceIcons {
 
@@ -40,27 +32,34 @@ enum PlaceIcons {
 
     // MARK: - Public API
 
-    /// All categories that should get a rendered marker. Areal categories
+    /// All point categories that get a rendered marker. Areal categories
     /// (glacier, park, lake, island, waterfall) are intentionally omitted —
     /// they're label-only on the map.
     static let iconedCategories: [String] = [
-        "peak",
-        "settlement_major", "settlement",
-        "airfield",
-        "fuel", "food", "lodging", "camping",
-        "visitor_center", "ranger_station",
-        "viewpoint", "attraction", "marina",
-        "volcano",
-        "hut", "spring", "cave", "water", "services",
-        "bank", "post", "medical", "pharmacy",
-        "store", "outdoor_shop", "vehicle_service", "hardware",
-        "ev_charging", "river_crossing", "historic",
-        "tower", "lighthouse", "picnic", "facilities",
-        "locality", "parking",
+        // Settlements / habitation
+        "settlement_major", "settlement", "locality", "hut",
+        // Air / boats / vehicles
+        "airfield", "marina",
+        // Energy / services
+        "fuel", "ev_charging", "vehicle_service",
+        // Hospitality / amenities
+        "food", "lodging", "camping", "picnic",
+        // Civic / info
+        "visitor_center", "ranger_station", "post", "bank",
+        // Health
+        "medical", "pharmacy",
+        // Shopping
+        "store", "outdoor_shop", "hardware",
+        // Sights / scenery
+        "viewpoint", "attraction", "historic", "lighthouse",
+        // Natural points
+        "peak", "volcano", "spring", "cave", "water",
+        // Infrastructure
+        "tower", "river_crossing", "services", "facilities", "parking",
     ]
 
     /// Marker name as referenced from style-base.json's icon-image match
-    /// expression. Mirror this list in the style if changed.
+    /// expression.
     static func iconName(for category: String) -> String {
         "place-\(category)"
     }
@@ -70,45 +69,54 @@ enum PlaceIcons {
     /// areal categories (those should not carry an icon).
     @MainActor
     static func image(for category: String) -> UIImage? {
-        guard let shape = shape(for: category) else { return nil }
+        guard isPointCategory(category) else { return nil }
         let color = color(for: category)
-        return render(shape: shape, color: color, style: TweaksStore.shared.placeMarkerStyle)
+        return render(
+            category: category,
+            color: color,
+            style: TweaksStore.shared.placeMarkerStyle
+        )
     }
 
-    // MARK: - Category → shape/color
+    // MARK: - Category classification + colors
 
-    /// Areal categories return nil — label-only on the map.
-    private static func shape(for category: String) -> PlaceShape? {
+    /// Areal categories don't get an icon — only a label centered on the centroid.
+    private static func isPointCategory(_ category: String) -> Bool {
         switch category {
-        case "peak":                                    return .triangle
-        case "settlement_major", "settlement":          return .square
-        case "airfield":                                return .cross
-        case "glacier", "park", "lake", "island",
-             "waterfall":                               return nil      // areal — no icon
-        default:                                        return .dot
+        case "glacier", "park", "lake", "island", "waterfall":  return false
+        default:                                                return true
         }
     }
 
-    /// Warm-paper palette colors mirroring the text-color match expressions
-    /// in style-base.json so a feature's icon and label share a hue.
+    /// Warm-paper palette mirroring the text-color match expressions in
+    /// style-base.json so a feature's icon and label share a hue.
     private static func color(for category: String) -> UIColor {
         switch category {
         case "peak":                  return rgb(0x5A, 0x28, 0x18) // dark terracotta
         case "volcano":               return rgb(0x88, 0x30, 0x18) // red-orange
         case "settlement_major":      return rgb(0x3A, 0x2A, 0x18) // dark warm brown
-        case "settlement":            return rgb(0x5A, 0x40, 0x30) // medium brown
+        case "settlement", "locality", "hut": return rgb(0x5A, 0x40, 0x30) // medium brown
         case "airfield":              return rgb(0x38, 0x40, 0x50) // slate
         case "fuel":                  return rgb(0x88, 0x30, 0x18) // red-orange
+        case "ev_charging":           return rgb(0x28, 0x55, 0x28) // green
+        case "vehicle_service":       return rgb(0x38, 0x40, 0x50) // slate
         case "ranger_station":        return rgb(0x1F, 0x40, 0x28) // forest green
         case "marina":                return rgb(0x1F, 0x38, 0x50) // deep blue
         case "viewpoint":             return rgb(0x70, 0x40, 0x18) // warm orange
         case "attraction",
-             "visitor_center":        return rgb(0x70, 0x52, 0x18) // amber
-        case "lighthouse":            return rgb(0x70, 0x52, 0x18) // amber
-        case "historic":              return rgb(0x6A, 0x4A, 0x2A) // sepia
-        case "medical",
-             "pharmacy":              return rgb(0x88, 0x30, 0x30) // medical red
-        case "ev_charging":           return rgb(0x28, 0x55, 0x28) // green
+             "visitor_center",
+             "historic",
+             "lighthouse":            return rgb(0x70, 0x52, 0x18) // amber
+        case "medical", "pharmacy":   return rgb(0x88, 0x30, 0x30) // medical red
+        case "spring", "water",
+             "river_crossing":       return rgb(0x2A, 0x52, 0x78) // water blue
+        case "food", "picnic":        return rgb(0x6A, 0x38, 0x18) // food brown
+        case "lodging":               return rgb(0x4A, 0x32, 0x22) // lodging brown
+        case "camping":               return rgb(0x28, 0x55, 0x28) // tent green
+        case "post", "bank":          return rgb(0x4A, 0x38, 0x28) // muted brown
+        case "store", "outdoor_shop",
+             "hardware":              return rgb(0x4A, 0x38, 0x28) // muted brown
+        case "tower":                 return rgb(0x38, 0x40, 0x50) // slate
         default:                      return rgb(0x3A, 0x2A, 0x18) // warm brown default
         }
     }
@@ -117,108 +125,111 @@ enum PlaceIcons {
         UIColor(red: CGFloat(r)/255, green: CGFloat(g)/255, blue: CGFloat(b)/255, alpha: 1.0)
     }
 
+    // MARK: - SF Symbol mapping
+
+    /// Returns (filled-variant-name, outline-variant-name) for a category.
+    /// SF Symbols where outline+fill are the same glyph (e.g. `airplane`)
+    /// return the same name in both slots.
+    private static func sfSymbol(for category: String) -> (filled: String, outline: String) {
+        switch category {
+        case "settlement_major":   return ("building.2.fill",        "building.2")
+        case "settlement":         return ("house.fill",             "house")
+        case "locality", "hut":    return ("house.fill",             "house")
+        case "airfield":           return ("airplane",               "airplane")
+        case "marina":             return ("ferry.fill",             "ferry")
+        case "fuel":               return ("fuelpump.fill",          "fuelpump")
+        case "ev_charging":        return ("bolt.fill",              "bolt")
+        case "vehicle_service":    return ("wrench.fill",            "wrench")
+        case "food", "picnic":     return ("fork.knife",             "fork.knife")
+        case "lodging":            return ("bed.double.fill",        "bed.double")
+        case "camping":            return ("tent.fill",              "tent")
+        case "visitor_center":     return ("info.circle.fill",       "info.circle")
+        case "ranger_station":     return ("shield.lefthalf.filled", "shield")
+        case "post":               return ("envelope.fill",          "envelope")
+        case "bank":               return ("creditcard.fill",        "creditcard")
+        case "medical":            return ("cross.case.fill",        "cross.case")
+        case "pharmacy":           return ("pills.fill",             "pills")
+        case "store":              return ("cart.fill",              "cart")
+        case "outdoor_shop":       return ("mountain.2.fill",        "mountain.2")
+        case "hardware":           return ("hammer.fill",            "hammer")
+        case "viewpoint":          return ("binoculars.fill",        "binoculars")
+        case "attraction":         return ("star.fill",              "star")
+        case "historic":           return ("building.columns.fill",  "building.columns")
+        case "lighthouse":         return ("lightbulb.fill",         "lightbulb")
+        case "peak":               return ("triangle.fill",          "triangle")
+        case "volcano":            return ("flame.fill",             "flame")
+        case "spring", "water":    return ("drop.fill",              "drop")
+        case "cave":               return ("circle.dotted",          "circle.dotted")
+        case "tower":              return ("antenna.radiowaves.left.and.right",
+                                            "antenna.radiowaves.left.and.right")
+        case "river_crossing":     return ("water.waves",            "water.waves")
+        case "services":           return ("wrench.fill",            "wrench")
+        case "facilities":         return ("wrench.and.screwdriver.fill",
+                                            "wrench.and.screwdriver")
+        case "parking":            return ("parkingsign.circle.fill","parkingsign.circle")
+        default:                   return ("mappin.circle.fill",     "mappin")
+        }
+    }
+
     // MARK: - Render
 
-    /// Render a marker using the selected visual style (spike harness):
-    ///   0 — filled (iteration 3): saturated 16×16 colored shape
-    ///   1 — outline + cream halo: stroke-only color over a wider cream
-    ///       halo path, baked into a 16×16 bitmap
-    ///   2 — smaller + translucent: 16×16 canvas, shape inset further +
-    ///       alpha 0.6
-    private static func render(shape: PlaceShape, color: UIColor, style: Int) -> UIImage {
-        let size: CGFloat = 16
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+    /// Canvas + glyph sizes, tuned so peaks/houses/planes read clearly at
+    /// MapLibre's icon-size 1.0 on a Retina display. Bumped from iter-3's
+    /// 16×16 after user feedback: "the circle shape should be bigger,
+    /// I hardly can see it."
+    private static let canvas: CGFloat = 22
+    private static let glyphPointSize: CGFloat = 14
+
+    private static func render(category: String, color: UIColor, style: Int) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvas, height: canvas))
         return renderer.image { _ in
             switch style {
-            case 1: renderOutlineHalo(shape: shape, color: color, size: size)
-            case 2: renderTranslucent(shape: shape, color: color, size: size)
-            default: renderFilled(shape: shape, color: color, size: size)
+            case 1: renderGlyph(category: category, color: color, outline: true,  withHalo: true)
+            case 2: renderGlyph(category: category, color: color.withAlphaComponent(0.65),
+                                outline: false, withHalo: false)
+            case 3: renderGlyph(category: category, color: color.withAlphaComponent(0.65),
+                                outline: false, withHalo: true)
+            default: renderGlyph(category: category, color: color, outline: false, withHalo: false)
             }
         }
     }
 
-    /// Variant 0 — iteration-3 baseline. Saturated filled colored shape.
-    private static func renderFilled(shape: PlaceShape, color: UIColor, size: CGFloat) {
-        color.setFill()
-        path(for: shape, in: size).fill()
-    }
+    /// Draw a single SF Symbol centered in the canvas.
+    /// - `outline`: pick the outline variant of the symbol where one exists.
+    /// - `withHalo`: surround the glyph with a soft cream rim via CGContext
+    ///   shadow. Same cream color the labels use, so icon+label share a
+    ///   visual treatment.
+    private static func renderGlyph(category: String, color: UIColor, outline: Bool, withHalo: Bool) {
+        let names = sfSymbol(for: category)
+        let chosenName = outline ? names.outline : names.filled
+        // Heavier weight on outline variants to compensate for the thinner
+        // stroke; lighter on filled so the colored shape doesn't overwhelm.
+        let weight: UIImage.SymbolWeight = outline ? .semibold : .regular
+        let config = UIImage.SymbolConfiguration(pointSize: glyphPointSize, weight: weight)
+        guard let baseSymbol = UIImage(systemName: chosenName, withConfiguration: config)
+                ?? UIImage(systemName: names.filled, withConfiguration: config)
+        else { return }
+        let tinted = baseSymbol.withTintColor(color, renderingMode: .alwaysOriginal)
 
-    /// Variant 2 — smaller (extra inset) + translucent (alpha 0.6).
-    private static func renderTranslucent(shape: PlaceShape, color: UIColor, size: CGFloat) {
-        color.withAlphaComponent(0.6).setFill()
-        // Shrink the shape by re-rendering with a smaller "virtual" size centered.
-        // Quickest: just apply an extra inset by drawing into a smaller rect.
-        let inner: CGFloat = 10
-        let off = (size - inner) / 2
-        let ctx = UIGraphicsGetCurrentContext()
-        ctx?.saveGState()
-        ctx?.translateBy(x: off, y: off)
-        path(for: shape, in: inner).fill()
-        ctx?.restoreGState()
-    }
+        let symW = tinted.size.width
+        let symH = tinted.size.height
+        let drawRect = CGRect(
+            x: (canvas - symW) / 2,
+            y: (canvas - symH) / 2,
+            width: symW,
+            height: symH
+        )
 
-    /// Variant 1 — outline shape on a cream halo. Visually coherent with the
-    /// labels (which carry the same cream halo treatment). Drawn as: a wider
-    /// cream stroke layer first, then a thinner colored stroke on top.
-    /// Shapes are *not filled* — the interior is transparent so the basemap
-    /// shows through, lightening the visual weight.
-    private static func renderOutlineHalo(shape: PlaceShape, color: UIColor, size: CGFloat) {
-        let cream = UIColor(red: 1.0, green: 250/255, blue: 238/255, alpha: 0.92)
-        // Slightly smaller shape to leave room for the halo stroke.
-        let inner: CGFloat = 12
-        let off = (size - inner) / 2
-        let ctx = UIGraphicsGetCurrentContext()
-        ctx?.saveGState()
-        ctx?.translateBy(x: off, y: off)
-        let p = path(for: shape, in: inner)
-        // Round joins/caps for a friendlier hand-drawn feel.
-        p.lineJoinStyle = .round
-        p.lineCapStyle = .round
-        // Cream halo first (wider).
-        cream.setStroke()
-        p.lineWidth = 3.0
-        p.stroke()
-        // Colored thin stroke on top.
-        color.setStroke()
-        p.lineWidth = 1.4
-        p.stroke()
-        ctx?.restoreGState()
-    }
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
 
-    /// Pure-geometry path builder for the four shapes, drawn inside an
-    /// `inner × inner` square at origin (0, 0). Caller transforms or
-    /// strokes/fills as needed.
-    private static func path(for shape: PlaceShape, in inner: CGFloat) -> UIBezierPath {
-        let rect = CGRect(x: 0, y: 0, width: inner, height: inner)
-        switch shape {
-        case .triangle:
-            let inset: CGFloat = 1.0
-            let p = UIBezierPath()
-            p.move(to:    CGPoint(x: inner / 2,         y: inset))
-            p.addLine(to: CGPoint(x: inner - inset,     y: inner - inset))
-            p.addLine(to: CGPoint(x: inset,             y: inner - inset))
-            p.close()
-            return p
-        case .square:
-            let inset: CGFloat = 2.0
-            return UIBezierPath(roundedRect: rect.insetBy(dx: inset, dy: inset),
-                                cornerRadius: 1.2)
-        case .cross:
-            let armLen: CGFloat = inner / 2 - 1.5
-            let armWidth: CGFloat = 2.2
-            let cx = inner / 2, cy = inner / 2
-            // Compose horizontal + vertical bars into a single path
-            // (matters for the outline variant which strokes the path).
-            let p = UIBezierPath(rect: CGRect(
-                x: cx - armLen, y: cy - armWidth / 2,
-                width: armLen * 2, height: armWidth))
-            p.append(UIBezierPath(rect: CGRect(
-                x: cx - armWidth / 2, y: cy - armLen,
-                width: armWidth, height: armLen * 2)))
-            return p
-        case .dot:
-            let inset: CGFloat = 3.5
-            return UIBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset))
+        if withHalo {
+            // Cream halo via shadow blur. Drawing the tinted symbol with this
+            // shadow set lays down both: the cream blur around all alpha-
+            // positive pixels, AND the symbol itself in its tinted color.
+            // A 1.8-px blur reads as a thin halo at our 22-px canvas.
+            let cream = UIColor(red: 1.0, green: 250/255, blue: 238/255, alpha: 0.95)
+            ctx.setShadow(offset: .zero, blur: 1.8, color: cream.cgColor)
         }
+        tinted.draw(in: drawRect)
     }
 }
