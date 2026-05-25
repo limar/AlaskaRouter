@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T09:42:37Z
+updated_at: 2026-05-25T13:53:37Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -83,3 +83,14 @@ Ready to implement when the user says go.
 ## Next bean: AlaskaRouter-5gmw
 
 Wire `.onTapMapGesture(on:)` to include the five new layer IDs, dispatch to a new `PlacePreviewCallout`, hook up "+ Add to trip" via SmartInsert.
+
+
+## Gotcha (2026-05-25)
+
+`AlaskaRouter/Resources/` is a *group* path in `project.yml`, not a folder reference. New files in `Resources/` aren't auto-picked-up by Xcode — `xcodegen generate` must be re-run BEFORE the next build. Otherwise the build succeeds but the resource is missing at runtime and any `Bundle.main.url(forResource:)` lookup fatalError-s.
+
+The `glyphs/` path IS `type: folder` (folder reference) — those work without regen. Only the group paths need the dance.
+
+**Rule of thumb:** any time we add a file to `AlaskaRouter/Resources/`, `AlaskaRouter/Assets.xcassets/`, or any code subdirectory tracked as a group, run `xcodegen` before the next build.
+
+Hit this with the newly-bundled `places.geojson` — build was clean, runtime tripped the `guard let placesURL` fatalError. Fixed by regenerating + rebuilding.
