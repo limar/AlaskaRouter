@@ -133,8 +133,13 @@ enum PlaceIcons {
     private static func sfSymbol(for category: String) -> (filled: String, outline: String) {
         switch category {
         case "settlement_major":   return ("building.2.fill",        "building.2")
-        case "settlement":         return ("house.fill",             "house")
-        case "locality", "hut":    return ("house.fill",             "house")
+        // Settlements + localities + huts get the classic open-circle paper-
+        // atlas village marker. Halo wraps the ring so it reads even on busy
+        // terrain. ("circle" is outline; "circle.fill" is filled — we use
+        // the outline glyph in both slots so all visual variants get the
+        // hollow look the user asked for.)
+        case "settlement",
+             "locality", "hut":    return ("circle",                 "circle")
         case "airfield":           return ("airplane",               "airplane")
         case "marina":             return ("ferry.fill",             "ferry")
         case "fuel":               return ("fuelpump.fill",          "fuelpump")
@@ -182,6 +187,17 @@ enum PlaceIcons {
     private static let canvas: CGFloat = 26
     private static let glyphPointSize: CGFloat = 17
 
+    /// Per-category override of the SF Symbol point size. Defaults to
+    /// `glyphPointSize` when not listed. Used to shrink categories the
+    /// user wants to read as small/subtle markers (settlements as a
+    /// "small o", not a chunky house).
+    private static func pointSize(for category: String) -> CGFloat {
+        switch category {
+        case "settlement", "locality", "hut": return 11   // small "o" markers
+        default:                              return glyphPointSize
+        }
+    }
+
     private static func render(category: String, color: UIColor, style: Int) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvas, height: canvas))
         return renderer.image { _ in
@@ -212,7 +228,7 @@ enum PlaceIcons {
         // Heavier weight on outline variants to compensate for the thinner
         // stroke; lighter on filled so the colored shape doesn't overwhelm.
         let weight: UIImage.SymbolWeight = outline ? .semibold : .regular
-        let config = UIImage.SymbolConfiguration(pointSize: glyphPointSize, weight: weight)
+        let config = UIImage.SymbolConfiguration(pointSize: pointSize(for: category), weight: weight)
         guard let baseSymbol = UIImage(systemName: chosenName, withConfiguration: config)
                 ?? UIImage(systemName: names.filled, withConfiguration: config)
         else { return }

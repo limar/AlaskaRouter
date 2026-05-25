@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T16:32:24Z
+updated_at: 2026-05-25T16:47:08Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -333,3 +333,32 @@ True fix is `6ihk` (self-render OpenTopoMap). Until then, the z=5↔6 transition
 - `MapLabelSizing.swift` — new. Mirror of label text-size schedules; applies multiplier at runtime.
 - `ExpeditionMapView.swift` — call `MapLabelSizing.apply` in the unsafe hook.
 - `RootView.swift` — added `labelSizeMultiplier` to `tweaksFingerprint`.
+
+
+## Iteration 8 — peak regression fix + settlement circle (2026-05-25)
+
+User feedback after iteration 7:
+> "I don't see peaks at all including their labels. Regression?"
+> "Settlement icon (house) is a bit cluttering, let's switch to a small empty circle with halo — sized like a small 'o'. Other icons are good."
+
+### Peak regression
+
+Suspected: the iteration-7 `match` expression on `icon-size` in `places-tier-natural-major` (peak: 0.45-0.65, others: 0.7-1.0) silently broke MapLibre's parsing for the whole layer. MapLibre style errors can be silent — a malformed nested-interpolate-inside-match expression often just drops the layer with no visible diagnostic.
+
+**Fix:** split peaks into their OWN layer `places-tier-peak`. Simple, no nested expressions, the icon-size is a flat interpolate (0.45→0.65). `places-tier-natural-major` now carries glacier/park/fuel only.
+
+This also removes any temptation to use `match` expressions on icon-size in the future — splitting layers is cleaner.
+
+### Settlement → small open circle
+
+PlaceIcons SF Symbol mapping for `settlement`, `locality`, `hut` changed from `house.fill`/`house` → `circle`/`circle` (outline glyph in BOTH the filled and outline slots — produces a hollow ring in every visual variant).
+
+Plus a new `pointSize(for:)` per-category override: settlement/locality/hut get glyph point size **11** (was the global 17). Reads as a small "o" — paper-atlas village convention. Other categories keep 17.
+
+Combined with the variant-3 cream halo, settlements now render as a small hollow circle wrapped in cream. The visual user explicitly asked for.
+
+### Files
+
+- `style-base.json` — new `places-tier-peak` layer (peaks only, small icon, flat interpolate); `places-tier-natural-major` now filters to `glacier`/`park`/`fuel`.
+- `MapLabelSizing.swift` — added `places-tier-peak` to the text-size schedule so the user's label-size multiplier applies to peak labels too.
+- `PlaceIcons.swift` — settlement/locality/hut now use SF `circle` (outline) in both variant slots. New `pointSize(for:)` override.

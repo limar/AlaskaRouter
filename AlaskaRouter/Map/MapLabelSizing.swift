@@ -28,6 +28,7 @@ enum MapLabelSizing {
         // Places overlay (places.geojson)
         ("places-tier-major-settlement", [(4, 11),  (8, 13), (12, 15)]),
         ("places-tier-settlement",       [(6, 10), (10, 12), (14, 13)]),
+        ("places-tier-peak",             [(7,  9), (12, 11.5)]),
         ("places-tier-natural-major",    [(7,  9), (12, 11.5)]),
         ("places-tier-misc",             [(9,  9), (13, 11)]),
         ("places-tier-long-tail",        [(11, 8.5), (16, 10.5)]),

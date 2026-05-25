@@ -195,24 +195,52 @@
     },
 
     {
+      "comment": "Peaks split into their own layer (places-tier-peak) below — smaller icon, decluttered. natural-major now carries glacier/park/fuel only.",
+
+      "id": "places-tier-peak",
+      "type": "symbol",
+      "source": "places",
+      "filter": ["all",
+        ["==", ["get", "category"], "peak"],
+        [">=", ["get", "importance"], 0.6]
+      ],
+      "minzoom": 7,
+      "layout": {
+        "icon-image": "place-peak",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 7, 0.45, 13, 0.65],
+        "icon-anchor": "center",
+        "icon-allow-overlap": false,
+        "icon-padding": 1,
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 7, 9, 12, 11.5],
+        "text-anchor": "top",
+        "text-offset": [0, 0.55],
+        "text-allow-overlap": false,
+        "text-padding": 3
+      },
+      "paint": {
+        "text-color": "#5a2818",
+        "text-halo-color": "rgba(255,250,238,0.92)",
+        "text-halo-width": 1.4
+      }
+    },
+
+    {
       "id": "places-tier-natural-major",
       "type": "symbol",
       "source": "places",
       "filter": ["all",
-        ["in", ["get", "category"], ["literal", ["peak", "glacier", "park", "fuel"]]],
+        ["in", ["get", "category"], ["literal", ["glacier", "park", "fuel"]]],
         [">=", ["get", "importance"], 0.6]
       ],
       "minzoom": 7,
       "layout": {
         "icon-image": ["match", ["get", "category"],
-          "peak", "place-peak",
           "fuel", "place-fuel",
           ""
         ],
-        "icon-size": ["match", ["get", "category"],
-          "peak", ["interpolate", ["linear"], ["zoom"], 7, 0.45, 13, 0.65],
-          ["interpolate", ["linear"], ["zoom"], 7, 0.7, 13, 1.0]
-        ],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 7, 0.7, 13, 1.0],
         "icon-anchor": "center",
         "icon-allow-overlap": false,
         "icon-padding": 1,
