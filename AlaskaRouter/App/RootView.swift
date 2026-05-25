@@ -110,7 +110,8 @@ struct RootView: View {
                 userLocation: locationProvider.lastLocation?.coordinate,
                 tweaksFingerprint: tweaksFingerprint,
                 onWaypointTap: handleMapWaypointTap,
-                onPlaceTap: handleMapPlaceTap
+                onPlaceTap: handleMapPlaceTap,
+                onEmptyMapTap: handleMapEmptyTap
             )
             .ignoresSafeArea()
 
@@ -291,6 +292,11 @@ struct RootView: View {
                 .presentationDetents([.medium, .large])
         }
         .onAppear {
+            // (4r8l) Pre-parse places.geojson into the AdminAreaLookup
+            // donor table so the first empty-map tap doesn't pay the
+            // ~200 ms parse cost. Idempotent; subsequent calls no-op.
+            AdminAreaLookup.shared.startLoad()
+
             if let prefill = LaunchArgs.prefillQuery {
                 searchService.setQuery(prefill)
                 if let action = LaunchArgs.debugAutoAction {
@@ -601,23 +607,13 @@ struct RootView: View {
 
     // MARK: - Stop callout (AlaskaRouter-kcq8)
 
-    private func handleMapWaypointTap(_ id: UUID?) {
+    private func handleMapWaypointTap(_ id: UUID) {
         // (l556 / eai0) If search is active, a tap on the map dismisses
-        // search. This replaces the old dim-layer dismiss path which
-        // blocked pinch/pan/rotate. The map's native single-tap recognizer
-        // reaches us here for both empty-area taps AND waypoint taps; we
-        // dismiss search and then fall through to normal select/deselect
-        // so the user gets both effects in one gesture (the iOS-standard
-        // "search-bar-focused + tap = both happen" behavior).
+        // search. The map's native single-tap recognizer fires this for
+        // a hit on one of the trip-waypoint marker layers; empty taps
+        // now go through `handleMapEmptyTap` (4r8l) instead, so we no
+        // longer need the `nil` id branch here.
         if isSearchActive { dismissSearch() }
-        guard let id else {
-            // Empty area tap — dismiss any selection / preview callout.
-            withAnimation(.smooth(duration: 0.2)) {
-                selectedWaypointID = nil
-                previewedResult = nil       // 5gmw: also clear place preview
-            }
-            return
-        }
         guard let trip = activeTrip,
               let wp = trip.orderedWaypoints.first(where: { $0.id == id })
         else { return }
@@ -625,6 +621,48 @@ struct RootView: View {
         withAnimation(.smooth(duration: 0.2)) {
             selectedWaypointID = wp.id
             mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
+        }
+    }
+
+    /// AlaskaRouter-4r8l — empty-area tap. iOS Maps convention: tap
+    /// dismisses any open overlay first; a second tap on truly empty
+    /// terrain drops a pin. We render the pin as a synthesized "Dropped
+    /// pin" SearchResult so the existing PreviewCallout renders with
+    /// "+ Add to trip" and we reuse the same SmartInsert add path.
+    /// Admin area is resolved at runtime via nearest-GNIS-within-30 km.
+    private func handleMapEmptyTap(_ coord: CLLocationCoordinate2D) {
+        // Dismiss-first behavior (highest priority each).
+        if isSearchActive {
+            dismissSearch()
+            return
+        }
+        if previewedResult != nil {
+            withAnimation(.smooth(duration: 0.2)) { previewedResult = nil }
+            return
+        }
+        if selectedWaypointID != nil {
+            withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
+            return
+        }
+        // Truly empty — drop a pin.
+        let admin = AdminAreaLookup.shared.nearestAdmin(for: coord)
+        var hasher = Hasher()
+        hasher.combine(coord.latitude)
+        hasher.combine(coord.longitude)
+        let synthId = Int64(hasher.finalize())
+        let pin = SearchResult(
+            id: synthId,
+            name: "Dropped pin",
+            altNames: "",
+            category: "",                                  // default mappin.circle.fill
+            coord: coord,
+            importance: 0,
+            stage: SearchStage.strict.rawValue,
+            editDistance: 0,
+            adminArea: admin
+        )
+        withAnimation(.smooth(duration: 0.2)) {
+            previewedResult = pin
         }
     }
 

@@ -41,6 +41,16 @@ struct PreviewCallout: View {
                 .buttonStyle(.plain)
             }
 
+            // Admin-area line (AlaskaRouter-b7g0 / -5gmw / -4r8l). Same
+            // "Borough, AK, USA" format the search-results dropdown uses.
+            // "AK, USA" universal fallback when the admin-area lookup
+            // returned nothing (rare — far ocean tap, or pre-load while
+            // the donor index is still parsing in the background).
+            Text(result.adminArea.isEmpty ? "AK, USA" : "\(result.adminArea), AK, USA")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 32)
+
             if let d = distanceFromTripText {
                 Text(d)
                     .font(.system(size: 12, weight: .regular))

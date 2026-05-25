@@ -97,15 +97,22 @@ struct ExpeditionMapView: View {
     /// fires our unsafe hook with the new tweak values applied to icons.
     let tweaksFingerprint: String
 
-    /// Map tap on a waypoint marker (AlaskaRouter-kcq8). `nil` means an empty
-    /// area was tapped — the parent should clear selection.
-    var onWaypointTap: ((UUID?) -> Void)? = nil
+    /// Map tap on a waypoint marker (AlaskaRouter-kcq8). Fires only when
+    /// a marker is actually hit — empty taps go through `onEmptyMapTap`
+    /// (4r8l) so the parent can drop a pin rather than just clear state.
+    var onWaypointTap: ((UUID) -> Void)? = nil
 
     /// Map tap on a places.geojson feature — anything in a `places-tier-*`
     /// layer (AlaskaRouter-5gmw). Parent renders a callout with name +
     /// admin_area + "+ Add to trip" capsule. Trip waypoint taps take
     /// priority over place taps when both are stacked under the touch.
     var onPlaceTap: ((MapPlaceTap) -> Void)? = nil
+
+    /// Map tap on empty terrain (AlaskaRouter-4r8l) — no trip waypoint
+    /// and no places.geojson feature was hit. Parent decides whether
+    /// to dismiss an open overlay first or drop a pin at this coord.
+    /// Replaces the old `onWaypointTap(nil)` empty signal.
+    var onEmptyMapTap: ((CLLocationCoordinate2D) -> Void)? = nil
 
     /// Tappable layer ids for hit-test. Includes both default + selected
     /// trip-marker layers AND the places-tier-* overlay so the same single
@@ -754,10 +761,10 @@ struct ExpeditionMapView: View {
         // layers. Dispatch order (highest priority first):
         //   1. Trip waypoint hit  → onWaypointTap(UUID)
         //   2. Place feature hit  → onPlaceTap(MapPlaceTap)         (5gmw)
-        //   3. Empty area         → onWaypointTap(nil)
+        //   3. Empty area         → onEmptyMapTap(coordinate)        (4r8l)
         // Trip waypoints win when both are stacked because they're the
         // user's own data and the tap is most likely intended for them.
-        .onTapMapGesture(on: Self.allTappableLayerIDs) { _, features in
+        .onTapMapGesture(on: Self.allTappableLayerIDs) { context, features in
             // 1. Trip waypoint?
             if let wp = features.first(where: { $0.attribute(forKey: "wpID") != nil }),
                let raw = wp.attribute(forKey: "wpID") as? String,
@@ -780,8 +787,9 @@ struct ExpeditionMapView: View {
                 onPlaceTap?(tap)
                 return
             }
-            // 3. Empty.
-            onWaypointTap?(nil)
+            // 3. Empty — hand the coord to the parent so it can drop a pin
+            //    (or dismiss whatever's currently open).
+            onEmptyMapTap?(context.coordinate)
         }
         // Clamp pinch-zoom to the pack's effective max so the user can't
         // pinch past the highest available tile zoom (z=10 today) into ugly
