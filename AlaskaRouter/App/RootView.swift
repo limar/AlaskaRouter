@@ -59,11 +59,12 @@ struct RootView: View {
     /// markers re-rendered with the new tweak values.
     private var tweaksFingerprint: String {
         String(
-            format: "d%.0f-s%.0f-w%.2f-r%.2f",
+            format: "d%.0f-s%.0f-w%.2f-r%.2f-m%d",
             tweaksStore.dotDiameterDefault,
             tweaksStore.dotDiameterSelected,
             tweaksStore.dotFontWeight,
-            tweaksStore.dotFontSizeRatio
+            tweaksStore.dotFontSizeRatio,
+            tweaksStore.placeMarkerStyle    // vyfe spike — re-register place icons on change
         )
     }
 

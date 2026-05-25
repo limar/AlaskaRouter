@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T15:14:28Z
+updated_at: 2026-05-25T15:37:59Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -155,3 +155,33 @@ Style layer's `icon-image` is a `match` expression on `category`. For point cate
 - **(new)** `AlaskaRouter/Map/PlaceIcons.swift` — shape + color logic, CoreGraphics rendering, runtime icon registration list.
 - `AlaskaRouter/Map/ExpeditionMapView.swift` — register place icons in the unsafe map hook, once per style.
 - `AlaskaRouter/Resources/style-base.json` — all 5 tiers become combined icon+label symbol layers.
+
+
+## Iteration 4 — A/B/C spike harness (2026-05-25)
+
+User feedback after iteration 3:
+> "Thick black marks look ugly on our artistic map with labels which look creative with their thin white borders. Smaller or lively colors, even transparent and pale. Cluttered and invaded."
+
+Brainstormed: at the scale we render (~10k visible symbols max), MapLibre's GPU-atlased symbol pipeline handles icons and text glyphs identically — performance is NOT the bottleneck. The constraint is **aesthetic coherence with the labels** (thin cream halo, warm-paper feel).
+
+Built a 3-variant A/B harness behind a TweaksStore picker so the user can iterate visually:
+
+| Variant | Spec |
+|---|---|
+| 0 | **Filled** (iteration 3 baseline) — saturated colored shape at 16 px |
+| 1 | **Outline + cream halo** — stroke-only shape on a wider cream halo path, matching the labels' visual treatment. Interior is transparent so the basemap shows through. |
+| 2 | **Smaller + translucent** — 10 px inset + 0.6 alpha. Faded version of 0. |
+
+### Files
+
+- `TweaksStore.swift` — `placeMarkerStyle: Int` (default 1 = outline+halo, the candidate).
+- `TweaksPanel.swift` — new "Place markers (vyfe spike)" section with inline picker.
+- `PlaceIcons.swift` — `render` now dispatches on style: `renderFilled` / `renderOutlineHalo` / `renderTranslucent`. New `path(for:in:)` helper builds the geometry once; each variant strokes/fills/translates differently.
+- `ExpeditionMapView.swift` — registration block tracks `PlaceIcons.lastRegisteredStyle`; on mismatch it removes + re-registers every category icon. Live switch — no app restart needed.
+- `RootView.swift` — `tweaksFingerprint` extended with `placeMarkerStyle` so the map view re-renders (and the unsafe hook re-fires) on picker change.
+
+### How to use the spike
+
+Open the wrench panel (top-left), scroll to **Place markers (vyfe spike)**, flip the picker between 0/1/2, close the panel. The next pan/zoom triggers a hook fire and the icons swap live.
+
+Pick the winner and let me know — I'll delete the other two variants + the picker, and lock the style.

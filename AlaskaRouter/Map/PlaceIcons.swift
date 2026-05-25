@@ -31,6 +31,13 @@ enum PlaceShape {
 
 enum PlaceIcons {
 
+    /// Tracks which `placeMarkerStyle` value the current MapLibre image
+    /// cache holds, so the ExpeditionMapView hook can detect a Tweak flip
+    /// and re-register every icon. -1 = "never registered yet".
+    /// MainActor-isolated because the registration site is on the main
+    /// queue and the Tweaks panel mutates from MainActor too.
+    @MainActor static var lastRegisteredStyle: Int = -1
+
     // MARK: - Public API
 
     /// All categories that should get a rendered marker. Areal categories
@@ -58,12 +65,14 @@ enum PlaceIcons {
         "place-\(category)"
     }
 
-    /// Render the marker bitmap for a category. Returns nil for areal
-    /// categories (those should not carry an icon).
+    /// Render the marker bitmap for a category, using the visual style
+    /// currently selected in the TweaksStore A/B harness. Returns nil for
+    /// areal categories (those should not carry an icon).
+    @MainActor
     static func image(for category: String) -> UIImage? {
         guard let shape = shape(for: category) else { return nil }
         let color = color(for: category)
-        return render(shape: shape, color: color, size: 16)
+        return render(shape: shape, color: color, style: TweaksStore.shared.placeMarkerStyle)
     }
 
     // MARK: - Category → shape/color
@@ -110,51 +119,106 @@ enum PlaceIcons {
 
     // MARK: - Render
 
-    /// Draw a single 16×16 marker centered in its bitmap. Designed to read
-    /// at MapLibre's default icon-size 1.0 against the warm OpenTopoMap
-    /// basemap. Small inset on every shape keeps a thin transparent ring
-    /// around the glyph so neighboring markers don't bleed together.
-    private static func render(shape: PlaceShape, color: UIColor, size: CGFloat) -> UIImage {
+    /// Render a marker using the selected visual style (spike harness):
+    ///   0 — filled (iteration 3): saturated 16×16 colored shape
+    ///   1 — outline + cream halo: stroke-only color over a wider cream
+    ///       halo path, baked into a 16×16 bitmap
+    ///   2 — smaller + translucent: 16×16 canvas, shape inset further +
+    ///       alpha 0.6
+    private static func render(shape: PlaceShape, color: UIColor, style: Int) -> UIImage {
+        let size: CGFloat = 16
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         return renderer.image { _ in
-            color.setFill()
-            let rect = CGRect(x: 0, y: 0, width: size, height: size)
-            switch shape {
-            case .triangle:
-                // ▲ filled equilateral triangle, point up. Inset 1.5 px so the
-                // shape sits inside the 16-px canvas with breathing room.
-                let inset: CGFloat = 1.5
-                let path = UIBezierPath()
-                path.move(to:    CGPoint(x: size / 2,          y: inset))
-                path.addLine(to: CGPoint(x: size - inset,      y: size - inset))
-                path.addLine(to: CGPoint(x: inset,             y: size - inset))
-                path.close()
-                path.fill()
-            case .square:
-                // ■ filled rounded square.
-                let inset: CGFloat = 3.0
-                UIBezierPath(
-                    roundedRect: rect.insetBy(dx: inset, dy: inset),
-                    cornerRadius: 1.2
-                ).fill()
-            case .cross:
-                // + bold plus sign — for airfields ("crossroads in the sky").
-                let armLen: CGFloat   = 5.0
-                let armWidth: CGFloat = 2.6
-                let cx = size / 2, cy = size / 2
-                UIBezierPath(rect: CGRect(
-                    x: cx - armLen,     y: cy - armWidth / 2,
-                    width: armLen * 2,  height: armWidth)
-                ).fill()
-                UIBezierPath(rect: CGRect(
-                    x: cx - armWidth / 2, y: cy - armLen,
-                    width: armWidth,      height: armLen * 2)
-                ).fill()
-            case .dot:
-                // ● small filled circle.
-                let inset: CGFloat = 4.5
-                UIBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset)).fill()
+            switch style {
+            case 1: renderOutlineHalo(shape: shape, color: color, size: size)
+            case 2: renderTranslucent(shape: shape, color: color, size: size)
+            default: renderFilled(shape: shape, color: color, size: size)
             }
+        }
+    }
+
+    /// Variant 0 — iteration-3 baseline. Saturated filled colored shape.
+    private static func renderFilled(shape: PlaceShape, color: UIColor, size: CGFloat) {
+        color.setFill()
+        path(for: shape, in: size).fill()
+    }
+
+    /// Variant 2 — smaller (extra inset) + translucent (alpha 0.6).
+    private static func renderTranslucent(shape: PlaceShape, color: UIColor, size: CGFloat) {
+        color.withAlphaComponent(0.6).setFill()
+        // Shrink the shape by re-rendering with a smaller "virtual" size centered.
+        // Quickest: just apply an extra inset by drawing into a smaller rect.
+        let inner: CGFloat = 10
+        let off = (size - inner) / 2
+        let ctx = UIGraphicsGetCurrentContext()
+        ctx?.saveGState()
+        ctx?.translateBy(x: off, y: off)
+        path(for: shape, in: inner).fill()
+        ctx?.restoreGState()
+    }
+
+    /// Variant 1 — outline shape on a cream halo. Visually coherent with the
+    /// labels (which carry the same cream halo treatment). Drawn as: a wider
+    /// cream stroke layer first, then a thinner colored stroke on top.
+    /// Shapes are *not filled* — the interior is transparent so the basemap
+    /// shows through, lightening the visual weight.
+    private static func renderOutlineHalo(shape: PlaceShape, color: UIColor, size: CGFloat) {
+        let cream = UIColor(red: 1.0, green: 250/255, blue: 238/255, alpha: 0.92)
+        // Slightly smaller shape to leave room for the halo stroke.
+        let inner: CGFloat = 12
+        let off = (size - inner) / 2
+        let ctx = UIGraphicsGetCurrentContext()
+        ctx?.saveGState()
+        ctx?.translateBy(x: off, y: off)
+        let p = path(for: shape, in: inner)
+        // Round joins/caps for a friendlier hand-drawn feel.
+        p.lineJoinStyle = .round
+        p.lineCapStyle = .round
+        // Cream halo first (wider).
+        cream.setStroke()
+        p.lineWidth = 3.0
+        p.stroke()
+        // Colored thin stroke on top.
+        color.setStroke()
+        p.lineWidth = 1.4
+        p.stroke()
+        ctx?.restoreGState()
+    }
+
+    /// Pure-geometry path builder for the four shapes, drawn inside an
+    /// `inner × inner` square at origin (0, 0). Caller transforms or
+    /// strokes/fills as needed.
+    private static func path(for shape: PlaceShape, in inner: CGFloat) -> UIBezierPath {
+        let rect = CGRect(x: 0, y: 0, width: inner, height: inner)
+        switch shape {
+        case .triangle:
+            let inset: CGFloat = 1.0
+            let p = UIBezierPath()
+            p.move(to:    CGPoint(x: inner / 2,         y: inset))
+            p.addLine(to: CGPoint(x: inner - inset,     y: inner - inset))
+            p.addLine(to: CGPoint(x: inset,             y: inner - inset))
+            p.close()
+            return p
+        case .square:
+            let inset: CGFloat = 2.0
+            return UIBezierPath(roundedRect: rect.insetBy(dx: inset, dy: inset),
+                                cornerRadius: 1.2)
+        case .cross:
+            let armLen: CGFloat = inner / 2 - 1.5
+            let armWidth: CGFloat = 2.2
+            let cx = inner / 2, cy = inner / 2
+            // Compose horizontal + vertical bars into a single path
+            // (matters for the outline variant which strokes the path).
+            let p = UIBezierPath(rect: CGRect(
+                x: cx - armLen, y: cy - armWidth / 2,
+                width: armLen * 2, height: armWidth))
+            p.append(UIBezierPath(rect: CGRect(
+                x: cx - armWidth / 2, y: cy - armLen,
+                width: armWidth, height: armLen * 2)))
+            return p
+        case .dot:
+            let inset: CGFloat = 3.5
+            return UIBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset))
         }
     }
 }

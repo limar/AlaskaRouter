@@ -50,6 +50,19 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(useLooseMatcher, forKey: K.useLooseMatcher) }
     }
 
+    // MARK: - Place markers (AlaskaRouter-vyfe spike harness)
+
+    /// Visual treatment for the ~33k place markers rendered on the map.
+    /// A spike-only Tweak so the user can A/B between variants on device
+    /// before locking the design. Values:
+    ///   0 — filled (iteration 3): saturated colored geometric shape baked at 16 px
+    ///   1 — outline + cream halo: stroke-only colored shape on a wider cream halo
+    ///       (visual coherence with the labels' thin cream halo treatment)
+    ///   2 — smaller + translucent: same filled shape but 10 px @ 0.6 alpha
+    var placeMarkerStyle: Int {
+        didSet { UserDefaults.standard.set(placeMarkerStyle, forKey: K.placeMarkerStyle) }
+    }
+
     /// One-call reset to v1 defaults.
     func resetToDefaults() {
         dotDiameterDefault  = Defaults.dotDiameterDefault
@@ -57,6 +70,7 @@ final class TweaksStore {
         dotFontWeight       = Defaults.dotFontWeight
         dotFontSizeRatio    = Defaults.dotFontSizeRatio
         useLooseMatcher     = Defaults.useLooseMatcher
+        placeMarkerStyle    = Defaults.placeMarkerStyle
     }
 
     // MARK: - Init / persistence
@@ -68,6 +82,7 @@ final class TweaksStore {
         dotFontWeight       = (d.object(forKey: K.dotFontWeight)       as? Double) ?? Defaults.dotFontWeight
         dotFontSizeRatio    = (d.object(forKey: K.dotFontSizeRatio)    as? Double) ?? Defaults.dotFontSizeRatio
         useLooseMatcher     = (d.object(forKey: K.useLooseMatcher)     as? Bool)   ?? Defaults.useLooseMatcher
+        placeMarkerStyle    = (d.object(forKey: K.placeMarkerStyle)    as? Int)    ?? Defaults.placeMarkerStyle
     }
 
     private enum K {
@@ -76,6 +91,7 @@ final class TweaksStore {
         static let dotFontWeight       = "tweak.dot.font.weight"
         static let dotFontSizeRatio    = "tweak.dot.font.sizeRatio"
         static let useLooseMatcher     = "tweak.search.useLooseMatcher"
+        static let placeMarkerStyle    = "tweak.places.markerStyle"
     }
 
     enum Defaults {
@@ -87,5 +103,6 @@ final class TweaksStore {
         static let dotFontWeight: Double       = 0.50   // between .bold (0.4) and .heavy (0.56)
         static let dotFontSizeRatio: Double    = 0.54
         static let useLooseMatcher: Bool       = true   // milestone 2 on by default; flip OFF to A/B
+        static let placeMarkerStyle: Int       = 1      // vyfe spike — start on Variant A (outline+halo)
     }
 }

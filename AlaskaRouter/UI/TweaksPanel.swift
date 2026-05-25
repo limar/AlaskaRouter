@@ -57,6 +57,20 @@ struct TweaksPanel: View {
                 }
 
                 Section {
+                    Picker("Marker style", selection: $tweaks.placeMarkerStyle) {
+                        Text("0 — Filled (iter 3)").tag(0)
+                        Text("1 — Outline + cream halo").tag(1)
+                        Text("2 — Smaller + translucent").tag(2)
+                    }
+                    .pickerStyle(.inline)
+                } header: {
+                    Text("Place markers (vyfe spike)")
+                } footer: {
+                    Text("Visual A/B for the place-marker icons. Pick a variant, then close this sheet — the map re-registers icons on the next pan/zoom. \"0\" is the heavy filled iteration 3; \"1\" is the candidate (stroked colored shape on a cream halo, matching the labels' aesthetic); \"2\" is a faded smaller filled. Lock the winner when you've decided.")
+                        .font(.footnote)
+                }
+
+                Section {
                     Button("Reset to defaults", role: .destructive) {
                         tweaks.resetToDefaults()
                     }
