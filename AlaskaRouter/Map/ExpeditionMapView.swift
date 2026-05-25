@@ -737,6 +737,20 @@ struct ExpeditionMapView: View {
             // Snap polyline used when available; straight-line dashed
             // fallback otherwise.
             if let style = controller.mapView.style {
+                // Register the place-marker SDFs once per style load
+                // (AlaskaRouter-vyfe iteration 3). Cheap idempotent guard —
+                // `style.image(forName:)` returns the cached image on
+                // subsequent calls so we only pay the CoreGraphics cost
+                // the first time.
+                for category in PlaceIcons.iconedCategories {
+                    let name = PlaceIcons.iconName(for: category)
+                    if style.image(forName: name) == nil,
+                       let img = PlaceIcons.image(for: category)
+                    {
+                        style.setImage(img, forName: name)
+                    }
+                }
+
                 ExpeditionMapView.syncTripRouteLayer(
                     style: style,
                     trip: trip,

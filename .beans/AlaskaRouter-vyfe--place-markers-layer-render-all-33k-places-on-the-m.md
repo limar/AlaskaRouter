@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T14:34:45Z
+updated_at: 2026-05-25T15:14:28Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -121,3 +121,37 @@ User feedback after first on-device test:
 
 - Layer-toggle UI to disable categories — new bean.
 - Higher-zoom tile pack (z=11+) — new bean.
+
+
+## Iteration 3 — small monochrome icons, paired with labels (2026-05-25)
+
+User feedback after iteration 2:
+> "I didn't mean to remove all the dots/circles. They should appear/disappear together with their labels. We need some dot to make user know where exactly to tap. The dots are not good enough, we need small icons. Small and monochromatic (like those black mini-triangles for mountain peaks). A color and a small geometrical form."
+
+### Architecture change
+
+Each tier collapses to **one symbol layer** (was: paired circle+label layers in iteration 1, label-only in iteration 2). The symbol layer carries both `icon-image` and `text-field`. MapLibre's defaults (`icon-optional: false`, `text-optional: false`) mean BOTH parts must place or the *whole symbol* drops → icon and label appear/disappear together by construction.
+
+### Marker design — 4 geometric shapes
+
+| Shape | Categories |
+|---|---|
+| **▲ triangle** | peak |
+| **■ square** | settlement_major, settlement (with different colors) |
+| **+ cross** | airfield |
+| **● dot** | every other point category (fuel, food, lodging, visitor_center, ranger_station, viewpoint, attraction, marina, volcano, hut, spring, …) |
+| **(no icon)** | areal: glacier, park, lake, island, waterfall — label-only, anchored at centroid |
+
+Each rendered at 16×16 via CoreGraphics in `PlaceIcons.swift`. Color baked in per-category from a warm-paper palette (peaks dark terracotta, fuel red-orange, ranger green, marina deep blue, etc.). Icons registered into MapLibre's style at runtime via `style.setImage(_:forName:)` inside the `unsafeMapViewControllerModifier` hook (idempotent — guarded by `style.image(forName:) == nil`).
+
+### Layer behavior
+
+Style layer's `icon-image` is a `match` expression on `category`. For point categories it returns `"place-<category>"` (e.g. `"place-peak"`); for areal categories it returns `""` → no icon, only the label, anchored at center.
+
+`text-anchor` and `text-offset` are also data-driven by category: areal labels are centered (sit on the centroid); point labels sit `top` with a small downward offset so they appear under the icon. Both decimate together via the layer's default optional flags.
+
+### Files
+
+- **(new)** `AlaskaRouter/Map/PlaceIcons.swift` — shape + color logic, CoreGraphics rendering, runtime icon registration list.
+- `AlaskaRouter/Map/ExpeditionMapView.swift` — register place icons in the unsafe map hook, once per style.
+- `AlaskaRouter/Resources/style-base.json` — all 5 tiers become combined icon+label symbol layers.

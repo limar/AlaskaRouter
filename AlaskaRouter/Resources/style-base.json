@@ -126,19 +126,25 @@
     },
 
     {
-      "comment": "places-tier-* layers (vyfe). label-peak retired — major peaks surface via places-tier-natural-major at z>=7. Dots dropped after first user iteration: 'I see more dots than names'. MapLibre's text-allow-overlap=false already decimates labels at collision; without paired circles, the label IS the affordance and dot+name show/hide together. Areal features (lakes, glaciers, parks, islands) get label-only because they're visually identifiable on the basemap.",
+      "comment": "places-tier-* layers (vyfe iteration 3 — icons restored). Each symbol layer has both icon-image AND text-field; MapLibre's defaults (icon-optional=false, text-optional=false) mean BOTH must place or the whole symbol is dropped → icon and label show/hide together, fixing the 'more dots than names' problem. Areal categories (glacier, park, lake, island, waterfall) get icon-image=\"\" so they have NO marker — they're identifiable as shapes on the basemap, and the label is centered on the centroid.",
 
-      "id": "places-tier-major-settlement-label",
+      "id": "places-tier-major-settlement",
       "type": "symbol",
       "source": "places",
       "filter": ["==", ["get", "category"], "settlement_major"],
       "minzoom": 4,
       "layout": {
+        "icon-image": "place-settlement_major",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 4, 0.8, 10, 1.0],
+        "icon-anchor": "center",
+        "icon-allow-overlap": false,
+        "icon-padding": 1,
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
         "text-size": ["interpolate", ["linear"], ["zoom"], 4, 11, 8, 13, 12, 15],
         "text-letter-spacing": 0.05,
-        "text-anchor": "center",
+        "text-anchor": "top",
+        "text-offset": [0, 0.55],
         "text-allow-overlap": false,
         "text-padding": 4
       },
@@ -150,16 +156,28 @@
     },
 
     {
-      "id": "places-tier-settlement-label",
+      "id": "places-tier-settlement",
       "type": "symbol",
       "source": "places",
       "filter": ["in", ["get", "category"], ["literal", ["settlement", "airfield", "visitor_center", "ranger_station"]]],
       "minzoom": 6,
       "layout": {
+        "icon-image": ["match", ["get", "category"],
+          "settlement",     "place-settlement",
+          "airfield",       "place-airfield",
+          "visitor_center", "place-visitor_center",
+          "ranger_station", "place-ranger_station",
+          ""
+        ],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.75, 12, 1.0],
+        "icon-anchor": "center",
+        "icon-allow-overlap": false,
+        "icon-padding": 1,
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
         "text-size": ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 12, 14, 13],
-        "text-anchor": "center",
+        "text-anchor": "top",
+        "text-offset": [0, 0.55],
         "text-allow-overlap": false,
         "text-padding": 3
       },
@@ -177,7 +195,7 @@
     },
 
     {
-      "id": "places-tier-natural-major-label",
+      "id": "places-tier-natural-major",
       "type": "symbol",
       "source": "places",
       "filter": ["all",
@@ -186,10 +204,28 @@
       ],
       "minzoom": 7,
       "layout": {
+        "icon-image": ["match", ["get", "category"],
+          "peak", "place-peak",
+          "fuel", "place-fuel",
+          ""
+        ],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 7, 0.7, 13, 1.0],
+        "icon-anchor": "center",
+        "icon-allow-overlap": false,
+        "icon-padding": 1,
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
         "text-size": ["interpolate", ["linear"], ["zoom"], 7, 9, 12, 11.5],
-        "text-anchor": "center",
+        "text-anchor": ["match", ["get", "category"],
+          "glacier", "center",
+          "park",    "center",
+          "top"
+        ],
+        "text-offset": ["match", ["get", "category"],
+          "glacier", ["literal", [0, 0]],
+          "park",    ["literal", [0, 0]],
+          ["literal", [0, 0.55]]
+        ],
         "text-allow-overlap": false,
         "text-padding": 3
       },
@@ -207,16 +243,38 @@
     },
 
     {
-      "id": "places-tier-misc-label",
+      "id": "places-tier-misc",
       "type": "symbol",
       "source": "places",
       "filter": ["in", ["get", "category"], ["literal", ["lake", "viewpoint", "attraction", "marina", "island", "volcano", "waterfall"]]],
       "minzoom": 9,
       "layout": {
+        "icon-image": ["match", ["get", "category"],
+          "viewpoint",  "place-viewpoint",
+          "attraction", "place-attraction",
+          "marina",     "place-marina",
+          "volcano",    "place-volcano",
+          ""
+        ],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.7, 14, 1.0],
+        "icon-anchor": "center",
+        "icon-allow-overlap": false,
+        "icon-padding": 1,
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
         "text-size": ["interpolate", ["linear"], ["zoom"], 9, 9, 13, 11],
-        "text-anchor": "center",
+        "text-anchor": ["match", ["get", "category"],
+          "lake",      "center",
+          "island",    "center",
+          "waterfall", "center",
+          "top"
+        ],
+        "text-offset": ["match", ["get", "category"],
+          "lake",      ["literal", [0, 0]],
+          "island",    ["literal", [0, 0]],
+          "waterfall", ["literal", [0, 0]],
+          ["literal", [0, 0.55]]
+        ],
         "text-allow-overlap": false,
         "text-padding": 2
       },
@@ -237,8 +295,8 @@
     },
 
     {
-      "comment": "Long tail — every category not above. The categories we DO want (lake/island/volcano/waterfall) get richer styling above; everything else (food, store, hut, etc.) drops here at z>=11.",
-      "id": "places-tier-long-tail-label",
+      "comment": "Long tail — every category not above. Gets the generic dot.",
+      "id": "places-tier-long-tail",
       "type": "symbol",
       "source": "places",
       "filter": ["!", ["in", ["get", "category"], ["literal", [
@@ -249,10 +307,16 @@
       ]]]],
       "minzoom": 11,
       "layout": {
+        "icon-image": ["concat", "place-", ["get", "category"]],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.65, 16, 0.95],
+        "icon-anchor": "center",
+        "icon-allow-overlap": false,
+        "icon-padding": 1,
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
         "text-size": ["interpolate", ["linear"], ["zoom"], 11, 8.5, 16, 10.5],
-        "text-anchor": "center",
+        "text-anchor": "top",
+        "text-offset": [0, 0.5],
         "text-allow-overlap": false,
         "text-padding": 2
       },
