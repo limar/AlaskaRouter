@@ -63,6 +63,16 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(placeMarkerStyle, forKey: K.placeMarkerStyle) }
     }
 
+    /// Multiplier applied to every map-label `text-size` interpolation
+    /// at runtime (label-region, label-water, label-mountains, label-city,
+    /// and all places-tier-* layers). 1.0 = the values declared in
+    /// style-base.json; 0.7 = noticeably smaller; 1.5 = noticeably larger.
+    /// A user-facing knob because legible-font preferences vary a lot —
+    /// future work may also drive this from iOS Dynamic Type.
+    var labelSizeMultiplier: Double {
+        didSet { UserDefaults.standard.set(labelSizeMultiplier, forKey: K.labelSizeMultiplier) }
+    }
+
     /// One-call reset to v1 defaults.
     func resetToDefaults() {
         dotDiameterDefault  = Defaults.dotDiameterDefault
@@ -71,6 +81,7 @@ final class TweaksStore {
         dotFontSizeRatio    = Defaults.dotFontSizeRatio
         useLooseMatcher     = Defaults.useLooseMatcher
         placeMarkerStyle    = Defaults.placeMarkerStyle
+        labelSizeMultiplier = Defaults.labelSizeMultiplier
     }
 
     // MARK: - Init / persistence
@@ -83,6 +94,7 @@ final class TweaksStore {
         dotFontSizeRatio    = (d.object(forKey: K.dotFontSizeRatio)    as? Double) ?? Defaults.dotFontSizeRatio
         useLooseMatcher     = (d.object(forKey: K.useLooseMatcher)     as? Bool)   ?? Defaults.useLooseMatcher
         placeMarkerStyle    = (d.object(forKey: K.placeMarkerStyle)    as? Int)    ?? Defaults.placeMarkerStyle
+        labelSizeMultiplier = (d.object(forKey: K.labelSizeMultiplier) as? Double) ?? Defaults.labelSizeMultiplier
     }
 
     private enum K {
@@ -92,6 +104,7 @@ final class TweaksStore {
         static let dotFontSizeRatio    = "tweak.dot.font.sizeRatio"
         static let useLooseMatcher     = "tweak.search.useLooseMatcher"
         static let placeMarkerStyle    = "tweak.places.markerStyle"
+        static let labelSizeMultiplier = "tweak.places.labelSizeMultiplier"
     }
 
     enum Defaults {
@@ -103,6 +116,7 @@ final class TweaksStore {
         static let dotFontWeight: Double       = 0.50   // between .bold (0.4) and .heavy (0.56)
         static let dotFontSizeRatio: Double    = 0.54
         static let useLooseMatcher: Bool       = true   // milestone 2 on by default; flip OFF to A/B
-        static let placeMarkerStyle: Int       = 1      // vyfe spike — start on Variant A (outline+halo)
+        static let placeMarkerStyle: Int       = 3      // vyfe iteration 6 winner: translucent + halo
+        static let labelSizeMultiplier: Double = 1.0    // unchanged from style defaults
     }
 }

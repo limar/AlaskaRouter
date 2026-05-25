@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T16:13:31Z
+updated_at: 2026-05-25T16:32:24Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -297,3 +297,39 @@ So nothing to fix in the data; the house icon on "Ferry, AK" is geographically a
 ### Files
 
 - `PlaceIcons.swift` — `renderGlyph` uses 8+8 cream-offset dilation when `withHalo`; canvas and point-size constants bumped; `viewpoint` symbol mapped to `eye.fill`.
+
+
+## Iteration 7 — winner locked + peak size + label-size slider (2026-05-25)
+
+User feedback:
+> "Number 3, Translucent+cream halo EASY WIN. Eye icon is gorgeous, it's almost winking."
+> "Peak icon can be a bit smaller — too many of them, they clutter."
+> "POI label font size is small — want it tweakable, may want to follow iOS pref later."
+> "What is the big-building icon at low zoom at Allakaket, Bettles, Anaktuvuk Pass, Delta Junction that disappears on zoom-in?"
+
+### Winner locked
+
+Default `placeMarkerStyle` flipped to **3** (translucent + cream halo). The 0/1/2 variants stay in the picker for future iteration; harness will be retired once we're done iterating.
+
+### Peak size — style match expression
+
+Peaks were drawing at the same icon-size as fuel, glaciers, parks. Triangles are recognizable even when small, and there are thousands of them, so they clutter the view at z=10+. Now peaks scale 0.45→0.65 across z=7→z=13 (was 0.7→1.0). Fuel and other natural-major categories keep the original size.
+
+### Label-size multiplier
+
+New TweaksStore knob `labelSizeMultiplier: Double` (default 1.0, range 0.70–1.50, step 0.05). New file `MapLabelSizing.swift` mirrors the text-size stop schedule from style-base.json (9 layers: 4 curated anchor labels + 5 places-tier-* layers) and rebuilds each layer's `textFontSize` NSExpression with every stop value scaled. Applied from the unsafe map-view modifier hook; idempotent guard on `lastAppliedMultiplier`. Future work: drive from iOS Dynamic Type as an additional input.
+
+### "Big building" at low zoom — explained, NOT a bug
+
+User reported a building-like icon at Allakaket, Bettles, Anaktuvuk Pass, Delta Junction that disappears on zoom-in. Investigation: those are **OpenTopoMap's baked-in raster labels** — OTM's tile renderer paints a small icon + name at population centers. At z=4-5 only the raster is visible; at z=6+ our vector overlay starts drawing on top and visually "replaces" them.
+
+True fix is `6ihk` (self-render OpenTopoMap). Until then, the z=5↔6 transition is the raster-vs-vector handoff. Not a vyfe issue.
+
+### Files
+
+- `TweaksStore.swift` — added `labelSizeMultiplier`; default `placeMarkerStyle` flipped 1→3.
+- `TweaksPanel.swift` — slider for label size; picker badge "✓" on variant 3.
+- `style-base.json` — peak `icon-size` match expression (peaks smaller than glaciers/parks/fuel).
+- `MapLabelSizing.swift` — new. Mirror of label text-size schedules; applies multiplier at runtime.
+- `ExpeditionMapView.swift` — call `MapLabelSizing.apply` in the unsafe hook.
+- `RootView.swift` — added `labelSizeMultiplier` to `tweaksFingerprint`.

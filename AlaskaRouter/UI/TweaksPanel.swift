@@ -61,13 +61,19 @@ struct TweaksPanel: View {
                         Text("0 — Filled (baseline)").tag(0)
                         Text("1 — Outline + cream halo").tag(1)
                         Text("2 — Translucent (no halo)").tag(2)
-                        Text("3 — Translucent + cream halo").tag(3)
+                        Text("3 — Translucent + cream halo  ✓").tag(3)
                     }
                     .pickerStyle(.inline)
+                    sliderRow(
+                        label: "Label size",
+                        value: $tweaks.labelSizeMultiplier,
+                        range: 0.70...1.50, step: 0.05,
+                        format: "%.2f ×"
+                    )
                 } header: {
-                    Text("Place markers (vyfe spike)")
+                    Text("Map labels & markers")
                 } footer: {
-                    Text("Visual A/B for the place-marker icons. All variants use SF Symbol glyphs per category (airplane, fuelpump, mountain, flame for volcano, eye/binoculars for viewpoint, …). \"0\" is filled, saturated. \"1\" is outline + cream rim — matches the labels' aesthetic. \"2\" is filled-but-translucent (no rim). \"3\" is translucent + cream halo (the 'tweakable halo' option). Pick a variant, close this sheet — the map re-registers icons on the next pan/zoom.")
+                    Text("Variant 3 is the locked vyfe winner (translucent SF Symbols + cream halo); the others stay as A/B for future iteration. The label-size slider multiplies every map text-size at runtime (all curated tier labels + all places-tier-* labels). 1.0 = the values declared in style-base.json.")
                         .font(.footnote)
                 }
 

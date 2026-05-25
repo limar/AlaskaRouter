@@ -759,6 +759,11 @@ struct ExpeditionMapView: View {
                     PlaceIcons.lastRegisteredStyle = currentStyle
                 }
 
+                // Apply the user's label-size multiplier (vyfe iter 7).
+                // Idempotent — MapLabelSizing.apply early-returns when the
+                // multiplier matches the last applied value.
+                MapLabelSizing.apply(TweaksStore.shared.labelSizeMultiplier, to: style)
+
                 ExpeditionMapView.syncTripRouteLayer(
                     style: style,
                     trip: trip,

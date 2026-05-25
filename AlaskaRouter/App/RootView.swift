@@ -59,12 +59,13 @@ struct RootView: View {
     /// markers re-rendered with the new tweak values.
     private var tweaksFingerprint: String {
         String(
-            format: "d%.0f-s%.0f-w%.2f-r%.2f-m%d",
+            format: "d%.0f-s%.0f-w%.2f-r%.2f-m%d-L%.2f",
             tweaksStore.dotDiameterDefault,
             tweaksStore.dotDiameterSelected,
             tweaksStore.dotFontWeight,
             tweaksStore.dotFontSizeRatio,
-            tweaksStore.placeMarkerStyle    // vyfe spike — re-register place icons on change
+            tweaksStore.placeMarkerStyle,       // vyfe spike — re-register place icons on change
+            tweaksStore.labelSizeMultiplier     // vyfe iter 7 — apply label-size scaling on change
         )
     }
 
