@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-24T18:54:28Z
-updated_at: 2026-05-25T07:07:34Z
+updated_at: 2026-05-25T08:39:16Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -128,4 +128,4 @@ DB size: 8.3 MB → 8.4 MB.
 - [x] GNIS pass: keep county_name with stripped suffix
 - [x] Inheritance pass: nearest-GNIS within 30 km for non-GNIS rows
 - [x] SearchResultsView: replace coord string with location line
-- [ ] On-device verify
+- [ ] On-device verify (pending user test)
