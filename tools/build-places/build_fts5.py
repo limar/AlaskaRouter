@@ -35,6 +35,7 @@ GEOJSON = DATA / "alaska-filtered.geojson"
 GNIS_TXT = DATA / "DomesticNames_AK.txt"   # USGS GNIS; fetched by fetch_gnis.sh
 WIKIDATA_JSONL = DATA / "wikidata-ak.jsonl"  # Wikidata; fetched by fetch_wikidata.py
 DB = DATA / "pois.sqlite"
+PLACES_GEOJSON = DATA / "places.geojson"   # AlaskaRouter-vyfe — for map rendering
 
 REGION = "Alaska"
 # Schema v3 (AlaskaRouter-22h7 milestone 1):
@@ -794,6 +795,37 @@ def build_db():
     print(f"[db] inserted={len(deduped):,}")
     print(f"[db] {DB} -> {DB.stat().st_size / 1e6:.1f} MB")
     print(f"[db] metadata: {json.dumps(metadata, indent=2)}")
+
+    # Companion GeoJSON for map rendering (AlaskaRouter-vyfe).
+    # Same rows as place_meta; properties carry the minimum the MapLibre
+    # style layers + tap handler need (name, category, importance, source,
+    # admin_area). Lat/lon become the GeoJSON Point geometry. Written
+    # COMPACT (no indent) — the bundled file is the hot path for app
+    # launch + map render, ~5 MB compact vs ~8 MB pretty.
+    print(f"[places-geojson] writing {PLACES_GEOJSON.name}")
+    features = []
+    for osm_type, osm_id, lat, lon, category, importance, name, alts, admin in deduped:
+        source = (
+            "gnis" if osm_type == "gnis"
+            else "wikidata" if osm_type == "wikidata"
+            else "osm"
+        )
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": {
+                "name": name,
+                "category": category,
+                "importance": importance,
+                "source": source,
+                "admin_area": admin,
+            },
+        })
+    fc = {"type": "FeatureCollection", "features": features}
+    with PLACES_GEOJSON.open("w", encoding="utf-8") as f:
+        json.dump(fc, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"[places-geojson] {PLACES_GEOJSON} -> {PLACES_GEOJSON.stat().st_size / 1e6:.1f} MB "
+          f"({len(features):,} features)")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,13 @@ private let styleURL: URL = {
     guard let anchorLabelsURL = Bundle.main.url(forResource: "alaska-anchor-labels", withExtension: "geojson") else {
         fatalError("Missing alaska-anchor-labels.geojson in bundle")
     }
+    // AlaskaRouter-vyfe — places.geojson provides ~33 k tappable place
+    // markers rendered as zoom-tiered MLNSymbolStyleLayers / MLNCircleStyleLayers
+    // declared in style-base.json. Bundled at build time by
+    // tools/build-places/build_fts5.py.
+    guard let placesURL = Bundle.main.url(forResource: "places", withExtension: "geojson") else {
+        fatalError("Missing places.geojson in bundle")
+    }
     let pmtilesRef = "pmtiles://\(pmtilesURL.absoluteString)"
     let glyphsBase = Bundle.main.bundleURL.appendingPathComponent("glyphs").absoluteString
         .replacingOccurrences(of: "file://", with: "file:///")
@@ -33,6 +40,7 @@ private let styleURL: URL = {
         json = json.replacingOccurrences(of: "__BASEMAP_URL__", with: pmtilesRef)
         json = json.replacingOccurrences(of: "__GLYPHS_URL_BASE__", with: glyphsBase)
         json = json.replacingOccurrences(of: "__ANCHOR_LABELS_URL__", with: anchorLabelsURL.absoluteString)
+        json = json.replacingOccurrences(of: "__PLACES_URL__", with: placesURL.absoluteString)
         let resolved = FileManager.default.temporaryDirectory
             .appendingPathComponent("style-base-resolved.json")
         try json.write(to: resolved, atomically: true, encoding: .utf8)
