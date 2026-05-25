@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T16:53:20Z
+updated_at: 2026-05-25T17:00:31Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -374,3 +374,33 @@ Two adjustments, both in `PlaceIcons.swift`:
 - New `haloScale(for:)` per-category multiplier on the cream-halo dilation radii. Default 1.0 (existing 2 px + 1 px ring); settlement / locality / hut get **0.5** (~1 px + 0.5 px). The halo stays proportional to the small inner glyph — otherwise a 5 px ring carries a 4 px halo and the marker reads as "halo with a dot."
 
 Net visible settlement marker: ~7 px total, similar to the Google reference. Variant 3 (translucent + cream halo) wraps it in a thin cream rim.
+
+
+## Iteration 9 verdict — small settlement marker reads as noise
+
+User feedback after iteration 9:
+> "Looks like... noise. Not divisible, vague form, halo looks rectangular. I don't know what to do."
+
+### Diagnosis
+
+The translucent-+-halo treatment (variant 3) doesn't scale down gracefully. Three independent failure modes converge at small sizes:
+
+1. **8-direction halo dilation is square-ish.** At large inner glyph sizes the icon's silhouette dominates and the slight grid-pattern in the halo edges is hidden by the icon. At tiny inner sizes (pt 7 → ~5 px ring), the halo IS the visible marker — and the user sees the underlying 8-direction-square dilation pattern as a rectangular outline.
+2. **Pixel snapping.** The 1 + 0.5 px halo offsets get rounded to whole pixels by the rasterizer; small markers show visible pixel artifacts.
+3. **SF Symbol AA breakdown below ~10 pt.** The outline `circle` glyph at pt 7 antialias to a soft haze, and the 0.65-alpha tint of variant 3 compounds the haze into "fog with a hint of color."
+
+Net: the marker reads as noise rather than a small clean ring.
+
+### Possible fixes (parked — revisit when there's a time slot)
+
+| Approach | Effort | Result quality |
+|---|---|---|
+| A. Use Core Image `CIMorphologyMaximumDisk` or `CIGaussianBlur` for a TRUE circular halo (replacing 8-direction offsets) | medium | smooth circular halo, no grid artifacts |
+| B. Custom-render small markers via `CGContext` paths (cream-stroked circle around a colored-stroked circle, both round) — bypass SF Symbols at small size | small | precise control, clean look |
+| C. Convert ALL PlaceIcons to SDF + leverage MapLibre's native `icon-halo-color` (GPU shader halo, smooth at any size) | medium-large | best long-term answer |
+| D. Accept the constraint — keep settlement at pt size 10–11 (small-ish but legible halo) | trivial | acceptable but not Google-tiny |
+| E. Drop halo for small markers; rely on opaque color + careful contrast | small | works, loses the unified halo aesthetic |
+
+### Parked state
+
+Settlement / locality / hut stay at iteration 9 sizing (point size 7, halo scale 0.5). It reads as noise at the smallest end. **Not blocking — moving to clickability (`5gmw`) now per user direction.** Will revisit with one of options A–C in a follow-up iteration.

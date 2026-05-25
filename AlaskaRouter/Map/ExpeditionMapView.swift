@@ -56,6 +56,26 @@ private func straightRouteCoords(for trip: Trip) -> [CLLocationCoordinate2D] {
     trip.orderedWaypoints.map(\.coordinate)
 }
 
+/// A places.geojson feature surfaced by a single-tap on the map
+/// (AlaskaRouter-5gmw). Hands enough context to the parent to render a
+/// preview callout and execute "+ Add to trip" without re-querying the
+/// places DB. The struct is intentionally minimal — the corresponding
+/// row in `alaska-places.sqlite` could be looked up later if richer
+/// fields (alt_names, importance for ranking) are ever needed.
+struct MapPlaceTap: Equatable {
+    let name: String
+    let category: String
+    let coord: CLLocationCoordinate2D
+    let adminArea: String
+
+    static func == (lhs: MapPlaceTap, rhs: MapPlaceTap) -> Bool {
+        lhs.name == rhs.name &&
+        lhs.category == rhs.category &&
+        abs(lhs.coord.latitude - rhs.coord.latitude) < 1e-6 &&
+        abs(lhs.coord.longitude - rhs.coord.longitude) < 1e-6
+    }
+}
+
 // MARK: - The view
 
 struct ExpeditionMapView: View {
@@ -81,12 +101,29 @@ struct ExpeditionMapView: View {
     /// area was tapped — the parent should clear selection.
     var onWaypointTap: ((UUID?) -> Void)? = nil
 
+    /// Map tap on a places.geojson feature — anything in a `places-tier-*`
+    /// layer (AlaskaRouter-5gmw). Parent renders a callout with name +
+    /// admin_area + "+ Add to trip" capsule. Trip waypoint taps take
+    /// priority over place taps when both are stacked under the touch.
+    var onPlaceTap: ((MapPlaceTap) -> Void)? = nil
+
     /// Tappable layer ids for hit-test. Includes both default + selected
-    /// marker layers so a stop can be selected regardless of current state.
+    /// trip-marker layers AND the places-tier-* overlay so the same single
+    /// tap recognizer dispatches to either onWaypointTap or onPlaceTap.
     private static let waypointLayerIDs: Set<String> = [
         "trip-marker-default-icons",
         "trip-marker-selected-icons",
     ]
+    private static let placesLayerIDs: Set<String> = [
+        "places-tier-major-settlement",
+        "places-tier-settlement",
+        "places-tier-peak",
+        "places-tier-natural-major",
+        "places-tier-misc",
+        "places-tier-long-tail",
+    ]
+    private static let allTappableLayerIDs: Set<String> =
+        waypointLayerIDs.union(placesLayerIDs)
 
     // MARK: - Production route renderer (AlaskaRouter-3bot, step 1)
 
@@ -713,17 +750,38 @@ struct ExpeditionMapView: View {
             // API in the unsafe hook gives us layer ownership and lets us
             // set those properties on creation, once, and forget.
         }
-        // Map tap hit-tests against the two waypoint-marker layers. When a
-        // marker is hit, fire onWaypointTap(UUID). Empty area → onWaypointTap(nil)
-        // so the parent can dismiss selection / callout.
-        .onTapMapGesture(on: Self.waypointLayerIDs) { _, features in
-            guard let cb = onWaypointTap else { return }
-            if let raw = features.first?.attribute(forKey: "wpID") as? String,
-               let id = UUID(uuidString: raw) {
-                cb(id)
-            } else {
-                cb(nil)
+        // Map tap hit-tests against trip-marker layers AND places-tier-*
+        // layers. Dispatch order (highest priority first):
+        //   1. Trip waypoint hit  → onWaypointTap(UUID)
+        //   2. Place feature hit  → onPlaceTap(MapPlaceTap)         (5gmw)
+        //   3. Empty area         → onWaypointTap(nil)
+        // Trip waypoints win when both are stacked because they're the
+        // user's own data and the tap is most likely intended for them.
+        .onTapMapGesture(on: Self.allTappableLayerIDs) { _, features in
+            // 1. Trip waypoint?
+            if let wp = features.first(where: { $0.attribute(forKey: "wpID") != nil }),
+               let raw = wp.attribute(forKey: "wpID") as? String,
+               let id = UUID(uuidString: raw)
+            {
+                onWaypointTap?(id)
+                return
             }
+            // 2. Place feature?  (places.geojson features always carry both
+            //    `name` and `category` attributes.)
+            if let place = features.first(where: {
+                $0.attribute(forKey: "name") != nil && $0.attribute(forKey: "category") != nil
+            }) {
+                let tap = MapPlaceTap(
+                    name:      (place.attribute(forKey: "name") as? String) ?? "",
+                    category:  (place.attribute(forKey: "category") as? String) ?? "",
+                    coord:     place.coordinate,
+                    adminArea: (place.attribute(forKey: "admin_area") as? String) ?? ""
+                )
+                onPlaceTap?(tap)
+                return
+            }
+            // 3. Empty.
+            onWaypointTap?(nil)
         }
         // Clamp pinch-zoom to the pack's effective max so the user can't
         // pinch past the highest available tile zoom (z=10 today) into ugly

@@ -109,7 +109,8 @@ struct RootView: View {
                 snappedRouteCoords: snappedRouteCoords,
                 userLocation: locationProvider.lastLocation?.coordinate,
                 tweaksFingerprint: tweaksFingerprint,
-                onWaypointTap: handleMapWaypointTap
+                onWaypointTap: handleMapWaypointTap,
+                onPlaceTap: handleMapPlaceTap
             )
             .ignoresSafeArea()
 
@@ -610,8 +611,11 @@ struct RootView: View {
         // "search-bar-focused + tap = both happen" behavior).
         if isSearchActive { dismissSearch() }
         guard let id else {
-            // Empty area tap — dismiss any selection / callout.
-            withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
+            // Empty area tap — dismiss any selection / preview callout.
+            withAnimation(.smooth(duration: 0.2)) {
+                selectedWaypointID = nil
+                previewedResult = nil       // 5gmw: also clear place preview
+            }
             return
         }
         guard let trip = activeTrip,
@@ -621,6 +625,47 @@ struct RootView: View {
         withAnimation(.smooth(duration: 0.2)) {
             selectedWaypointID = wp.id
             mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
+        }
+    }
+
+    /// AlaskaRouter-5gmw — handle a tap on a places.geojson feature.
+    /// We synthesize a `SearchResult` from the map-tap data and route it
+    /// through the existing `previewedResult` state, which then makes the
+    /// already-built `PreviewCallout` render with "+ Add to trip". Same
+    /// add path as search-result preview — `handleAddPreviewed` does the
+    /// SmartInsert.
+    private func handleMapPlaceTap(_ tap: MapPlaceTap) {
+        // Dismiss search if it was active — the user is interacting with
+        // the map, not the search.
+        if isSearchActive { dismissSearch() }
+        // Deterministic id so SwiftUI diffs cleanly when consecutive taps
+        // hit different places. id space is disjoint from search-result
+        // rowids (which are positive ints < ~50k); using the hash here
+        // can't collide in practice.
+        var hasher = Hasher()
+        hasher.combine(tap.name)
+        hasher.combine(tap.coord.latitude)
+        hasher.combine(tap.coord.longitude)
+        let synthId = Int64(hasher.finalize())
+
+        let result = SearchResult(
+            id: synthId,
+            name: tap.name,
+            altNames: "",
+            category: tap.category,
+            coord: tap.coord,
+            importance: 0,
+            stage: SearchStage.strict.rawValue,
+            editDistance: 0,
+            adminArea: tap.adminArea
+        )
+        withAnimation(.smooth(duration: 0.2)) {
+            // Replaces any previous preview (from search OR from another
+            // map tap) — only one preview at a time.
+            previewedResult = result
+            // Clear any selected trip waypoint so the StopCallout doesn't
+            // also show.
+            selectedWaypointID = nil
         }
     }
 
