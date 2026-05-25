@@ -152,7 +152,7 @@ enum PlaceIcons {
         case "store":              return ("cart.fill",              "cart")
         case "outdoor_shop":       return ("mountain.2.fill",        "mountain.2")
         case "hardware":           return ("hammer.fill",            "hammer")
-        case "viewpoint":          return ("binoculars.fill",        "binoculars")
+        case "viewpoint":          return ("eye.fill",               "eye")
         case "attraction":         return ("star.fill",              "star")
         case "historic":           return ("building.columns.fill",  "building.columns")
         case "lighthouse":         return ("lightbulb.fill",         "lightbulb")
@@ -173,12 +173,14 @@ enum PlaceIcons {
 
     // MARK: - Render
 
-    /// Canvas + glyph sizes, tuned so peaks/houses/planes read clearly at
-    /// MapLibre's icon-size 1.0 on a Retina display. Bumped from iter-3's
-    /// 16×16 after user feedback: "the circle shape should be bigger,
-    /// I hardly can see it."
-    private static let canvas: CGFloat = 22
-    private static let glyphPointSize: CGFloat = 14
+    /// Canvas + glyph sizes, tuned so peaks/houses/planes/binoculars read
+    /// clearly at MapLibre's icon-size 1.0 on a Retina display. Bumped
+    /// twice: iter-3 16×16 → iter-5 22×22 → iter-6 26×26 after the user
+    /// reported intricate glyphs (binoculars) were too thin to recognize.
+    /// Extra 4 px also gives room for the cream halo (2-px morphological
+    /// dilation) without clipping at the canvas edge.
+    private static let canvas: CGFloat = 26
+    private static let glyphPointSize: CGFloat = 17
 
     private static func render(category: String, color: UIColor, style: Int) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvas, height: canvas))
@@ -196,9 +198,14 @@ enum PlaceIcons {
 
     /// Draw a single SF Symbol centered in the canvas.
     /// - `outline`: pick the outline variant of the symbol where one exists.
-    /// - `withHalo`: surround the glyph with a soft cream rim via CGContext
-    ///   shadow. Same cream color the labels use, so icon+label share a
-    ///   visual treatment.
+    /// - `withHalo`: bake a cream rim into the bitmap via 8-direction
+    ///   morphological dilation — render the cream-tinted symbol 8 times
+    ///   offset by ±2 px, then the category-colored symbol on top. The
+    ///   `CGContext.setShadow` approach didn't work reliably with
+    ///   `UIImage.draw(in:)` (shadow state doesn't always propagate through
+    ///   the rasterized image path) AND the cream blur was nearly invisible
+    ///   against the warm OTM basemap. The explicit-offset technique gives
+    ///   a sharp, predictable 2-px halo that reads against any background.
     private static func renderGlyph(category: String, color: UIColor, outline: Bool, withHalo: Bool) {
         let names = sfSymbol(for: category)
         let chosenName = outline ? names.outline : names.filled
@@ -209,27 +216,45 @@ enum PlaceIcons {
         guard let baseSymbol = UIImage(systemName: chosenName, withConfiguration: config)
                 ?? UIImage(systemName: names.filled, withConfiguration: config)
         else { return }
-        let tinted = baseSymbol.withTintColor(color, renderingMode: .alwaysOriginal)
 
-        let symW = tinted.size.width
-        let symH = tinted.size.height
-        let drawRect = CGRect(
+        let coloredSymbol = baseSymbol.withTintColor(color, renderingMode: .alwaysOriginal)
+        let symW = coloredSymbol.size.width
+        let symH = coloredSymbol.size.height
+        let baseRect = CGRect(
             x: (canvas - symW) / 2,
             y: (canvas - symH) / 2,
             width: symW,
             height: symH
         )
 
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-
         if withHalo {
-            // Cream halo via shadow blur. Drawing the tinted symbol with this
-            // shadow set lays down both: the cream blur around all alpha-
-            // positive pixels, AND the symbol itself in its tinted color.
-            // A 1.8-px blur reads as a thin halo at our 22-px canvas.
-            let cream = UIColor(red: 1.0, green: 250/255, blue: 238/255, alpha: 0.95)
-            ctx.setShadow(offset: .zero, blur: 1.8, color: cream.cgColor)
+            // Solid cream — same color the labels use for their halo.
+            let cream = UIColor(red: 1.0, green: 250/255, blue: 238/255, alpha: 1.0)
+            let creamSymbol = baseSymbol.withTintColor(cream, renderingMode: .alwaysOriginal)
+            // 8-direction dilation at 2 px → produces a ~2-px thick cream rim
+            // around the glyph's silhouette. Looks like the labels' text halo.
+            let r: CGFloat = 2.0
+            let offsets: [(CGFloat, CGFloat)] = [
+                (-r, -r), (0, -r), (r, -r),
+                (-r,  0),          (r,  0),
+                (-r,  r), (0,  r), (r,  r),
+            ]
+            for (dx, dy) in offsets {
+                creamSymbol.draw(in: baseRect.offsetBy(dx: dx, dy: dy))
+            }
+            // Inner ring at 1 px fills any gaps from the 2-px offsets so the
+            // halo reads as a solid rim, not 8 spaced dots.
+            let r1: CGFloat = 1.0
+            let inner: [(CGFloat, CGFloat)] = [
+                (-r1, -r1), (0, -r1), (r1, -r1),
+                (-r1,   0),           (r1,   0),
+                (-r1,  r1), (0,  r1), (r1,  r1),
+            ]
+            for (dx, dy) in inner {
+                creamSymbol.draw(in: baseRect.offsetBy(dx: dx, dy: dy))
+            }
         }
-        tinted.draw(in: drawRect)
+
+        coloredSymbol.draw(in: baseRect)
     }
 }

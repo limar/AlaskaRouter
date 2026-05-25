@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T15:57:02Z
+updated_at: 2026-05-25T16:13:31Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -250,3 +250,50 @@ The halo is implemented via `CGContext.setShadow(offset: .zero, blur: 1.8, color
 - SF Symbol bitmaps tint cleanly via `image.withTintColor(color, renderingMode: .alwaysOriginal)`.
 - `CGContext.setShadow` is the simplest way to halo arbitrary alpha-shaped imagery — works for both outline AND filled symbols.
 - Areal categories (`glacier`, `park`, `lake`, `island`, `waterfall`) still return nil from `image(for:)` and remain label-only.
+
+
+## Iteration 6 — visible halo + bigger glyphs (2026-05-25)
+
+User feedback after iteration 5:
+> Translucent works better. "Talking" icons — significant positive impact.
+> - I don't see halo for any of the options. I definitely would like to see halo.
+> - Binoculars are too small.
+> - Ferry points (labels say "Ferry") are shown as "house". Is it something we could fix?
+
+### Halo — root cause + fix
+
+The `CGContext.setShadow(blur:color:)` approach from iteration 5 didn't work because:
+1. `UIImage.draw(in:)` rasterizes the symbol THROUGH the shadow context, but the shadow state doesn't always propagate cleanly to rasterized images (CGImage compositing).
+2. Even when shadow renders, a 1.8-px cream blur is nearly invisible against the warm OpenTopoMap basemap (cream-on-cream).
+
+Replaced with **8-direction morphological dilation**: render the cream-tinted SF Symbol 8 times offset by ±2 px (and 8 more at ±1 px to fill gaps), then the category-colored symbol on top. The cream offsets accumulate into a sharp ~2-px rim around the glyph silhouette. Reads cleanly against any background, including warm-paper terrain.
+
+Cost: 16 cream `draw(in:)` calls + 1 colored draw = 17 raster passes per icon. ~30 categories registered → ~510 draws on style change. Sub-millisecond on iPhone 16.
+
+### Bigger glyphs
+
+- Canvas 22 → **26 px** (gives room for the 2-px halo without clipping)
+- Symbol point size 14 → **17 pt**
+
+Triangle.fill / airplane / fuelpump.fill stay clearly readable; binoculars (now `eye.fill` per user's "Egyptian eye" suggestion) and other intricate glyphs gain enough pixels to be recognizable.
+
+### Viewpoint glyph
+
+Changed `viewpoint` from `binoculars.fill` → **`eye.fill`** per user suggestion. The eye is a simpler silhouette that reads better at small size. Binoculars has too much internal detail.
+
+### Ferry "house" mystery — explained, NOT a bug
+
+Investigated:
+```
+SELECT name, category FROM place_meta WHERE name LIKE '%ferry%';
+```
+
+- ~25 entries with "Ferry" in name are categorized as `marina` (ferry icon, correct).
+- 2 entries named **just "Ferry"** are categorized as `settlement` (house icon, ALSO correct). These are an actual unincorporated community — *Ferry, Alaska* — in Denali Borough, pop. ~35, OSM-tagged `place=hamlet`. The name happens to be "Ferry" but it's a real village.
+- A few "Ferry loading lanes" / "Ferry Terminal Parking" are `parking` (parking icon, correct).
+
+So nothing to fix in the data; the house icon on "Ferry, AK" is geographically accurate. Ferry TERMINALS appear at z=9+ (misc tier) with the ferry icon as expected; below z=9 only settlement-tier features show, including the village.
+
+### Files
+
+- `PlaceIcons.swift` — `renderGlyph` uses 8+8 cream-offset dilation when `withHalo`; canvas and point-size constants bumped; `viewpoint` symbol mapped to `eye.fill`.
