@@ -5,7 +5,7 @@ status: todo
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T08:42:54Z
+updated_at: 2026-05-25T08:55:23Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -35,3 +35,12 @@ Render every entry from `alaska-places.sqlite` as a tappable marker on the map, 
 - [ ] Per-category SF Symbol icons (Phase-2 of the visual)
 - [ ] Decide curated label-peak tier survival
 - [ ] Performance check: 33k features on iPhone 16 simulator + device
+
+
+## Decisions inherited from the umbrella (2026-05-25)
+
+- Bundle `places.geojson` into `AlaskaRouter/Resources/` at build time.
+- V1 visual: per-category colored dot + label text below. SF Symbol icons / hand-drawn bullets are follow-up polish (the latter tracked as `sn3r`).
+- Retire the existing `label-peak` style layer in `style-base.json` as part of this bean — its 13 anchor labels are subsumed by the new layer's peak-at-z=10 tier.
+
+Ready to implement when the user says go.

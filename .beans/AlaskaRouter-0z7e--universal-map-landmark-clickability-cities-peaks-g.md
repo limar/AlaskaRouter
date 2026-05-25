@@ -5,7 +5,7 @@ status: in-progress
 type: epic
 priority: high
 created_at: 2026-05-19T07:59:29Z
-updated_at: 2026-05-25T08:43:39Z
+updated_at: 2026-05-25T08:55:23Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -116,3 +116,13 @@ Three first-class callout types:
 - [ ] Tap-on-place callout child bean
 - [ ] Tap-on-empty-map callout child bean
 - [ ] On-device verify
+
+
+## Decisions locked (2026-05-25)
+
+1. **Bundle `places.geojson`** at build time into `AlaskaRouter/Resources/`. Zero launch cost, ~5 MB IPA delta.
+2. **V1 visual: colored dot per category + label text below.** Cheapest path. SF Symbol icons / hand-drawn bullets (sn3r) come as follow-up polish.
+3. **Retire the existing `label-peak` style layer** once `vyfe` ships. The new place-markers layer carries peaks (including the 13 currently-anchor-labelled ones) at the appropriate zoom tier; the old curated tier becomes redundant.
+4. **Start sequence: `vyfe` first.** The two callout beans (`5gmw`, `4r8l`) are downstream — they need the place-marker layer in place to wire tap dispatch.
+
+Remaining open questions (zoom tiers, importance threshold, label-always-visible, empty-tap admin path, OTM raster clash, tap priority, add-to-trip parity) carry forward into the `vyfe` implementation. Most have proposed defaults in this body — they can lock as we go without blocking the start.
