@@ -193,8 +193,20 @@ enum PlaceIcons {
     /// "small o", not a chunky house).
     private static func pointSize(for category: String) -> CGFloat {
         switch category {
-        case "settlement", "locality", "hut": return 11   // small "o" markers
+        case "settlement", "locality", "hut": return 7    // small "o" — Google-Maps-style
         default:                              return glyphPointSize
+        }
+    }
+
+    /// Per-category scale factor applied to the cream-halo dilation radii.
+    /// Default 1.0 = the 2 px + 1 px ring established in iter-6. When we
+    /// shrink the inner glyph (e.g. settlement at pt-size 7) the halo needs
+    /// to shrink proportionally — otherwise a tight 5 px ring carries a
+    /// 4 px halo and the marker reads as "halo with a dot in the middle."
+    private static func haloScale(for category: String) -> CGFloat {
+        switch category {
+        case "settlement", "locality", "hut": return 0.5  // halo ~1 px + 0.5 px
+        default:                              return 1.0
         }
     }
 
@@ -247,26 +259,27 @@ enum PlaceIcons {
             // Solid cream — same color the labels use for their halo.
             let cream = UIColor(red: 1.0, green: 250/255, blue: 238/255, alpha: 1.0)
             let creamSymbol = baseSymbol.withTintColor(cream, renderingMode: .alwaysOriginal)
-            // 8-direction dilation at 2 px → produces a ~2-px thick cream rim
-            // around the glyph's silhouette. Looks like the labels' text halo.
-            let r: CGFloat = 2.0
-            let offsets: [(CGFloat, CGFloat)] = [
+            // 8-direction dilation, scaled per-category. Default scale 1.0
+            // gives a 2 px outer + 1 px inner ring; settlements scale 0.5
+            // (~1 px outer + 0.5 px inner) so the halo stays proportional
+            // to their tiny "small o" glyph.
+            let scale = haloScale(for: category)
+            let r:  CGFloat = 2.0 * scale
+            let r1: CGFloat = 1.0 * scale
+            let outerOffsets: [(CGFloat, CGFloat)] = [
                 (-r, -r), (0, -r), (r, -r),
                 (-r,  0),          (r,  0),
                 (-r,  r), (0,  r), (r,  r),
             ]
-            for (dx, dy) in offsets {
+            for (dx, dy) in outerOffsets {
                 creamSymbol.draw(in: baseRect.offsetBy(dx: dx, dy: dy))
             }
-            // Inner ring at 1 px fills any gaps from the 2-px offsets so the
-            // halo reads as a solid rim, not 8 spaced dots.
-            let r1: CGFloat = 1.0
-            let inner: [(CGFloat, CGFloat)] = [
+            let innerOffsets: [(CGFloat, CGFloat)] = [
                 (-r1, -r1), (0, -r1), (r1, -r1),
                 (-r1,   0),           (r1,   0),
                 (-r1,  r1), (0,  r1), (r1,  r1),
             ]
-            for (dx, dy) in inner {
+            for (dx, dy) in innerOffsets {
                 creamSymbol.draw(in: baseRect.offsetBy(dx: dx, dy: dy))
             }
         }

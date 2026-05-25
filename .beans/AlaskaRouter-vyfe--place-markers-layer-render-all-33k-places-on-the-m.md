@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T16:47:08Z
+updated_at: 2026-05-25T16:53:20Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -362,3 +362,15 @@ Combined with the variant-3 cream halo, settlements now render as a small hollow
 - `style-base.json` — new `places-tier-peak` layer (peaks only, small icon, flat interpolate); `places-tier-natural-major` now filters to `glacier`/`park`/`fuel`.
 - `MapLabelSizing.swift` — added `places-tier-peak` to the text-size schedule so the user's label-size multiplier applies to peak labels too.
 - `PlaceIcons.swift` — settlement/locality/hut now use SF `circle` (outline) in both variant slots. New `pointSize(for:)` override.
+
+
+## Iteration 9 — settlements like Google Maps' tiny ring (2026-05-25)
+
+User shared a Google Maps screenshot of Alexandria showing a tiny hollow circle marker (~5-6 px) with a thin halo. Our iteration-8 settlement was too big (point size 11 → ~13 px including halo).
+
+Two adjustments, both in `PlaceIcons.swift`:
+
+- `pointSize(for:)` for settlement / locality / hut: **11 → 7**. The SF Symbol `circle` (outline) renders as a ~5 px ring at this size.
+- New `haloScale(for:)` per-category multiplier on the cream-halo dilation radii. Default 1.0 (existing 2 px + 1 px ring); settlement / locality / hut get **0.5** (~1 px + 0.5 px). The halo stays proportional to the small inner glyph — otherwise a 5 px ring carries a 4 px halo and the marker reads as "halo with a dot."
+
+Net visible settlement marker: ~7 px total, similar to the Google reference. Variant 3 (translucent + cream halo) wraps it in a thin cream rim.
