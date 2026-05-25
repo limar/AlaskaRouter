@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T13:53:37Z
+updated_at: 2026-05-25T14:34:45Z
 parent: AlaskaRouter-0z7e
 ---
 
@@ -94,3 +94,30 @@ The `glyphs/` path IS `type: folder` (folder reference) — those work without r
 **Rule of thumb:** any time we add a file to `AlaskaRouter/Resources/`, `AlaskaRouter/Assets.xcassets/`, or any code subdirectory tracked as a group, run `xcodegen` before the next build.
 
 Hit this with the newly-bundled `places.geojson` — build was clean, runtime tripped the `guard let placesURL` fatalError. Fixed by regenerating + rebuilding.
+
+
+## Iteration 2 — drop the dots, lower the zooms (2026-05-25)
+
+User feedback after first on-device test:
+1. *"More dots than names"* — labels collide-decimate; circles don't, so dots outnumber names visually.
+2. *"At max zoom still had dots without names"* — same root cause; tile pack also caps at z=10 (see follow-up bean).
+3. *"Love what I see, start showing earlier"* — lower minzoom on each tier.
+4. *"Don't draw a dot on lakes"* — areal features (lakes/glaciers/parks/islands/volcano) are visually identifiable on the basemap; the dot was redundant.
+
+### Changes
+
+- **All 5 circle layers removed.** Only the label (symbol) layers remain — one per tier. Without the paired circles, the label IS the affordance and decimation is symmetric: a label shows up or doesn't, with nothing else hanging around it.
+- **Lower minzooms** across all tiers:
+  - `settlement_major` 6 → 4
+  - `settlement / airfield / vc / ranger` 8 → 6
+  - `natural-major (peak/glacier/park/fuel @ imp≥0.6)` 10 → 7
+  - `misc (lake/viewpoint/attraction/marina + island/volcano/waterfall)` 12/13 → 9
+  - `long-tail (everything else)` 14 → 11
+- **`text-anchor` changed to `center`** so the label sits ON the lat/lon (no offset). For point features this puts the text right where the place is; for areal features the label drops near the centroid.
+- **Per-category text-color** via `match` expression — peaks terracotta, glaciers slate blue, parks forest green, fuels red-orange, lakes deeper blue, etc. Cream halo (`rgba(255,250,238,0.92)`) for legibility on the warm OTM raster.
+- **Volcano + waterfall + island** promoted from long-tail into misc tier (more deserving of an earlier appearance).
+
+### Follow-ups noted
+
+- Layer-toggle UI to disable categories — new bean.
+- Higher-zoom tile pack (z=11+) — new bean.

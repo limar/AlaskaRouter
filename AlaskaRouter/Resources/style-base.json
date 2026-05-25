@@ -126,104 +126,56 @@
     },
 
     {
-      "comment": "label-peak retired in AlaskaRouter-vyfe — peaks are now part of the places layer at z>=10.",
-      "id": "places-tier-major-settlement",
-      "type": "circle",
-      "source": "places",
-      "filter": ["==", ["get", "category"], "settlement_major"],
-      "minzoom": 6,
-      "paint": {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 2, 10, 3, 14, 4],
-        "circle-color": "#7a4a2a",
-        "circle-stroke-width": 0.6,
-        "circle-stroke-color": "rgba(255,250,238,0.9)"
-      }
-    },
-    {
+      "comment": "places-tier-* layers (vyfe). label-peak retired — major peaks surface via places-tier-natural-major at z>=7. Dots dropped after first user iteration: 'I see more dots than names'. MapLibre's text-allow-overlap=false already decimates labels at collision; without paired circles, the label IS the affordance and dot+name show/hide together. Areal features (lakes, glaciers, parks, islands) get label-only because they're visually identifiable on the basemap.",
+
       "id": "places-tier-major-settlement-label",
       "type": "symbol",
       "source": "places",
       "filter": ["==", ["get", "category"], "settlement_major"],
-      "minzoom": 6,
+      "minzoom": 4,
       "layout": {
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 6, 11, 10, 13, 14, 15],
-        "text-anchor": "top",
-        "text-offset": [0, 0.6],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4, 11, 8, 13, 12, 15],
+        "text-letter-spacing": 0.05,
+        "text-anchor": "center",
         "text-allow-overlap": false,
         "text-padding": 4
       },
       "paint": {
-        "text-color": "#1a1a1a",
+        "text-color": "#3a2a18",
         "text-halo-color": "rgba(255,250,238,0.95)",
-        "text-halo-width": 1.4
+        "text-halo-width": 1.5
       }
     },
 
-    {
-      "id": "places-tier-settlement",
-      "type": "circle",
-      "source": "places",
-      "filter": ["in", ["get", "category"], ["literal", ["settlement", "airfield", "visitor_center", "ranger_station"]]],
-      "minzoom": 8,
-      "paint": {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 2, 14, 3.5],
-        "circle-color": ["match", ["get", "category"],
-          "settlement",       "#a87050",
-          "airfield",         "#4a5060",
-          "visitor_center",   "#b58932",
-          "ranger_station",   "#2d5a3a",
-          "#7a4a2a"
-        ],
-        "circle-stroke-width": 0.5,
-        "circle-stroke-color": "rgba(255,250,238,0.9)"
-      }
-    },
     {
       "id": "places-tier-settlement-label",
       "type": "symbol",
       "source": "places",
       "filter": ["in", ["get", "category"], ["literal", ["settlement", "airfield", "visitor_center", "ranger_station"]]],
-      "minzoom": 9,
+      "minzoom": 6,
       "layout": {
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 9, 10, 14, 12],
-        "text-anchor": "top",
-        "text-offset": [0, 0.6],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 12, 14, 13],
+        "text-anchor": "center",
         "text-allow-overlap": false,
         "text-padding": 3
       },
       "paint": {
-        "text-color": "#2a2a2a",
-        "text-halo-color": "rgba(255,250,238,0.9)",
-        "text-halo-width": 1.3
+        "text-color": ["match", ["get", "category"],
+          "settlement",     "#3a2a18",
+          "airfield",       "#384050",
+          "visitor_center", "#705218",
+          "ranger_station", "#1f4028",
+          "#3a2a18"
+        ],
+        "text-halo-color": "rgba(255,250,238,0.92)",
+        "text-halo-width": 1.4
       }
     },
 
-    {
-      "id": "places-tier-natural-major",
-      "type": "circle",
-      "source": "places",
-      "filter": ["all",
-        ["in", ["get", "category"], ["literal", ["peak", "glacier", "park", "fuel"]]],
-        [">=", ["get", "importance"], 0.6]
-      ],
-      "minzoom": 10,
-      "paint": {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3],
-        "circle-color": ["match", ["get", "category"],
-          "peak",    "#8b3a1f",
-          "glacier", "#7fb5d4",
-          "park",    "#3d6e3a",
-          "fuel",    "#c85020",
-          "#7a4a2a"
-        ],
-        "circle-stroke-width": 0.5,
-        "circle-stroke-color": "rgba(255,250,238,0.85)"
-      }
-    },
     {
       "id": "places-tier-natural-major-label",
       "type": "symbol",
@@ -232,84 +184,60 @@
         ["in", ["get", "category"], ["literal", ["peak", "glacier", "park", "fuel"]]],
         [">=", ["get", "importance"], 0.6]
       ],
-      "minzoom": 10,
+      "minzoom": 7,
       "layout": {
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 9, 14, 11],
-        "text-anchor": "bottom",
-        "text-offset": [0, -0.6],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 7, 9, 12, 11.5],
+        "text-anchor": "center",
         "text-allow-overlap": false,
         "text-padding": 3
       },
       "paint": {
-        "text-color": "#3a2a1a",
+        "text-color": ["match", ["get", "category"],
+          "peak",    "#5a2818",
+          "glacier", "#2a5278",
+          "park",    "#1f4028",
+          "fuel",    "#883018",
+          "#3a2a18"
+        ],
+        "text-halo-color": "rgba(255,250,238,0.92)",
+        "text-halo-width": 1.4
+      }
+    },
+
+    {
+      "id": "places-tier-misc-label",
+      "type": "symbol",
+      "source": "places",
+      "filter": ["in", ["get", "category"], ["literal", ["lake", "viewpoint", "attraction", "marina", "island", "volcano", "waterfall"]]],
+      "minzoom": 9,
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 9, 9, 13, 11],
+        "text-anchor": "center",
+        "text-allow-overlap": false,
+        "text-padding": 2
+      },
+      "paint": {
+        "text-color": ["match", ["get", "category"],
+          "lake",       "#1f4878",
+          "viewpoint",  "#704018",
+          "attraction", "#705218",
+          "marina",     "#1f3850",
+          "island",     "#3a2a18",
+          "volcano",    "#883018",
+          "waterfall",  "#1f4878",
+          "#3a2a18"
+        ],
         "text-halo-color": "rgba(255,250,238,0.9)",
         "text-halo-width": 1.3
       }
     },
 
     {
-      "id": "places-tier-misc",
-      "type": "circle",
-      "source": "places",
-      "filter": ["in", ["get", "category"], ["literal", ["lake", "viewpoint", "attraction", "marina"]]],
-      "minzoom": 12,
-      "paint": {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 1.8, 14, 2.8],
-        "circle-color": ["match", ["get", "category"],
-          "lake",       "#4a87b4",
-          "viewpoint",  "#c87832",
-          "attraction", "#b58932",
-          "marina",     "#3a5a78",
-          "#7a4a2a"
-        ],
-        "circle-stroke-width": 0.4,
-        "circle-stroke-color": "rgba(255,250,238,0.85)"
-      }
-    },
-    {
-      "id": "places-tier-misc-label",
-      "type": "symbol",
-      "source": "places",
-      "filter": ["in", ["get", "category"], ["literal", ["lake", "viewpoint", "attraction", "marina"]]],
-      "minzoom": 13,
-      "layout": {
-        "text-field": ["get", "name"],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 13, 9, 15, 11],
-        "text-anchor": "bottom",
-        "text-offset": [0, -0.6],
-        "text-allow-overlap": false,
-        "text-padding": 2
-      },
-      "paint": {
-        "text-color": "#3a2a1a",
-        "text-halo-color": "rgba(255,250,238,0.85)",
-        "text-halo-width": 1.2
-      }
-    },
-
-    {
-      "comment": "Long tail — every other category not above. Caught by !in test on the unioned set used in higher tiers.",
-      "id": "places-tier-long-tail",
-      "type": "circle",
-      "source": "places",
-      "filter": ["!", ["in", ["get", "category"], ["literal", [
-        "settlement_major",
-        "settlement", "airfield", "visitor_center", "ranger_station",
-        "peak", "glacier", "park", "fuel",
-        "lake", "viewpoint", "attraction", "marina"
-      ]]]],
-      "minzoom": 14,
-      "paint": {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 1.8, 16, 2.5],
-        "circle-color": "#6a4a2a",
-        "circle-stroke-width": 0.3,
-        "circle-stroke-color": "rgba(255,250,238,0.8)"
-      }
-    },
-    {
+      "comment": "Long tail — every category not above. The categories we DO want (lake/island/volcano/waterfall) get richer styling above; everything else (food, store, hut, etc.) drops here at z>=11.",
       "id": "places-tier-long-tail-label",
       "type": "symbol",
       "source": "places",
@@ -317,21 +245,20 @@
         "settlement_major",
         "settlement", "airfield", "visitor_center", "ranger_station",
         "peak", "glacier", "park", "fuel",
-        "lake", "viewpoint", "attraction", "marina"
+        "lake", "viewpoint", "attraction", "marina", "island", "volcano", "waterfall"
       ]]]],
-      "minzoom": 14,
+      "minzoom": 11,
       "layout": {
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 14, 9, 16, 10.5],
-        "text-anchor": "bottom",
-        "text-offset": [0, -0.55],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 11, 8.5, 16, 10.5],
+        "text-anchor": "center",
         "text-allow-overlap": false,
         "text-padding": 2
       },
       "paint": {
-        "text-color": "#3a2a1a",
-        "text-halo-color": "rgba(255,250,238,0.85)",
+        "text-color": "#3a2a18",
+        "text-halo-color": "rgba(255,250,238,0.88)",
         "text-halo-width": 1.2
       }
     }
