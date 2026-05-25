@@ -45,6 +45,11 @@ struct SearchResult: Identifiable, Hashable {
     let importance: Double
     let stage: Int                 // see SearchStage
     let editDistance: Int          // 0 except for .editDistance hits
+    /// Stripped borough / census-area name from the places-DB schema v4
+    /// (AlaskaRouter-b7g0). Empty when no GNIS donor within 30 km. The
+    /// search-results row renders "{adminArea}, AK, USA" or just "AK, USA"
+    /// when empty.
+    let adminArea: String
 
     static func == (lhs: SearchResult, rhs: SearchResult) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -217,7 +222,7 @@ final class SearchService {
         }
         let whereSql = whereClauses.isEmpty ? "1=1" : whereClauses.joined(separator: " AND ")
         let sql = """
-        SELECT m.rowid, m.name, m.alt_names, m.category, m.lat, m.lon, m.importance,
+        SELECT m.rowid, m.name, m.alt_names, m.category, m.lat, m.lon, m.importance, m.admin_area,
                (\(scoreExpr)) AS final_score
         FROM \(baseFrom)
         WHERE \(whereSql)
@@ -268,7 +273,7 @@ final class SearchService {
         let ftsArg = prefixes.joined(separator: " OR ")
 
         let sql = """
-        SELECT m.rowid, m.name, m.alt_names, m.category, m.lat, m.lon, m.importance,
+        SELECT m.rowid, m.name, m.alt_names, m.category, m.lat, m.lon, m.importance, m.admin_area,
                bm25(places_word) AS bm
         FROM places_word JOIN place_meta AS m ON m.rowid = places_word.rowid
         WHERE places_word MATCH ?
@@ -301,7 +306,8 @@ final class SearchService {
             updated = SearchResult(
                 id: r.id, name: r.name, altNames: r.altNames, category: r.category,
                 coord: r.coord, importance: r.importance,
-                stage: SearchStage.editDistance.rawValue, editDistance: total
+                stage: SearchStage.editDistance.rawValue, editDistance: total,
+                adminArea: r.adminArea
             )
             return (updated, score)
         }
@@ -352,10 +358,14 @@ final class SearchService {
         let lat = sqlite3_column_double(stmt, 4)
         let lon = sqlite3_column_double(stmt, 5)
         let imp = sqlite3_column_double(stmt, 6)
+        // admin_area lives in column 7 across both SQL paths (stage 1 + 2)
+        // since both query strings now SELECT m.admin_area at index 7.
+        let admin = String(cString: sqlite3_column_text(stmt, 7))
         return SearchResult(
             id: rowid, name: name, altNames: altn, category: cat,
             coord: .init(latitude: lat, longitude: lon),
-            importance: imp, stage: stage, editDistance: editDistance
+            importance: imp, stage: stage, editDistance: editDistance,
+            adminArea: admin
         )
     }
 }

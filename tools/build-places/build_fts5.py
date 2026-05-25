@@ -45,7 +45,18 @@ REGION = "Alaska"
 # - Merges USGS GNIS Alaska entries (~30 k natural-feature names). OSM wins
 #   on coord-collision dedup; GNIS fills the long tail of named peaks,
 #   lakes, capes, bays, glaciers, etc.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+# v4 (AlaskaRouter-b7g0): add `admin_area` column to place_meta. For GNIS
+# rows it's the source `county_name` with the borough/census-area suffix
+# stripped ("Denali Borough" → "Denali"). For OSM/Wikidata rows it's
+# inherited from the nearest GNIS row within ADMIN_INHERIT_KM. Empty when
+# no GNIS row is within range. Used by the iOS search-results view in
+# place of the lat/lon line: "Denali, AK, USA" / "AK, USA" fallback.
+
+# Radius (km) within which a non-GNIS row inherits the admin_area of the
+# nearest GNIS row. 30 km matches Alaska's GNIS density without crossing
+# borough boundaries too often. AlaskaRouter-b7g0.
+ADMIN_INHERIT_KM = 30.0
 
 # Round coords for the FAST pre-pass dedup: 1 decimal degree latitude ≈ 111 km.
 # 4 fractional digits ≈ 11 m, 3 ≈ 110 m. We use ROUND_COORD_DIGITS=3 so two
@@ -289,14 +300,70 @@ def wikidata_candidates(path: Path) -> list[tuple]:
             importance = IMPORTANCE.get(category, 0.2)
             # GNIS-style: empty alt_names. Wikidata could supply multilingual
             # names if we extended the SPARQL — out of scope for v1.
-            out.append(("wikidata", qnum, lat, lon, category, importance, name, ""))
+            # admin_area starts empty; the inheritance pass after dedup fills
+            # it in from the nearest GNIS row within ADMIN_INHERIT_KM (b7g0).
+            out.append(("wikidata", qnum, lat, lon, category, importance, name, "", ""))
     print(f"[wikidata] kept={len(out):,}  unmapped_type={skipped_no_cat:,}")
+    return out
+
+
+def strip_borough_suffix(s: str) -> str:
+    """Trim the verbose admin-area suffix GNIS publishes. "Denali Borough" →
+    "Denali", "Yukon-Koyukuk Census Area" → "Yukon-Koyukuk", "Juneau, City and
+    Borough of" → "Juneau", "Anchorage Municipality" → "Anchorage", "Nome
+    (CA)" → "Nome". AlaskaRouter-b7g0.
+
+    Order matters — longest match first. We apply parenthetical suffix
+    stripping AFTER the word-suffix pass so "Foo Census Area (CA)" collapses
+    correctly to "Foo".
+    """
+    if not s: return ""
+    out = s.strip()
+    # Strip trailing parenthetical disambiguators GNIS sometimes uses
+    # ("Nome (CA)" — the (CA) marks Census Area).
+    paren_tails = [
+        " (CA)", "(CA)",
+        " (Census Area)", "(Census Area)",
+        " (Borough)", "(Borough)",
+    ]
+    changed = True
+    while changed:
+        changed = False
+        for t in paren_tails:
+            if out.endswith(t):
+                out = out[: -len(t)].rstrip(", ").strip()
+                changed = True
+    # Comma forms before non-comma forms so we don't leave a trailing comma.
+    suffixes = [
+        ", City and Borough of",
+        ", Municipality of",
+        " City and Borough of",
+        " City and Borough",
+        " Municipality of",
+        " Census Area",
+        " Borough",
+        " Municipality",
+        " County",
+        " City",                 # "Sitka City" / "Juneau City" — alt GNIS form
+    ]
+    for suf in suffixes:
+        if out.endswith(suf):
+            out = out[: -len(suf)].rstrip(", ").strip()
+            break
+    # Re-strip parenthetical in case stripping a suffix exposed one.
+    changed = True
+    while changed:
+        changed = False
+        for t in paren_tails:
+            if out.endswith(t):
+                out = out[: -len(t)].rstrip(", ").strip()
+                changed = True
     return out
 
 
 def gnis_candidates(path: Path) -> list[tuple]:
     """Parse a USGS GNIS state .txt (pipe-delimited, header row) and yield
-    candidates in the same 8-tuple shape as the OSM pass. Filters out classes
+    candidates in the 9-tuple shape (with admin_area). Filters out classes
     not in GNIS_CATEGORY and rows with bad/zero coordinates."""
     if not path.exists():
         print(f"[gnis] {path} not present — skipping (run fetch_gnis.sh first)")
@@ -309,14 +376,15 @@ def gnis_candidates(path: Path) -> list[tuple]:
         header = f.readline().rstrip("\n").split("|")
         # Cache the indexes we care about; tolerate column-order drift between
         # GNIS releases by looking them up by name.
-        i_id    = header.index("feature_id")
-        i_name  = header.index("feature_name")
-        i_class = header.index("feature_class")
-        i_lat   = header.index("prim_lat_dec")
+        i_id     = header.index("feature_id")
+        i_name   = header.index("feature_name")
+        i_class  = header.index("feature_class")
+        i_county = header.index("county_name") if "county_name" in header else -1
+        i_lat    = header.index("prim_lat_dec")
         # The Alaska file uses 'prim_long_dec' (full word "long"); other vintages
         # have used 'prim_lon_dec'. Accept either.
-        i_lon   = header.index("prim_long_dec") if "prim_long_dec" in header \
-                  else header.index("prim_lon_dec")
+        i_lon    = header.index("prim_long_dec") if "prim_long_dec" in header \
+                   else header.index("prim_lon_dec")
         for line in f:
             row = line.rstrip("\n").split("|")
             if len(row) <= max(i_id, i_name, i_class, i_lat, i_lon):
@@ -339,9 +407,12 @@ def gnis_candidates(path: Path) -> list[tuple]:
                 fid = int(row[i_id])
             except ValueError:
                 fid = 0
+            admin = ""
+            if i_county >= 0 and i_county < len(row):
+                admin = strip_borough_suffix(row[i_county])
             importance = IMPORTANCE.get(category, 0.2)
             # GNIS doesn't carry alt names in this file; keep alt_names empty.
-            out.append(("gnis", fid, lat, lon, category, importance, name, ""))
+            out.append(("gnis", fid, lat, lon, category, importance, name, "", admin))
     top_skipped = sorted(skipped_class.items(), key=lambda kv: -kv[1])[:6]
     print(f"[gnis] kept={len(out):,}  bad_coords={skipped_coord:,}  "
           f"top_skipped_classes={top_skipped}")
@@ -481,7 +552,8 @@ def build_db():
       importance REAL NOT NULL,
       name TEXT NOT NULL,
       alt_names TEXT NOT NULL,
-      source   TEXT NOT NULL DEFAULT 'osm'
+      source   TEXT NOT NULL DEFAULT 'osm',
+      admin_area TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX idx_place_meta_cat ON place_meta(category);
     CREATE INDEX idx_place_meta_source ON place_meta(source);
@@ -535,7 +607,11 @@ def build_db():
 
         alts = alt_names(props, name)
         importance = IMPORTANCE.get(category, 0.2)
-        candidates.append((osm_type, osm_id, lat, lon, category, importance, name, alts))
+        # admin_area starts empty; inheritance pass after dedup fills it from
+        # the nearest GNIS row within ADMIN_INHERIT_KM (b7g0). OSM features
+        # CAN carry admin via the addr:* tags or via admin relations, but we
+        # don't extract those today — nearest-GNIS heuristic is enough for v1.
+        candidates.append((osm_type, osm_id, lat, lon, category, importance, name, alts, ""))
 
     print(f"[db] osm passed-filter={len(candidates):,} no_name={skipped_no_name:,} no_cat={skipped_no_cat:,} no_geom={skipped_no_geom:,}")
     osm_count = len(candidates)
@@ -560,7 +636,7 @@ def build_db():
     # dict semantics), which means OSM wins over GNIS over Wikidata.
     dedup: dict[tuple[str, float, float], tuple] = {}
     for row in candidates:
-        _, _, lat, lon, _, importance, name, _ = row
+        _, _, lat, lon, _, importance, name, _, _ = row
         key = (name.casefold(), round(lat, ROUND_COORD_DIGITS), round(lon, ROUND_COORD_DIGITS))
         prev = dedup.get(key)
         if prev is None or row[5] > prev[5]:   # row[5] is importance (strictly greater)
@@ -617,9 +693,52 @@ def build_db():
     collapsed = len(candidates) - len(deduped)
     print(f"[db] deduped: {len(candidates):,} -> after-2a {after_a:,} -> after-2b {len(deduped):,}  (collapsed {collapsed:,} total)")
 
+    # Pass 2c: admin_area inheritance (AlaskaRouter-b7g0).
+    # GNIS rows already carry a stripped county/borough name. Non-GNIS rows
+    # (OSM, Wikidata) have admin_area="". For each, find the nearest GNIS
+    # row with non-empty admin_area within ADMIN_INHERIT_KM and adopt its
+    # admin_area. Bbox-prefilter via an integer-degree-lat hash so we don't
+    # haversine every donor.
+    donors = [(r[2], r[3], r[8]) for r in deduped if r[0] == "gnis" and r[8]]
+    donor_by_band: dict[int, list[tuple[float, float, str]]] = {}
+    for lat, lon, admin in donors:
+        donor_by_band.setdefault(int(lat // 1), []).append((lat, lon, admin))
+    # 30 km ≈ 0.27° lat — search ±1 integer band to be safe.
+    from math import radians, sin, cos, asin, sqrt
+    def hav_km(a_lat, a_lon, b_lat, b_lon):
+        dlat = radians(b_lat - a_lat); dlon = radians(b_lon - a_lon)
+        h = sin(dlat/2)**2 + cos(radians(a_lat)) * cos(radians(b_lat)) * sin(dlon/2)**2
+        return 2.0 * 6371.0 * asin(sqrt(h))
+
+    inherited = 0
+    enriched: list[tuple] = []
+    for row in deduped:
+        if row[8]:
+            enriched.append(row); continue
+        lat, lon = row[2], row[3]
+        band = int(lat // 1)
+        best_d = ADMIN_INHERIT_KM + 1.0
+        best_admin = ""
+        for b in (band - 1, band, band + 1):
+            for d_lat, d_lon, d_admin in donor_by_band.get(b, []):
+                # Cheap latitude prefilter — same threshold in degrees.
+                if abs(d_lat - lat) > 0.30: continue
+                dist = hav_km(lat, lon, d_lat, d_lon)
+                if dist < best_d:
+                    best_d = dist; best_admin = d_admin
+        if best_admin and best_d <= ADMIN_INHERIT_KM:
+            enriched.append((*row[:8], best_admin))
+            inherited += 1
+        else:
+            enriched.append(row)
+    deduped = enriched
+    n_with_admin = sum(1 for r in deduped if r[8])
+    print(f"[db] admin_area: {n_with_admin:,}/{len(deduped):,} rows have admin "
+          f"({inherited:,} inherited from nearest GNIS within {ADMIN_INHERIT_KM:.0f} km)")
+
     # Pass 3: insert.
     cur.execute("BEGIN")
-    for osm_type, osm_id, lat, lon, category, importance, name, alts in deduped:
+    for osm_type, osm_id, lat, lon, category, importance, name, alts, admin in deduped:
         # source is derived from the legacy osm_type slot: GNIS rows
         # carry "gnis", Wikidata rows carry "wikidata", OSM rows carry
         # {node,way,relation,unknown}.
@@ -629,8 +748,8 @@ def build_db():
             else "osm"
         )
         cur.execute(
-            "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names, source) VALUES (?,?,?,?,?,?,?,?,?)",
-            (osm_type, osm_id, lat, lon, category, importance, name, alts, source),
+            "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names, source, admin_area) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (osm_type, osm_id, lat, lon, category, importance, name, alts, source, admin),
         )
         rid = cur.lastrowid
         cur.execute(

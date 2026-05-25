@@ -59,12 +59,15 @@ struct SearchResultsView: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
+                        // Replaced the lat/lon line with admin-area context
+                        // (AlaskaRouter-b7g0): "category · Denali, AK, USA"
+                        // (or "AK, USA" when admin_area is empty — universal
+                        // fallback that still disambiguates from adjacent
+                        // Canada when the v2+ multi-region work lands).
                         HStack(spacing: 4) {
                             Text(result.category.replacingOccurrences(of: "_", with: " "))
                             Text("·")
-                            Text(String(format: "%.3f, %.3f",
-                                        result.coord.latitude,
-                                        result.coord.longitude))
+                            Text(locationLine(for: result))
                             if result.stage == SearchStage.editDistance.rawValue {
                                 Text("·").foregroundStyle(.secondary)
                                 Text("fuzzy ±\(result.editDistance)")
@@ -105,6 +108,17 @@ struct SearchResultsView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+    }
+
+    /// "Denali, AK, USA" when adminArea is non-empty; "AK, USA" otherwise.
+    /// The state+country suffix is universal in v1 (everything is Alaska),
+    /// but kept visible so users disambiguate v.s. adjacent Canada — many
+    /// toponyms (Yukon River, etc.) repeat across the border. When v2+
+    /// multi-region lands, this is where country/state derivation hooks in.
+    /// AlaskaRouter-b7g0.
+    private func locationLine(for r: SearchResult) -> String {
+        if r.adminArea.isEmpty { return "AK, USA" }
+        return "\(r.adminArea), AK, USA"
     }
 
     @ViewBuilder
