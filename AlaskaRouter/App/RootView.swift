@@ -142,6 +142,28 @@ struct RootView: View {
                     .onTapGesture { dismissSearch() }
             }
 
+            // On-map controls (right edge, vertical) + scale (bottom-left).
+            // Pinned to a fixed bottom clearance, rendered BEFORE the bar/
+            // results VStack and the bottom sheet so both cover the controls
+            // visually when they overlap. (qat6: previously the controls
+            // floated above a long search-results sheet — moved them earlier
+            // in the ZStack so they "stick to the map.") (ir85 still holds:
+            // anchor them, let the sheet cover them — no chasing.)
+            VStack {
+                Spacer()
+                HStack(alignment: .bottom, spacing: 0) {
+                    ScaleIndicator(camera: mapCamera)
+                        .padding(.leading, 12)
+                        .padding(.bottom, mapControlsBottomClearance)
+                    Spacer()
+                    MapControls(camera: $mapCamera, onLocateMe: handleLocateMe)
+                        .padding(.trailing, 12)
+                        .padding(.bottom, mapControlsBottomClearance)
+                }
+            }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .allowsHitTesting(!isSearchActive)   // taps pass through to scrim when search is active
+
             VStack(spacing: 0) {
                 FloatingSearchBar(
                     state: $barState,
@@ -229,25 +251,6 @@ struct RootView: View {
                 .allowsHitTesting(true)
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
-
-            // On-map controls (right edge, vertical) + scale (bottom-left).
-            // Pinned to a fixed bottom clearance, rendered BEFORE the sheet
-            // so the sheet covers them when it expands above .collapsed.
-            // (ir85: anchor them, let the sheet cover them — no chasing.)
-            VStack {
-                Spacer()
-                HStack(alignment: .bottom, spacing: 0) {
-                    ScaleIndicator(camera: mapCamera)
-                        .padding(.leading, 12)
-                        .padding(.bottom, mapControlsBottomClearance)
-                    Spacer()
-                    MapControls(camera: $mapCamera, onLocateMe: handleLocateMe)
-                        .padding(.trailing, 12)
-                        .padding(.bottom, mapControlsBottomClearance)
-                }
-            }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .allowsHitTesting(!isSearchActive)   // don't compete with the search dim layer
 
             if let trip = activeTrip, !isSearchActive {
                 TripBottomSheet(
