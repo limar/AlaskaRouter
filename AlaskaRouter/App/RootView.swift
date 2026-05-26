@@ -265,15 +265,17 @@ struct RootView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Live-tweaks trigger (AlaskaRouter-ykuf). Tucked top-left so it
-            // doesn't compete with the search bar or on-map controls.
+            // Live-tweaks trigger (ykuf). Top-right, vertically offset below
+            // the search bar (b7c1) so it doesn't overlay the bar's expanded
+            // pill. Shares the right-column visual position with MapControls
+            // (which sit on the right edge near the bottom).
             // Persistent — the app is a personal tool; tweaks ship with it.
             VStack {
                 HStack {
-                    tweaksTriggerButton
-                        .padding(.leading, 12)
-                        .padding(.top, 8)
                     Spacer()
+                    tweaksTriggerButton
+                        .padding(.trailing, 12)
+                        .padding(.top, 72)   // clears the bar + breathing room
                 }
                 Spacer()
             }
