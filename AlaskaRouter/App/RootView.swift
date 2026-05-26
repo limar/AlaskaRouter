@@ -144,16 +144,22 @@ struct RootView: View {
                     && !searchService.results.isEmpty
                     && previewedResult == nil
                 {
-                    // Wrap the results in a ScrollView so the panel scrolls
-                    // internally (atvg). Bound to its content height via
-                    // `.fixedSize(vertical: true)` (eai0 follow-up): tells
-                    // ScrollView to adopt the content's ideal height instead
-                    // of greedily filling the remaining VStack space. Taps
-                    // below the visible rows then fall through to the map's
-                    // tap recognizer → `handleMapEmptyTap` → dismissSearch.
-                    // `.frame(maxHeight: cap)` caps at ~8 rows; beyond that
-                    // the ScrollView starts scrolling internally instead of
-                    // pushing the bar off-screen.
+                    // Wrap the results in a ScrollView (atvg). Greedy fill
+                    // up to a cap — anything taller scrolls internally
+                    // instead of pushing the bar off-screen. Earlier
+                    // attempts with `.fixedSize(vertical: true)` and with
+                    // a GeometryReader-measured frame both had layout
+                    // pathologies: fixedSize caused gaps under the bar
+                    // when content was short and pushed the bar off when
+                    // long; the measured-height pattern had a
+                    // chicken-and-egg first-render with state at 0.
+                    //
+                    // Known caveat (eai0 reopen): a tap in the bottom of
+                    // the ScrollView frame when content is shorter than
+                    // the cap lands inside the ScrollView's hit area and
+                    // doesn't dismiss search. Workaround until a cleaner
+                    // measurement pattern lands: backspace-to-empty, the
+                    // xmark.circle clear button, or tap a result.
                     ScrollView {
                         SearchResultsView(
                             results: searchService.results,
@@ -162,7 +168,6 @@ struct RootView: View {
                             onFastAdd: handleFastAdd
                         )
                     }
-                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxHeight: searchResultsHeightCap)
                     .scrollDismissesKeyboard(.interactively)
                 }

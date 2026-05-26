@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-05-24T09:55:56Z
-updated_at: 2026-05-26T12:51:24Z
+updated_at: 2026-05-26T13:14:15Z
 parent: AlaskaRouter-ka6b
 ---
 
@@ -79,3 +79,36 @@ The GeometryReader+PreferenceKey approach from 030fa2a hit the chicken-and-egg c
 - `.frame(maxHeight: 500)` caps it; when content overflows the cap, the ScrollView scrolls internally.
 
 Removed the `SearchResultsContentHeightKey` PreferenceKey type and the `searchResultsContentHeight` @State var — both dead.
+
+
+## Second regression (same day) — both attempts to bound the ScrollView misfired
+
+The user hit two distinct layout pathologies with two distinct fixes:
+
+1. **GeometryReader+PreferenceKey (030fa2a)** — initial state was 0 → `min(max(0,1), 500) = 1 pt` ScrollView on first render. No results visible. Preference round-trip didn't catch up.
+2. **`.fixedSize(vertical: true)` + `.frame(maxHeight: 500)` (331863e)** — long lists pushed the bar off-screen (the fixedSize'd ScrollView demanded its content height — up to 720+ pt — and the VStack couldn't compress it, so the bar got clipped at top). Short lists rendered with a large gap between the bar and the results card — the VStack appeared to be vertically off-anchored in a way I couldn't fully diagnose under keyboard avoidance.
+
+Both attempts solved the tap-below dismissal but broke the basic layout. Reverting to the simple greedy ScrollView + maxHeight cap restores layout correctness and **accepts the tap-below caveat as a known limitation.**
+
+### Current state (this commit)
+
+```swift
+ScrollView { SearchResultsView(...) }
+    .frame(maxHeight: 500)
+    .scrollDismissesKeyboard(.interactively)
+```
+
+The user can dismiss search by:
+- Backspacing the query to empty (the results panel disappears once `searchService.results.isEmpty`)
+- Tapping the new xmark.circle.fill clear button (7i4o)
+- Tapping a result row (preview opens)
+
+### Future work (when we have a time slot)
+
+Cleaner approaches to revisit:
+- **Apple's `.searchable`** — native sheet-based dropdown that doesn't have these layout issues. Bigger refactor; would replace the custom FloatingSearchBar visual.
+- **GeometryReader with non-zero initial state** — `@State searchResultsContentHeight: CGFloat = searchResultsHeightCap` (initial = cap, then measurement tightens). First render is greedy; brief layout shift to tight on first preference. Might work better than fixedSize.
+- **Use a `Group { .. } .layoutPriority(N)` on the bar** to force VStack to give the bar its full height before the ScrollView gets any.
+- **Custom layout (Layout protocol, iOS 16+)** — write a 2-child layout that gives bar its intrinsic height and ScrollView the rest, capped.
+
+Reopening eai0 — the tap-below caveat is still officially known and tracked.
