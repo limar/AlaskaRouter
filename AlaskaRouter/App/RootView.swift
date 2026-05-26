@@ -314,7 +314,9 @@ struct RootView: View {
         }
         .sheet(isPresented: $showTweaksPanel) {
             TweaksPanel(tweaks: tweaksStore)
-                .presentationDetents([.medium, .large])
+                // (xvb8) Full-screen by default — the panel has grown enough
+                // that .medium forced scrolling for the bottom sections.
+                .presentationDetents([.large])
         }
         .onAppear {
             // (4r8l) Pre-parse places.geojson into the AdminAreaLookup
