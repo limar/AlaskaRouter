@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-05-24T09:55:56Z
-updated_at: 2026-05-26T13:14:15Z
+updated_at: 2026-05-26T16:02:03Z
 parent: AlaskaRouter-ka6b
 ---
 
@@ -112,3 +112,16 @@ Cleaner approaches to revisit:
 - **Custom layout (Layout protocol, iOS 16+)** — write a 2-child layout that gives bar its intrinsic height and ScrollView the rest, capped.
 
 Reopening eai0 — the tap-below caveat is still officially known and tracked.
+
+## Superseded by AlaskaRouter-y7l0 (2026-05-26)
+
+The ScrollView-bounding approach was abandoned. The new architecture (y7l0):
+- Plain VStack with prefix(8) cap → genuinely content-sized, no greedy frame
+- Map-touch scrim → any gesture (tap/drag/pinch) dismisses search
+- Cancel button replaces AK chip on focus → universal single-tap dismiss
+
+The user's original two failure modes from this bean (tap below short list does nothing; long list covers screen with no map to tap) are both addressed by y7l0. The tap-below-short-list case works because the VStack frame ends at the last row — below is scrim → dismiss. The long-list case is bounded to 8 rows with a "+ N more" hint and a Cancel button always available.
+
+Remaining caveat: NONE in this design. The two ways to dismiss are (1) Cancel button, (2) any touch on visible map.
+
+This bean stays open as the umbrella for the dismiss-on-tap problem, but the active implementation work lives in y7l0.

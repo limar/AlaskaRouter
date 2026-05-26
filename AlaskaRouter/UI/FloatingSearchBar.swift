@@ -1,10 +1,13 @@
 // Floating search bar — pill collapse aesthetic (locked v1, 2026-05-18).
 //
 // Two states:
-//   - .expanded:  full Safari-style pill with search field, mic, profile chip.
-//                  When the field is focused, a "Cancel" button replaces the
-//                  profile chip — tap it to blur the field and collapse the
-//                  bar back to pill form.
+//   - .expanded:  full Safari-style pill with search field, clear-x (when
+//                  there's text), and a trailing chip that swaps form by
+//                  focus state:
+//                    - blurred  → AK region chip (orange circle "AK")
+//                    - focused  → Cancel button (y7l0 spike — calls onCancel)
+//                  Tap Cancel to dismiss search entirely; tap clear-x to
+//                  wipe the query but keep typing.
 //   - .collapsed: thin oval pill below the Dynamic Island, showing the active
 //                  trip name + chevron. Tap to re-expand.
 //
@@ -21,6 +24,14 @@ struct FloatingSearchBar: View {
     @Binding var query: String
     @Binding var isFieldFocused: Bool   // mirrors @FocusState outward for RootView
     let activeTripName: String
+    /// y7l0 — invoked when the user taps the Cancel button (replaces the AK
+    /// chip while the field is focused). RootView wires this to
+    /// `dismissSearch()`. Optional so a unit-test instance can omit it.
+    var onCancel: (() -> Void)? = nil
+
+    /// Reactive read of the TweaksStore so the bar re-renders when the user
+    /// flips the Cancel button style/color/weight from the Tweaks panel.
+    @State private var tweaks = TweaksStore.shared
 
     @FocusState private var fieldFocused: Bool
 
@@ -76,14 +87,18 @@ struct FloatingSearchBar: View {
                 .buttonStyle(.plain)
             }
             Spacer(minLength: 0)
-            // The AK chip stays visible at all times — region indicator
-            // (one day it'll be tappable to switch the active region pack).
-            // The mic icon was removed in 7i4o: it was decorative (no
-            // speech-to-text wired) and duplicated the iOS keyboard mic.
-            Circle()
-                .fill(Color.orange.opacity(0.85))
-                .frame(width: 24, height: 24)
-                .overlay(Text("AK").font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
+            // Trailing chip swaps by focus (y7l0):
+            //   - blurred → orange AK region indicator
+            //   - focused → Cancel button → onCancel?() → RootView dismisses
+            // The AK chip is decorative-only today (region indicator; one
+            // day tappable to switch the active region pack). Cancel is the
+            // user-facing dismissal affordance — never an icon, to avoid the
+            // two-x antipattern (clear-x for query vs dismiss-x for search).
+            if fieldFocused {
+                cancelButton
+            } else {
+                akChip
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -92,6 +107,90 @@ struct FloatingSearchBar: View {
         .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
         .contentShape(Capsule())
         .onTapGesture { fieldFocused = true }
+    }
+
+    // MARK: - Trailing chip variants (y7l0)
+
+    private var akChip: some View {
+        Circle()
+            .fill(Color.orange.opacity(0.85))
+            .frame(width: 24, height: 24)
+            .overlay(Text("AK").font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
+    }
+
+    /// Cancel button. Three visual variants × six colors × five font weights,
+    /// all driven by TweaksStore — see y7l0 spike. Generous invisible
+    /// hit-padding so the right-edge button isn't easy to thumb-miss.
+    private var cancelButton: some View {
+        Button {
+            onCancel?()
+        } label: {
+            Group {
+                switch tweaks.cancelButtonStyle {
+                case 0:  plainTextCancel
+                case 1:  filledChipCancel
+                case 2:  outlinedChipCancel
+                default: plainTextCancel
+                }
+            }
+            // Invisible hit-padding for thumb-comfort.
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Reads tweaks each render so live A/B works without a tap-blur cycle.
+        .id("cancel-\(tweaks.cancelButtonStyle)-\(tweaks.cancelButtonColor)-\(tweaks.cancelButtonFontWeight)")
+    }
+
+    private var plainTextCancel: some View {
+        Text("Cancel")
+            .font(.system(size: 15, weight: swiftUIFontWeight(tweaks.cancelButtonFontWeight)))
+            .foregroundStyle(cancelPaletteColor(tweaks.cancelButtonColor))
+    }
+
+    private var filledChipCancel: some View {
+        Text("Cancel")
+            .font(.system(size: 13, weight: swiftUIFontWeight(tweaks.cancelButtonFontWeight)))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(cancelPaletteColor(tweaks.cancelButtonColor), in: Capsule(style: .continuous))
+    }
+
+    private var outlinedChipCancel: some View {
+        Text("Cancel")
+            .font(.system(size: 13, weight: swiftUIFontWeight(tweaks.cancelButtonFontWeight)))
+            .foregroundStyle(cancelPaletteColor(tweaks.cancelButtonColor))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(cancelPaletteColor(tweaks.cancelButtonColor), lineWidth: 1)
+            )
+    }
+
+    /// 6-color Cancel palette (matches TweaksStore docs).
+    private func cancelPaletteColor(_ idx: Int) -> Color {
+        switch idx {
+        case 0:  return Color(red: 0.35, green: 0.45, blue: 0.55)   // slate blue
+        case 1:  return Color(red: 0.20, green: 0.40, blue: 0.65)   // brand blue
+        case 2:  return .blue                                        // system blue
+        case 3:  return Color(red: 0.30, green: 0.30, blue: 0.30)   // charcoal
+        case 4:  return Color(white: 0.55)                           // secondary gray
+        case 5:  return Color(red: 0.20, green: 0.55, blue: 0.55)   // teal
+        default: return Color(red: 0.35, green: 0.45, blue: 0.55)
+        }
+    }
+
+    private func swiftUIFontWeight(_ idx: Int) -> Font.Weight {
+        switch idx {
+        case 0:  return .regular
+        case 1:  return .medium
+        case 2:  return .semibold
+        case 3:  return .bold
+        case 4:  return .heavy
+        default: return .semibold
+        }
     }
 
     private var collapsedPill: some View {

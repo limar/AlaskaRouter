@@ -51,12 +51,14 @@ struct RootView: View {
     @State private var snapTask: Task<Void, Never>?
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
 
-    /// Hard cap for the search-results ScrollView's height when content
-    /// overflows. Roughly 8 typical result rows; below this the ScrollView
-    /// is exactly content-height (via `.fixedSize(vertical: true)`), above
-    /// this the ScrollView caps at this height and scrolls internally.
-    /// eai0 follow-up.
-    private let searchResultsHeightCap: CGFloat = 500
+    /// Hard cap on the number of result rows the dropdown ever shows
+    /// (AlaskaRouter-y7l0). The remaining results are summarized by a
+    /// "+ N more — refine your query" footer. A count cap (rather than a
+    /// height cap on a ScrollView) keeps the dropdown content-sized, so
+    /// the area below it is genuinely map territory — taps there land on
+    /// the scrim and dismiss search. 8 rows ≈ ½ screen on iPhone 16,
+    /// leaving plenty of map visible.
+    private let displayedResultsCap: Int = 8
 
     private var activeTrip: Trip? { TripStore.resolveActive(from: trips) }
 
@@ -122,13 +124,31 @@ struct RootView: View {
             )
             .ignoresSafeArea()
 
-            // (No dim-layer overlay for tap-outside-dismiss — see
-            // AlaskaRouter-l556 / -eai0. The old `Color.black.opacity(0.001)
-            // .onTapGesture { dismissSearch() }` swallowed pinch/pan/rotate
-            // gestures, so the map became un-zoomable while the search bar
-            // was focused. Dismiss-on-map-tap is now handled in
-            // `handleMapWaypointTap` which runs from the map's native
-            // single-tap recognizer — taps work AND pinch/pan stay live.)
+            // (y7l0) Search-mode scrim. When search is active (field focused
+            // OR there's a non-empty query), this transparent layer sits
+            // above the map and below the bar/results. ANY touch on it
+            // dismisses search and goes nowhere else — per the user's
+            // explicit spec: "Any touch on map (tap, drag, pinch, whatever)
+            // should just dismiss the search sheet without doing anything
+            // else." A DragGesture with minimumDistance: 0 catches the
+            // touch-down phase of every gesture (tap, pan, the start of a
+            // pinch), so we don't need separate Magnify/Rotate handlers.
+            //
+            // Unlike the old dim-layer from before eai0/l556 (which was
+            // removed because it ate gestures with no behavior), this scrim
+            // INTENTIONALLY eats gestures and triggers `dismissSearch()` for
+            // each — restoring the "tap-outside-to-dismiss" intent but for
+            // all gesture types, not just taps.
+            if isSearchActive {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in dismissSearch() }
+                    )
+                    .onTapGesture { dismissSearch() }
+            }
 
             VStack(spacing: 0) {
                 FloatingSearchBar(
@@ -138,46 +158,39 @@ struct RootView: View {
                         set: { searchService.setQuery($0) }
                     ),
                     isFieldFocused: $isSearchFieldFocused,
-                    activeTripName: activeTrip?.name ?? "(no trip)"
+                    activeTripName: activeTrip?.name ?? "(no trip)",
+                    onCancel: dismissSearch
                 )
                 if barState == .expanded
                     && !searchService.results.isEmpty
                     && previewedResult == nil
                 {
-                    // Wrap the results in a ScrollView (atvg). Greedy fill
-                    // up to a cap — anything taller scrolls internally
-                    // instead of pushing the bar off-screen. Earlier
-                    // attempts with `.fixedSize(vertical: true)` and with
-                    // a GeometryReader-measured frame both had layout
-                    // pathologies: fixedSize caused gaps under the bar
-                    // when content was short and pushed the bar off when
-                    // long; the measured-height pattern had a
-                    // chicken-and-egg first-render with state at 0.
-                    //
-                    // Known caveat (eai0 reopen): a tap in the bottom of
-                    // the ScrollView frame when content is shorter than
-                    // the cap lands inside the ScrollView's hit area and
-                    // doesn't dismiss search. Workaround until a cleaner
-                    // measurement pattern lands: backspace-to-empty, the
-                    // xmark.circle clear button, or tap a result.
-                    ScrollView {
-                        SearchResultsView(
-                            results: searchService.results,
-                            parsed: searchService.parsed,
-                            onPreview: handlePreviewSelected,
-                            onFastAdd: handleFastAdd
-                        )
-                    }
-                    .frame(maxHeight: searchResultsHeightCap)
-                    .scrollDismissesKeyboard(.interactively)
+                    // (y7l0) Plain VStack with a count cap — no ScrollView,
+                    // no greedy frame, no measurement. The VStack is naturally
+                    // content-height, so the area below it is genuinely map
+                    // (covered by the scrim while search is active → any
+                    // gesture there dismisses). If there are more results
+                    // than the cap, a "+ N more" footer inside the card
+                    // tells the user to refine. The user's prior bug — tap
+                    // below short list does nothing — was the ScrollView
+                    // claiming the whole space below the bar; with the
+                    // ScrollView gone, the empty space genuinely IS map.
+                    let displayed = Array(searchService.results.prefix(displayedResultsCap))
+                    let overflow = searchService.results.count - displayed.count
+                    SearchResultsView(
+                        results: displayed,
+                        overflowCount: overflow,
+                        parsed: searchService.parsed,
+                        onPreview: handlePreviewSelected,
+                        onFastAdd: handleFastAdd
+                    )
                 }
                 Spacer(minLength: 0)
             }
             // Deliberately NOT .ignoresSafeArea(.keyboard, edges: .bottom):
             // we WANT SwiftUI's standard keyboard avoidance to shrink the
-            // VStack from the bottom when the keyboard appears. That bounds
-            // the ScrollView above, and the bar (at top of VStack) stays
-            // visible since the VStack's top is unaffected.
+            // VStack from the bottom when the keyboard appears. The bar
+            // (top of VStack) stays visible since the top is unaffected.
 
             // Preview callout (floating mid-screen near the previewed pin).
             if let preview = previewedResult {

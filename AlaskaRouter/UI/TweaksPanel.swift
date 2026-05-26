@@ -78,6 +78,37 @@ struct TweaksPanel: View {
                 }
 
                 Section {
+                    Picker("Style", selection: $tweaks.cancelButtonStyle) {
+                        Text("0 — Plain text").tag(0)
+                        Text("1 — Filled chip").tag(1)
+                        Text("2 — Outlined chip").tag(2)
+                    }
+                    .pickerStyle(.inline)
+                    Picker("Color", selection: $tweaks.cancelButtonColor) {
+                        Text("0 — Slate blue").tag(0)
+                        Text("1 — Brand blue").tag(1)
+                        Text("2 — System blue").tag(2)
+                        Text("3 — Charcoal").tag(3)
+                        Text("4 — Secondary gray").tag(4)
+                        Text("5 — Teal").tag(5)
+                    }
+                    .pickerStyle(.menu)
+                    Picker("Font weight", selection: $tweaks.cancelButtonFontWeight) {
+                        Text("0 — regular").tag(0)
+                        Text("1 — medium").tag(1)
+                        Text("2 — semibold").tag(2)
+                        Text("3 — bold").tag(3)
+                        Text("4 — heavy").tag(4)
+                    }
+                    .pickerStyle(.menu)
+                } header: {
+                    Text("Search bar Cancel button")
+                } footer: {
+                    Text("Replaces the AK chip when the search field is focused (y7l0 spike). Slate-blue filled chip is the initial recommendation — cool counterpart to the warm AK and \"+\" buttons. Try all combinations on-device; once locked, the tweaks get stripped and the chosen combo becomes the constant default.")
+                        .font(.footnote)
+                }
+
+                Section {
                     Button("Reset to defaults", role: .destructive) {
                         tweaks.resetToDefaults()
                     }
