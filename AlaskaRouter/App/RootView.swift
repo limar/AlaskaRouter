@@ -3,6 +3,17 @@ import SwiftData
 import MapLibreSwiftUI
 import CoreLocation
 
+/// Carries the measured natural height of the search-results card from
+/// inside the ScrollView up to RootView, so we can bound the ScrollView's
+/// frame to its content height (eai0 follow-up): a 4-result ScrollView is
+/// 4-rows-tall, not "fills remaining space and swallows taps."
+private struct SearchResultsContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// The single root screen: full-screen map + floating chrome + bottom sheet.
 /// Search → add-to-trip supports two flows:
 ///   A) Research-first — tap result row body → preview pin + floating callout.
@@ -50,6 +61,18 @@ struct RootView: View {
     @State private var snappedRouteKey: String = ""        // tracks which trip-state the snap is for
     @State private var snapTask: Task<Void, Never>?
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
+
+    /// Measured natural height of the search-results dropdown content
+    /// (eai0 follow-up — fixes the "tap below visible results doesn't
+    /// dismiss" bug). Used to size the ScrollView frame to the actual
+    /// content height instead of letting it greedily fill available
+    /// space and swallow taps in its transparent lower area.
+    @State private var searchResultsContentHeight: CGFloat = 0
+
+    /// Hard cap for the ScrollView's height when content overflows.
+    /// Roughly 8 typical result rows; below this content fits without
+    /// scrolling, above this the ScrollView scrolls internally.
+    private let searchResultsHeightCap: CGFloat = 500
 
     private var activeTrip: Trip? { TripStore.resolveActive(from: trips) }
 
@@ -138,11 +161,13 @@ struct RootView: View {
                     && previewedResult == nil
                 {
                     // Wrap the results in a ScrollView so the panel scrolls
-                    // internally (AlaskaRouter-atvg). Without this, a tall
-                    // dropdown's intrinsic height overflowed the VStack's
-                    // available space and SwiftUI pushed the bar off-screen.
-                    // .scrollDismissesKeyboard(.interactively) lets the user
-                    // drag the list to dismiss the keyboard mid-scroll.
+                    // internally (atvg). Bound to actual content height (eai0
+                    // follow-up): without this, ScrollView greedily fills the
+                    // remaining VStack space and the transparent area below
+                    // the visible rows swallows taps that should reach the map
+                    // (which dismisses search). Cap at `searchResultsHeightCap`
+                    // so a 12-result list still becomes scrollable instead of
+                    // pushing the bar off-screen.
                     ScrollView {
                         SearchResultsView(
                             results: searchService.results,
@@ -150,8 +175,25 @@ struct RootView: View {
                             onPreview: handlePreviewSelected,
                             onFastAdd: handleFastAdd
                         )
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: SearchResultsContentHeightKey.self,
+                                    value: proxy.size.height
+                                )
+                            }
+                        )
                     }
+                    .frame(
+                        height: min(
+                            max(searchResultsContentHeight, 1),
+                            searchResultsHeightCap
+                        )
+                    )
                     .scrollDismissesKeyboard(.interactively)
+                    .onPreferenceChange(SearchResultsContentHeightKey.self) { h in
+                        searchResultsContentHeight = h
+                    }
                 }
                 Spacer(minLength: 0)
             }

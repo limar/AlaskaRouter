@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-05-24T09:55:56Z
-updated_at: 2026-05-24T10:03:32Z
+updated_at: 2026-05-26T06:57:10Z
 parent: AlaskaRouter-ka6b
 ---
 
@@ -44,3 +44,25 @@ Caveat: a tap **inside** a tall ScrollView (the search-results panel) but outsid
 - [x] Remove dim layer
 - [x] Route dismiss via map tap recognizer
 - [ ] On-device verify
+
+
+## Follow-up: bound ScrollView to content height (2026-05-26)
+
+The original eai0 fix (6e0e888, dim-layer removal + map-tap dismissal) had this caveat:
+
+> A tap inside a tall ScrollView (the search-results panel) but outside any result row may still not dismiss — that's the ScrollView's scroll-gesture territory.
+
+User hit it on device: typing "denali Ai" returns 4 results; tapping below the 4 visible rows (still inside the ScrollView's greedy frame) did nothing, while a slow drag would visibly stretch the panel — confirming the ScrollView was claiming all the empty space.
+
+### Fix
+
+Measure the SearchResultsView's natural content height via a GeometryReader-based `PreferenceKey` (`SearchResultsContentHeightKey`), and bind the ScrollView's frame to `min(measuredHeight, 500)`. Now:
+
+- 4 results → ScrollView is exactly 4-rows tall. Taps below land on the map → `handleMapEmptyTap` → `dismissSearch` (search is active branch).
+- 12+ results that overflow 500 pt → ScrollView caps at 500 pt and scrolls internally. Taps below the 500 pt land on the map → dismiss.
+
+### Files
+
+- `AlaskaRouter/App/RootView.swift` — new `private struct SearchResultsContentHeightKey: PreferenceKey`, new `@State searchResultsContentHeight: CGFloat`, new `searchResultsHeightCap: CGFloat = 500`. The ScrollView gains a `.background(GeometryReader { ... preference ... })` on its child, plus `.frame(height: min(measured, cap))` and `.onPreferenceChange`.
+
+The caveat is now closed.
