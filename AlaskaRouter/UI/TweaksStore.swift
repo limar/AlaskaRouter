@@ -85,13 +85,14 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(cancelButtonStyle, forKey: K.cancelButtonStyle) }
     }
 
-    /// Index into the 6-color curated Cancel palette:
+    /// Index into the 7-color curated Cancel palette:
     ///   0 — Slate blue (0.35/0.45/0.55)        cool, muted (initial recommendation)
     ///   1 — Brand blue (0.20/0.40/0.65)        same as category-icon blue
     ///   2 — System blue (.blue)                iOS-conventional
     ///   3 — Charcoal (0.30/0.30/0.30)          neutral dark
     ///   4 — Secondary gray (Color(white: 0.55))quietest
     ///   5 — Teal (0.20/0.55/0.55)              cool with personality
+    ///   6 — System red (.red)                  iOS Cancel/destructive convention (zaha)
     /// For style 1 (filled), this is the fill color. For 0 and 2, it's the
     /// text/stroke color.
     var cancelButtonColor: Int {

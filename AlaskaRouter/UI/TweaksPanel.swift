@@ -91,6 +91,7 @@ struct TweaksPanel: View {
                         Text("3 — Charcoal").tag(3)
                         Text("4 — Secondary gray").tag(4)
                         Text("5 — Teal").tag(5)
+                        Text("6 — System red").tag(6)
                     }
                     .pickerStyle(.menu)
                     Picker("Font weight", selection: $tweaks.cancelButtonFontWeight) {

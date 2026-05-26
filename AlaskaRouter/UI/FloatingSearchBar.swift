@@ -169,7 +169,7 @@ struct FloatingSearchBar: View {
             )
     }
 
-    /// 6-color Cancel palette (matches TweaksStore docs).
+    /// 7-color Cancel palette (matches TweaksStore docs).
     private func cancelPaletteColor(_ idx: Int) -> Color {
         switch idx {
         case 0:  return Color(red: 0.35, green: 0.45, blue: 0.55)   // slate blue
@@ -178,6 +178,7 @@ struct FloatingSearchBar: View {
         case 3:  return Color(red: 0.30, green: 0.30, blue: 0.30)   // charcoal
         case 4:  return Color(white: 0.55)                           // secondary gray
         case 5:  return Color(red: 0.20, green: 0.55, blue: 0.55)   // teal
+        case 6:  return .red                                         // system red (zaha)
         default: return Color(red: 0.35, green: 0.45, blue: 0.55)
         }
     }
