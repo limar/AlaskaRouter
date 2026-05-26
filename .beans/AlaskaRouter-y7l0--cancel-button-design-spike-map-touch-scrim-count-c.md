@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-26T15:55:52Z
-updated_at: 2026-05-26T16:01:48Z
+updated_at: 2026-05-26T16:14:25Z
 parent: AlaskaRouter-ka6b
 ---
 
@@ -60,3 +60,14 @@ Spike harness pattern (like vyfe `placeMarkerStyle`) — user A/Bs on-device, we
 ## Status (2026-05-26 sim build)
 
 All code wired, builds cleanly for iPhone 17 simulator. On-device verification still pending. The Tweaks panel now has a Search-bar Cancel-button section with style × color × weight pickers — flip them on device, land on a combo, then the strip-tweaks follow-up bean removes the harness.
+
+## Revert: count cap + footer removed (2026-05-26)
+
+User pushed back on the displayedResultsCap = 8 + "+ N more" footer — "incomprehensible, counterintuitive and shows too few search results." Fair: the cap was a defense against a bar-push failure mode that was actually caused by `.fixedSize`, not by an unbounded ScrollView. ab23a70's plain ScrollView never had that problem.
+
+Restored ab23a70's layout: a ScrollView with `.scrollDismissesKeyboard(.interactively)` and no cap. All results shown; scrolls internally if overflowing. Dismissal stays clean because Cancel button is always available and the map-touch scrim catches gestures on visible map.
+
+- SearchResultsView: removed `overflowCount` parameter and the footer block
+- RootView: dropped `displayedResultsCap` constant, replaced VStack-with-prefix with the ScrollView wrapper
+
+The eaten-tap-inside-ScrollView edge case is now non-fatal — Cancel handles it.

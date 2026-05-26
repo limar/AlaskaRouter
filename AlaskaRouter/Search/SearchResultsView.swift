@@ -9,10 +9,6 @@ import CoreLocation
 
 struct SearchResultsView: View {
     let results: [SearchResult]
-    /// Number of additional results beyond what's displayed. When > 0, a
-    /// "+ N more — refine your query" footer is rendered so the user knows
-    /// the cap is artificial (AlaskaRouter-y7l0). Pass 0 (default) to omit.
-    var overflowCount: Int = 0
     let parsed: StructuredQuery
     let onPreview: (SearchResult) -> Void
     let onFastAdd: (SearchResult) -> Void
@@ -37,20 +33,6 @@ struct SearchResultsView: View {
             ForEach(results) { result in
                 resultRow(result)
                 Divider().opacity(0.4)
-            }
-            if overflowCount > 0 {
-                // "+ N more" footer — soft cue that the list is artificially
-                // capped (y7l0) without making it tappable: a tappable
-                // "show all" would reopen the ScrollView-frame-eats-taps
-                // problem we just escaped from. Refine the query to narrow.
-                HStack {
-                    Text("+ \(overflowCount) more — refine your query")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
             }
         }
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

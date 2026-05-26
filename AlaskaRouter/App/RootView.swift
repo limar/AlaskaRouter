@@ -51,14 +51,6 @@ struct RootView: View {
     @State private var snapTask: Task<Void, Never>?
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
 
-    /// Hard cap on the number of result rows the dropdown ever shows
-    /// (AlaskaRouter-y7l0). The remaining results are summarized by a
-    /// "+ N more — refine your query" footer. A count cap (rather than a
-    /// height cap on a ScrollView) keeps the dropdown content-sized, so
-    /// the area below it is genuinely map territory — taps there land on
-    /// the scrim and dismiss search. 8 rows ≈ ½ screen on iPhone 16,
-    /// leaving plenty of map visible.
-    private let displayedResultsCap: Int = 8
 
     private var activeTrip: Trip? { TripStore.resolveActive(from: trips) }
 
@@ -165,25 +157,22 @@ struct RootView: View {
                     && !searchService.results.isEmpty
                     && previewedResult == nil
                 {
-                    // (y7l0) Plain VStack with a count cap — no ScrollView,
-                    // no greedy frame, no measurement. The VStack is naturally
-                    // content-height, so the area below it is genuinely map
-                    // (covered by the scrim while search is active → any
-                    // gesture there dismisses). If there are more results
-                    // than the cap, a "+ N more" footer inside the card
-                    // tells the user to refine. The user's prior bug — tap
-                    // below short list does nothing — was the ScrollView
-                    // claiming the whole space below the bar; with the
-                    // ScrollView gone, the empty space genuinely IS map.
-                    let displayed = Array(searchService.results.prefix(displayedResultsCap))
-                    let overflow = searchService.results.count - displayed.count
-                    SearchResultsView(
-                        results: displayed,
-                        overflowCount: overflow,
-                        parsed: searchService.parsed,
-                        onPreview: handlePreviewSelected,
-                        onFastAdd: handleFastAdd
-                    )
+                    // Restored ab23a70's layout: a plain ScrollView that
+                    // scrolls internally when content overflows. The bar
+                    // stays put (it's earlier in the VStack and has its
+                    // intrinsic height). No artificial cap — the user sees
+                    // every match. Dismissal is handled by the y7l0 Cancel
+                    // button (always available when focused) and the
+                    // map-touch scrim (any gesture on visible map → dismiss).
+                    ScrollView {
+                        SearchResultsView(
+                            results: searchService.results,
+                            parsed: searchService.parsed,
+                            onPreview: handlePreviewSelected,
+                            onFastAdd: handleFastAdd
+                        )
+                    }
+                    .scrollDismissesKeyboard(.interactively)
                 }
                 Spacer(minLength: 0)
             }
