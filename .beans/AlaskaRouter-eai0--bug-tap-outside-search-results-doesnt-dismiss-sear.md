@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-05-24T09:55:56Z
-updated_at: 2026-05-26T06:57:10Z
+updated_at: 2026-05-26T12:51:24Z
 parent: AlaskaRouter-ka6b
 ---
 
@@ -66,3 +66,16 @@ Measure the SearchResultsView's natural content height via a GeometryReader-base
 - `AlaskaRouter/App/RootView.swift` — new `private struct SearchResultsContentHeightKey: PreferenceKey`, new `@State searchResultsContentHeight: CGFloat`, new `searchResultsHeightCap: CGFloat = 500`. The ScrollView gains a `.background(GeometryReader { ... preference ... })` on its child, plus `.frame(height: min(measured, cap))` and `.onPreferenceChange`.
 
 The caveat is now closed.
+
+
+## Regression fix (same day) — replace GeometryReader pattern with `.fixedSize`
+
+The GeometryReader+PreferenceKey approach from 030fa2a hit the chicken-and-egg case: initial `searchResultsContentHeight` is 0, so the ScrollView's frame computed `min(max(0,1), 500) = 1 pt` on first render. The preference round-trip should have caught up on the next layout pass, but SwiftUI's preference propagation didn't complete in time for the conditional-rendered ScrollView, leaving the user with an invisible 1-pt-tall ScrollView and no results.
+
+### Simpler fix
+
+`.fixedSize(horizontal: false, vertical: true).frame(maxHeight: 500)` — one line each, no state, no measurement:
+- `.fixedSize(vertical: true)` tells SwiftUI to use the ScrollView's ideal height, which for ScrollView is its content height.
+- `.frame(maxHeight: 500)` caps it; when content overflows the cap, the ScrollView scrolls internally.
+
+Removed the `SearchResultsContentHeightKey` PreferenceKey type and the `searchResultsContentHeight` @State var — both dead.

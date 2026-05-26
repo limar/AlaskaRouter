@@ -3,17 +3,6 @@ import SwiftData
 import MapLibreSwiftUI
 import CoreLocation
 
-/// Carries the measured natural height of the search-results card from
-/// inside the ScrollView up to RootView, so we can bound the ScrollView's
-/// frame to its content height (eai0 follow-up): a 4-result ScrollView is
-/// 4-rows-tall, not "fills remaining space and swallows taps."
-private struct SearchResultsContentHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 /// The single root screen: full-screen map + floating chrome + bottom sheet.
 /// Search → add-to-trip supports two flows:
 ///   A) Research-first — tap result row body → preview pin + floating callout.
@@ -62,16 +51,11 @@ struct RootView: View {
     @State private var snapTask: Task<Void, Never>?
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
 
-    /// Measured natural height of the search-results dropdown content
-    /// (eai0 follow-up — fixes the "tap below visible results doesn't
-    /// dismiss" bug). Used to size the ScrollView frame to the actual
-    /// content height instead of letting it greedily fill available
-    /// space and swallow taps in its transparent lower area.
-    @State private var searchResultsContentHeight: CGFloat = 0
-
-    /// Hard cap for the ScrollView's height when content overflows.
-    /// Roughly 8 typical result rows; below this content fits without
-    /// scrolling, above this the ScrollView scrolls internally.
+    /// Hard cap for the search-results ScrollView's height when content
+    /// overflows. Roughly 8 typical result rows; below this the ScrollView
+    /// is exactly content-height (via `.fixedSize(vertical: true)`), above
+    /// this the ScrollView caps at this height and scrolls internally.
+    /// eai0 follow-up.
     private let searchResultsHeightCap: CGFloat = 500
 
     private var activeTrip: Trip? { TripStore.resolveActive(from: trips) }
@@ -161,12 +145,14 @@ struct RootView: View {
                     && previewedResult == nil
                 {
                     // Wrap the results in a ScrollView so the panel scrolls
-                    // internally (atvg). Bound to actual content height (eai0
-                    // follow-up): without this, ScrollView greedily fills the
-                    // remaining VStack space and the transparent area below
-                    // the visible rows swallows taps that should reach the map
-                    // (which dismisses search). Cap at `searchResultsHeightCap`
-                    // so a 12-result list still becomes scrollable instead of
+                    // internally (atvg). Bound to its content height via
+                    // `.fixedSize(vertical: true)` (eai0 follow-up): tells
+                    // ScrollView to adopt the content's ideal height instead
+                    // of greedily filling the remaining VStack space. Taps
+                    // below the visible rows then fall through to the map's
+                    // tap recognizer → `handleMapEmptyTap` → dismissSearch.
+                    // `.frame(maxHeight: cap)` caps at ~8 rows; beyond that
+                    // the ScrollView starts scrolling internally instead of
                     // pushing the bar off-screen.
                     ScrollView {
                         SearchResultsView(
@@ -175,25 +161,10 @@ struct RootView: View {
                             onPreview: handlePreviewSelected,
                             onFastAdd: handleFastAdd
                         )
-                        .background(
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: SearchResultsContentHeightKey.self,
-                                    value: proxy.size.height
-                                )
-                            }
-                        )
                     }
-                    .frame(
-                        height: min(
-                            max(searchResultsContentHeight, 1),
-                            searchResultsHeightCap
-                        )
-                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxHeight: searchResultsHeightCap)
                     .scrollDismissesKeyboard(.interactively)
-                    .onPreferenceChange(SearchResultsContentHeightKey.self) { h in
-                        searchResultsContentHeight = h
-                    }
                 }
                 Spacer(minLength: 0)
             }
