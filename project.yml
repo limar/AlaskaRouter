@@ -36,6 +36,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.alaskarouter.AlaskaRouter
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "AlaskaRouter shows your position on the map so you can see how close you are to your trip stops. Used only while the app is open."
+        DEVELOPMENT_TEAM: 8UGV7J3SKQ
     dependencies:
       - package: MapLibreSwiftUI
         product: MapLibreSwiftUI
