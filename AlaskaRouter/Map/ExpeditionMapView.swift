@@ -131,6 +131,20 @@ struct ExpeditionMapView: View {
     ]
     private static let allTappableLayerIDs: Set<String> =
         waypointLayerIDs.union(placesLayerIDs)
+    private static let labelCoverLayerIDs: [String] = [
+        "label-region",
+        "label-water",
+        "label-mountains",
+        "label-city",
+        "places-tier-major-settlement",
+        "places-tier-settlement",
+        "places-tier-peak",
+        "places-tier-natural-major",
+        "places-tier-misc",
+        "places-tier-long-tail",
+        "trip-marker-default-icons",
+        "trip-marker-selected-icons",
+    ]
 
     // MARK: - Production route renderer (AlaskaRouter-3bot, step 1)
 
@@ -213,7 +227,7 @@ struct ExpeditionMapView: View {
         }
 
         // Add layers for desired passes that aren't already present.
-        let belowLayer: MLNStyleLayer? = waypointLayerIDs
+        let belowLayer: MLNStyleLayer? = labelCoverLayerIDs
             .compactMap { style.layer(withIdentifier: $0) }
             .first
 

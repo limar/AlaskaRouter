@@ -70,18 +70,19 @@ struct RootView: View {
         )
     }
 
-    /// Live-design tweaks trigger (top-left corner, small wrench button).
+    /// Live-design tweaks trigger. Styled as map chrome, same footprint as
+    /// zoom / locate controls, and rendered in the map-control Z layer.
     private var tweaksTriggerButton: some View {
         Button {
             showTweaksPanel = true
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.primary)
-                .frame(width: 32, height: 32)
+                .frame(width: 44, height: 44)
                 .background(.thinMaterial, in: Circle())
                 .overlay(Circle().stroke(.white.opacity(0.10), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.08), radius: 4, y: 1)
+                .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
         }
         .buttonStyle(.plain)
     }
@@ -142,7 +143,9 @@ struct RootView: View {
                     .onTapGesture { dismissSearch() }
             }
 
-            // On-map controls (right edge, vertical) + scale (bottom-left).
+            // On-map controls (right edge, vertical) + scale (bottom-left)
+            // + tweaks trigger (top-right). All live in this early ZStack
+            // layer so search/results and sheets cover them like map chrome.
             // Pinned to a fixed bottom clearance, rendered BEFORE the bar/
             // results VStack and the bottom sheet so both cover the controls
             // visually when they overlap. (qat6: previously the controls
@@ -150,6 +153,12 @@ struct RootView: View {
             // in the ZStack so they "stick to the map.") (ir85 still holds:
             // anchor them, let the sheet cover them — no chasing.)
             VStack {
+                HStack {
+                    Spacer()
+                    tweaksTriggerButton
+                        .padding(.trailing, 12)
+                        .padding(.top, 72)   // clears the expanded search bar
+                }
                 Spacer()
                 HStack(alignment: .bottom, spacing: 0) {
                     ScaleIndicator(camera: mapCamera)
@@ -264,22 +273,6 @@ struct RootView: View {
                 .ignoresSafeArea(.keyboard, edges: .bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-
-            // Live-tweaks trigger (ykuf). Top-right, vertically offset below
-            // the search bar (b7c1) so it doesn't overlay the bar's expanded
-            // pill. Shares the right-column visual position with MapControls
-            // (which sit on the right edge near the bottom).
-            // Persistent — the app is a personal tool; tweaks ship with it.
-            VStack {
-                HStack {
-                    Spacer()
-                    tweaksTriggerButton
-                        .padding(.trailing, 12)
-                        .padding(.top, 72)   // clears the bar + breathing room
-                }
-                Spacer()
-            }
-            .allowsHitTesting(!isSearchActive)
 
             if let added = recentlyAddedWaypoint {
                 VStack {
