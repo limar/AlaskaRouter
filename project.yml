@@ -41,3 +41,18 @@ targets:
         product: MapLibreSwiftUI
       - package: MapLibreSwiftUI
         product: MapLibreSwiftDSL
+  AlaskaRouterTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alaskarouter.AlaskaRouterTests
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AlaskaRouter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AlaskaRouter"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    dependencies:
+      - target: AlaskaRouter
