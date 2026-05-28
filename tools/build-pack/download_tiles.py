@@ -7,7 +7,7 @@ their usage policy asks for reasonable use + identifying User-Agent).
 
 Plan for v1 'alaska-pack':
   - World skeleton z=0..5  (1365 tiles globally — continents/oceans/countries)
-  - Alaska z=6..10         (~12k tiles, bbox -180..-130 lon, 51..72 lat)
+  - Alaska z=6..11         (statewide detail, bbox -180..-130 lon, 51..72 lat)
 """
 import argparse
 import math
@@ -24,6 +24,9 @@ UA = "AlaskaRouter/v1 personal-use limar.go@gmail.com"
 URL_TMPL = "https://tile.opentopomap.org/{z}/{x}/{y}.png"
 
 ALASKA_BBOX = (-180.0, 51.0, -130.0, 72.0)  # (lon_min, lat_min, lon_max, lat_max)
+WORLD_MAXZOOM = 5
+ALASKA_MINZOOM = 6
+ALASKA_MAXZOOM = 11
 
 
 def lonlat_to_tile(lon: float, lat: float, z: int) -> tuple[int, int]:
@@ -86,6 +89,15 @@ def init_db(path: str, minzoom: int, maxzoom: int):
         db.execute("INSERT OR REPLACE INTO metadata(name, value) VALUES(?,?)", (k, v))
     db.commit()
     db.close()
+
+
+def count_existing_tiles(path: str) -> int:
+    if not os.path.exists(path):
+        return 0
+    db = sqlite3.connect(path)
+    count = db.execute("SELECT COUNT(*) FROM tiles").fetchone()[0]
+    db.close()
+    return int(count)
 
 
 def existing_tiles(path: str) -> set[tuple[int, int, int]]:
@@ -156,18 +168,41 @@ def main():
     ap.add_argument("--workers", type=int, default=2, help="parallel HTTP workers (be polite!)")
     ap.add_argument("--delay", type=float, default=0.45, help="per-worker delay between fetches (sec)")
     ap.add_argument("--phase", choices=["skeleton", "alaska", "both"], default="both")
+    ap.add_argument("--world-maxzoom", type=int, default=WORLD_MAXZOOM)
+    ap.add_argument("--alaska-minzoom", type=int, default=ALASKA_MINZOOM)
+    ap.add_argument("--alaska-maxzoom", type=int, default=ALASKA_MAXZOOM)
+    ap.add_argument("--dry-run", action="store_true", help="print target counts and exit without downloading")
     args = ap.parse_args()
 
-    init_db(args.db, 0, 10)
+    if args.world_maxzoom < 0:
+        ap.error("--world-maxzoom must be >= 0")
+    if args.alaska_minzoom < 0:
+        ap.error("--alaska-minzoom must be >= 0")
+    if args.alaska_maxzoom < args.alaska_minzoom:
+        ap.error("--alaska-maxzoom must be >= --alaska-minzoom")
+
+    maxzoom = max(args.world_maxzoom if args.phase in ("skeleton", "both") else 0,
+                  args.alaska_maxzoom if args.phase in ("alaska", "both") else 0)
+    init_db(args.db, 0, maxzoom)
 
     tiles: list[tuple[int, int, int]] = []
     if args.phase in ("skeleton", "both"):
-        tiles += world_tiles(range(0, 6))                 # z=0..5 world
+        tiles += world_tiles(range(0, args.world_maxzoom + 1))
     if args.phase in ("alaska", "both"):
-        tiles += bbox_tiles(range(6, 11), ALASKA_BBOX)    # z=6..10 Alaska
+        tiles += bbox_tiles(range(args.alaska_minzoom, args.alaska_maxzoom + 1), ALASKA_BBOX)
 
     tiles = sorted(set(tiles))
     print(f"Total target tiles: {len(tiles)}")
+    by_zoom: dict[int, int] = {}
+    for z, _, _ in tiles:
+        by_zoom[z] = by_zoom.get(z, 0) + 1
+    print("Target tiles by zoom:")
+    for z in sorted(by_zoom):
+        print(f"  z={z}: {by_zoom[z]}")
+    if args.dry_run:
+        print(f"Existing rows in DB: {count_existing_tiles(args.db)}")
+        return
+
     have = existing_tiles(args.db)
     todo = [t for t in tiles if t not in have]
     print(f"Already in DB: {len(have)}; remaining: {len(todo)}")

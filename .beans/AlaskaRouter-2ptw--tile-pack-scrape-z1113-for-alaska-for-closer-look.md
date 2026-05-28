@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-2ptw
 title: 'Tile pack: scrape z=11..13 for Alaska for closer-look detail'
-status: todo
+status: in-progress
 type: feature
-priority: low
+priority: high
 created_at: 2026-05-25T14:34:45Z
-updated_at: 2026-05-25T14:34:45Z
+updated_at: 2026-05-28T10:02:57Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -41,6 +41,20 @@ Worth doing for v1? Or accept current 10-zoom limit and revisit when v2+ multi-r
 
 ## Checklist
 
-- [ ] Decide z=10 vs z=11 vs corridor-selective
+- [x] Decide z=10 vs z=11 vs corridor-selective
 - [ ] If shipping z=11: re-run tools/build-pack/download_tiles.py for the new range
 - [ ] Rebuild the pmtiles, push as a new data/ release tag
+
+## Decision (2026-05-28)
+
+Priority is visible map detail now; package infrastructure is secondary. Build a new single Alaska pack with statewide z=11 added on top of the existing world z=0..5 + Alaska z=6..10 coverage. Do not build the runtime downloadable-pack system first. Do not attempt statewide z=12/z=13 for v1 because the size multiplier is too large; revisit corridor-selective z=12/z=13 only if z=11 still feels insufficient on device. Continue hosting the resulting v1 artifact via GitHub Releases and installing it through the existing fetch-pack flow.
+
+## Build Notes (2026-05-28)
+
+Local disk check: 185 GiB free on the workspace volume, enough for z=11 scratch. Exact dry-run target for the final z=0..11 pack is 101,631 tiles: 1,365 world skeleton tiles, 25,311 existing Alaska z=6..10 tiles, and 74,955 new Alaska z=11 tiles.
+
+To reduce bandwidth, build only the z=11 delta first, then merge it with the existing z=0..10 `alaska-pack.pmtiles`. Expected network transfer is roughly the z=11 PNG payload only (order of 1-2 GiB, depending OpenTopoMap tile sizes), plus GitHub upload/download of the final release asset later. Expected scratch footprint is the z=11 MBTiles, z=11 PMTiles, and merged PMTiles; well below available disk.
+
+Started the z=11-only download into `tools/build-pack/data/alaska-z11-only.mbtiles` with 2 workers and 0.45s per-worker delay. Initial measured rate was ~1.5 tiles/sec, so this may take overnight; the MBTiles writer is resumable.
+
+Paused the public-tile-server download after 2,345 rows were written (~15 MiB scratch) because this is a bulk offline archive request. The partial MBTiles remains in `tools/build-pack/data/` and can resume, but the next step should be explicit: either confirm permission/acceptable-use for the OpenTopoMap tile source, or switch to self-rendering / another source intended for offline bulk packages.

@@ -41,7 +41,9 @@ tools/build-places/data/
 # Distributed via GitHub Releases. See tools/build-pack/fetch-pack.sh to
 # pull the current release asset, or tools/build-pack/download_tiles.py to
 # regenerate from OpenTopoMap from scratch.
+tools/build-pack/data/
 *.pmtiles
+*.mbtiles
 # SHA-256 sidecars are release-time artifacts (created by release-pack.sh,
 # consumed by fetch-pack.sh against the release asset). No need to commit.
 *.pmtiles.sha256
