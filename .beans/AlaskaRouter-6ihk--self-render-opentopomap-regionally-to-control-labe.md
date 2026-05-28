@@ -251,3 +251,25 @@ Still missing before first rendered tile:
 
 - SRTM source selection/fetch automation.
 - Actual container import run on the server.
+
+## SRTM Fetch Slice (2026-05-28)
+
+Added `scripts/fetch-srtm.py <region>` and tests. The script fetches
+SRTMGL1 HGT ZIP files from the ESA public DEM mirror by default, writes them
+to `data/docker/data/srtm`, validates ZIP responses, skips existing files, and
+supports `--dry-run`.
+
+The script deliberately refuses regions with cells outside standard SRTM
+coverage. For the current targets:
+
+- `israel_palestine_poc` can fetch 15 SRTMGL1 ZIPs immediately.
+- `alaska_z11` still refuses because 600 of its 1,050 HGT-style cells are
+  north of standard SRTM coverage.
+
+Also corrected `export-region-tiles.py` to default to the otm-docker tile
+route: `http://127.0.0.1:8080/otm`.
+
+Still missing before first rendered tile:
+
+- Actual container import run on the server.
+- High-latitude DEM source decision for Alaska production rendering.

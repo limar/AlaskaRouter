@@ -78,6 +78,14 @@ class ExportRegionTilesTests(unittest.TestCase):
             self.assertEqual(exported.read_bytes(), PNG_1X1)
             self.assertEqual(seen, ["/3/4/3.png"])
 
+    def test_default_url_matches_otm_docker_tile_endpoint(self):
+        exporter = load_exporter()
+
+        self.assertEqual(
+            exporter.tile_url("http://127.0.0.1:8080/otm", 3, 4, 3),
+            "http://127.0.0.1:8080/otm/3/4/3.png",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

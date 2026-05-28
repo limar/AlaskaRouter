@@ -46,6 +46,8 @@ Expected Alaska z=11 target count: 74,955 tiles.
 
 - `estimate-region.py`: deterministic tile-count / bbox math.
 - `fetch-osm.sh`: resumable Geofabrik PBF fetch plus sidecar checksum fetch.
+- `fetch-srtm.py`: resumable SRTMGL1 HGT ZIP fetch for regions fully covered
+  by standard SRTM.
 - `prepare-otm-docker.sh`: lays out a configured region as `osmdata.pbf` for
   the Docker image.
 - `plan-srtm-cells.py`: lists HGT-style DEM cells and flags cells outside
@@ -86,6 +88,8 @@ tools/opentopomap-render/scripts/prepare-otm-docker.sh israel_palestine_poc
 # 4. Add region-covering SRTM ZIP/HGT files to:
 #    tools/opentopomap-render/data/docker/data/srtm/
 tools/opentopomap-render/scripts/plan-srtm-cells.py israel_palestine_poc
+tools/opentopomap-render/scripts/fetch-srtm.py israel_palestine_poc --dry-run
+tools/opentopomap-render/scripts/fetch-srtm.py israel_palestine_poc
 
 # 5. Start the container and run the one-time import scripts.
 tools/opentopomap-render/scripts/otm-docker.sh up
@@ -100,7 +104,8 @@ tools/opentopomap-render/scripts/export-region-tiles.py israel_palestine_poc
 ```
 
 The exporter is resumable by default: existing PNG files are skipped unless
-`--force` is passed. Use `--dry-run` before a large export:
+`--force` is passed. Its default endpoint is the otm-docker tile route,
+`http://127.0.0.1:8080/otm`. Use `--dry-run` before a large export:
 
 ```bash
 tools/opentopomap-render/scripts/export-region-tiles.py alaska_z11 --dry-run

@@ -87,7 +87,7 @@ def export_one(args) -> tuple[str, int, int, int, str | None]:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("region_id")
-    ap.add_argument("--base-url", default="http://127.0.0.1:8080")
+    ap.add_argument("--base-url", default="http://127.0.0.1:8080/otm")
     ap.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--retries", type=int, default=3)
