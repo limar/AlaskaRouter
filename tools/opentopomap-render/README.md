@@ -51,6 +51,8 @@ Expected Alaska z=11 target count: 74,955 tiles.
   `--strict-missing` is passed.
 - `prepare-otm-docker.sh`: lays out a configured region as `osmdata.pbf` for
   the Docker image.
+- `ensure-otm-deps.sh`: installs/checks legacy GDAL helper scripts inside the
+  running image before DEM preprocessing.
 - `plan-srtm-cells.py`: lists HGT-style DEM cells and flags cells outside
   standard SRTM coverage.
 - `otm-docker.sh`: wraps the compose file for start/stop/logs/shell.
@@ -101,6 +103,7 @@ tools/opentopomap-render/scripts/fetch-srtm.py israel_palestine_poc
 
 # 5. Start the container and run the one-time import scripts.
 tools/opentopomap-render/scripts/otm-docker.sh up
+tools/opentopomap-render/scripts/otm-docker.sh deps
 tools/opentopomap-render/scripts/otm-docker.sh scripts
 tools/opentopomap-render/scripts/otm-docker.sh shell
 

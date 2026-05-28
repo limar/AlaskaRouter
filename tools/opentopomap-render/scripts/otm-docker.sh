@@ -15,6 +15,7 @@ commands:
   down        Stop the container
   logs        Follow container logs
   shell       Open a shell in the container
+  deps        Install/check renderer runtime dependencies
   scripts     Print the first-run import script order
 EOF
 }
@@ -33,8 +34,15 @@ case "${cmd}" in
   shell)
     docker compose -f "${COMPOSE}" exec otm-docker bash
     ;;
+  deps)
+    "${ROOT}/scripts/ensure-otm-deps.sh"
+    ;;
   scripts)
     cat <<'EOF'
+Before entering the container, run:
+
+  tools/opentopomap-render/scripts/otm-docker.sh deps
+
 Inside the container, run the OpenTopoMap import/preprocess scripts in order:
 
   cd /scripts
