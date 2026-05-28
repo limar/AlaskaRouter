@@ -189,3 +189,28 @@ Next slice:
 3. Import the tiny `israel_palestine_poc` extract first and render one z=3 tile.
 4. Once a one-tile render works, run the Alaska import and z=11 render on the
    server.
+
+## Docker Bootstrap Slice (2026-05-28)
+
+Upstream check: the official `der-stefan/OpenTopoMap` repo says the raster
+renderer is Mapnik-based and includes the files needed to build an OpenTopoMap
+server. The practical Docker wrapper `lukey78/otm-docker` packages those files
+and expects a project data layout containing `data/data/osmdata.pbf`,
+`data/data/srtm/`, `data/db`, and `data/letsencrypt`.
+
+Added local wrappers around that shape:
+
+- `config/docker-compose.otm.yml` uses `jhassler/otm-docker:latest` by default,
+  with an overridable `OTM_DOCKER_IMAGE`.
+- `scripts/prepare-otm-docker.sh <region>` symlinks the configured PBF to the
+  expected `osmdata.pbf` and creates Docker scratch directories.
+- `scripts/otm-docker.sh` wraps compose up/down/logs/shell and prints the
+  ordered one-time import scripts.
+- `scripts/render-region-command.py <region>` prints the Tirex batch command
+  for the configured bbox/zoom target.
+
+Still missing before first rendered tile:
+
+- SRTM source selection/fetch automation.
+- Actual container import run on the server.
+- Export from Tirex/mod_tile cache into a deterministic `z/x/y.png` tree.

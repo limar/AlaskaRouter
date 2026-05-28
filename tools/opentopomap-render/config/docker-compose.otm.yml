@@ -1,0 +1,17 @@
+services:
+  otm-docker:
+    image: ${OTM_DOCKER_IMAGE:-jhassler/otm-docker:latest}
+    container_name: ${OTM_CONTAINER_NAME:-alaskarouter-otm}
+    restart: unless-stopped
+    environment:
+      LETSENCRYPT: "0"
+      EMAIL: ${OTM_EMAIL:-admin@localhost}
+      DOMAIN: ${OTM_DOMAIN:-localhost}
+      WHITELIST: ${OTM_WHITELIST:-127.0.0.1}
+      MOD_TILE_PREVENT_EXPIRATION: "1"
+    ports:
+      - "${OTM_HTTP_PORT:-8080}:80"
+    volumes:
+      - ../data/docker/data:/data
+      - ../data/docker/db:/var/lib/postgresql
+      - ../data/docker/letsencrypt:/etc/letsencrypt

@@ -44,11 +44,53 @@ Expected Alaska z=11 target count: 74,955 tiles.
 
 - `estimate-region.py`: deterministic tile-count / bbox math.
 - `fetch-osm.sh`: resumable Geofabrik PBF fetch plus sidecar checksum fetch.
+- `prepare-otm-docker.sh`: lays out a configured region as `osmdata.pbf` for
+  the Docker image.
+- `otm-docker.sh`: wraps the compose file for start/stop/logs/shell.
+- `render-region-command.py`: prints the `tirex-batch` command for a region.
 - `pack-mbtiles.py`: convert a rendered `z/x/y.png` tile tree into MBTiles.
 
 The Mapnik/OpenTopoMap renderer itself is the next slice. It should write PNGs
 into `tools/opentopomap-render/data/tiles/<region>/<z>/<x>/<y>.png`, after
 which `pack-mbtiles.py` and `pmtiles convert` can package them.
+
+## Docker Renderer Bootstrap
+
+The official OpenTopoMap repository contains the Mapnik renderer files, and
+the `lukey78/otm-docker` wrapper packages those files into a Docker setup. Its
+README expects:
+
+- `data/data/osmdata.pbf`
+- `data/data/srtm/`
+- `data/db`
+- `data/letsencrypt`
+
+Our wrapper maps those paths under `tools/opentopomap-render/data/docker/`.
+
+```bash
+# 1. Estimate the target.
+tools/opentopomap-render/scripts/estimate-region.py israel_palestine_poc
+
+# 2. Fetch the configured Geofabrik extract.
+tools/opentopomap-render/scripts/fetch-osm.sh israel_palestine_poc
+
+# 3. Prepare the Docker data layout.
+tools/opentopomap-render/scripts/prepare-otm-docker.sh israel_palestine_poc
+
+# 4. Add region-covering SRTM ZIP/HGT files to:
+#    tools/opentopomap-render/data/docker/data/srtm/
+
+# 5. Start the container and run the one-time import scripts.
+tools/opentopomap-render/scripts/otm-docker.sh up
+tools/opentopomap-render/scripts/otm-docker.sh scripts
+tools/opentopomap-render/scripts/otm-docker.sh shell
+
+# 6. Print the pre-render command for the region.
+tools/opentopomap-render/scripts/render-region-command.py israel_palestine_poc
+```
+
+After Tirex renders into the server cache, the next missing piece is an export
+script that copies cached PNGs into `data/tiles/<region>/<z>/<x>/<y>.png`.
 
 ## Scratch Paths
 
