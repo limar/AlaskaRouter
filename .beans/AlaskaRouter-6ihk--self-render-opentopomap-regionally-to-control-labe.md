@@ -294,3 +294,26 @@ Still missing before first rendered tile:
 - Prepare Docker layout for `israel_palestine_poc`.
 - Start the renderer container and run the import scripts.
 - High-latitude DEM source decision for Alaska production rendering.
+
+## Docker Mount Fix (2026-05-28)
+
+Started the otm-docker container and verified the initial service startup. The
+container created its PostgreSQL cluster and Apache/mod_tile exposed `/otm` on
+port 8080.
+
+This exposed a wrapper bug: `osmdata.pbf` originally symlinked to a host path
+outside the `/data` bind mount, so the link was broken inside the container.
+Fixed the compose file to mount `data/osm` read-only at `/osm` and changed
+`prepare-otm-docker.sh` to point `osmdata.pbf` at `/osm/<region>.osm.pbf`.
+
+The first recreate also exposed a limitation in this Docker image: it persists
+`/var/lib/postgresql`, but keeps `/etc/postgresql` inside the container image.
+Until we add a durable import strategy, treat `data/docker/db` as disposable
+scratch if the container is recreated before the real server import.
+
+Still missing before first rendered tile:
+
+- Re-prepare Docker layout and re-check the mounted POC PBF inside the
+  container.
+- Run the import scripts.
+- High-latitude DEM source decision for Alaska production rendering.

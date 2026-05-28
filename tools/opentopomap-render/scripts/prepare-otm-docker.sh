@@ -17,8 +17,11 @@ if [[ ! -f "${PBF}" ]]; then
   exit 1
 fi
 
-mkdir -p "${DOCKER_DATA}/srtm" "${DATA_ROOT}/docker/db" "${DATA_ROOT}/docker/letsencrypt"
-ln -sf "../../osm/${REGION}.osm.pbf" "${DOCKER_DATA}/osmdata.pbf"
+mkdir -p \
+  "${DOCKER_DATA}/srtm" \
+  "${DATA_ROOT}/docker/db" \
+  "${DATA_ROOT}/docker/letsencrypt"
+ln -sf "/osm/${REGION}.osm.pbf" "${DOCKER_DATA}/osmdata.pbf"
 
 python3 - "${CONFIG}" "${REGION}" "${DATA_ROOT}/docker/REGION.txt" <<'PY'
 import json, pathlib, sys
@@ -36,6 +39,7 @@ out.write_text(
 PY
 
 echo "Prepared otm-docker data layout for ${REGION}"
-echo "PBF: ${DOCKER_DATA}/osmdata.pbf -> ${PBF}"
+echo "PBF: ${DOCKER_DATA}/osmdata.pbf -> /osm/${REGION}.osm.pbf"
+echo "Host PBF source: ${PBF}"
 echo "SRTM directory: ${DOCKER_DATA}/srtm"
 echo "Next: add SRTM ZIP/HGT files covering the region, then run scripts/otm-docker.sh up"

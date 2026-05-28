@@ -74,7 +74,12 @@ README expects:
 - `data/db`
 - `data/letsencrypt`
 
-Our wrapper maps those paths under `tools/opentopomap-render/data/docker/`.
+Our wrapper maps those paths under `tools/opentopomap-render/data/docker/` and
+mounts `tools/opentopomap-render/data/osm/` into the container at `/osm`.
+The image keeps PostgreSQL config inside the container image, so if the
+container is recreated before a durable import strategy is added, clear the
+generated `data/docker/db/` scratch directory and let the image initialize it
+again.
 
 ```bash
 # 1. Estimate the target.
