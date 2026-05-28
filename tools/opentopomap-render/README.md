@@ -47,7 +47,8 @@ Expected Alaska z=11 target count: 74,955 tiles.
 - `estimate-region.py`: deterministic tile-count / bbox math.
 - `fetch-osm.sh`: resumable Geofabrik PBF fetch plus sidecar checksum fetch.
 - `fetch-srtm.py`: resumable SRTMGL1 HGT ZIP fetch for regions fully covered
-  by standard SRTM.
+  by standard SRTM. HTTP 404 cells are treated as absent no-data cells unless
+  `--strict-missing` is passed.
 - `prepare-otm-docker.sh`: lays out a configured region as `osmdata.pbf` for
   the Docker image.
 - `plan-srtm-cells.py`: lists HGT-style DEM cells and flags cells outside

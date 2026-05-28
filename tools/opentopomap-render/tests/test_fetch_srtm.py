@@ -26,12 +26,16 @@ def load_fetcher():
 
 
 @contextlib.contextmanager
-def srtm_server():
+def srtm_server(missing_paths: set[str] | None = None):
     seen_paths: list[str] = []
+    missing_paths = missing_paths or set()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
             seen_paths.append(self.path)
+            if self.path in missing_paths:
+                self.send_error(404)
+                return
             self.send_response(200)
             self.send_header("Content-Type", "application/zip")
             self.end_headers()
@@ -76,6 +80,27 @@ class FetchSrtmTests(unittest.TestCase):
                 (pathlib.Path(tmp) / "N29E033.SRTMGL1.hgt.zip").read_bytes(),
                 ZIP_BYTES,
             )
+
+    def test_missing_cells_are_nonfatal_by_default(self):
+        fetcher = load_fetcher()
+
+        with tempfile.TemporaryDirectory() as tmp, srtm_server(
+            {"/N29E033.SRTMGL1.hgt.zip"}
+        ) as (base_url, _seen):
+            rc = fetcher.main(
+                [
+                    "israel_palestine_poc",
+                    "--base-url",
+                    base_url,
+                    "--output-dir",
+                    tmp,
+                    "--jobs",
+                    "1",
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            self.assertFalse((pathlib.Path(tmp) / "N29E033.SRTMGL1.hgt.zip").exists())
 
     def test_refuses_regions_outside_standard_srtm_coverage(self):
         fetcher = load_fetcher()

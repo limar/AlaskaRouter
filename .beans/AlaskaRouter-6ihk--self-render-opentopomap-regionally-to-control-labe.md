@@ -273,3 +273,24 @@ Still missing before first rendered tile:
 
 - Actual container import run on the server.
 - High-latitude DEM source decision for Alaska production rendering.
+
+## POC Data Fetch Slice (2026-05-28)
+
+Fetched the small POC inputs locally:
+
+- `data/osm/israel_palestine_poc.osm.pbf`: Geofabrik Israel/Palestine extract,
+  116 MiB download, 128 MiB on disk with checksum sidecar.
+- `data/docker/data/srtm/`: 12 SRTMGL1 ZIP files, 94 MiB on disk.
+
+Three SRTMGL1 cells inside the bbox return HTTP 404 from the ESA mirror:
+`N32E033`, `N33E033`, and `N33E034`. The fetcher now treats 404s as nonfatal
+absent/no-data cells by default and offers `--strict-missing` for audits.
+
+Also added curl timeouts to `fetch-osm.sh` so checksum sidecar requests cannot
+silently block a completed PBF fetch.
+
+Still missing before first rendered tile:
+
+- Prepare Docker layout for `israel_palestine_poc`.
+- Start the renderer container and run the import scripts.
+- High-latitude DEM source decision for Alaska production rendering.

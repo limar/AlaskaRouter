@@ -24,13 +24,15 @@ FILE="${OUTDIR}/${REGION}.osm.pbf"
 
 echo "Fetching ${URL}"
 curl -fL --continue-at - --retry 3 --retry-delay 5 \
+  --connect-timeout 20 --max-time 1800 \
   --output "${FILE}.tmp" "${URL}"
 mv "${FILE}.tmp" "${FILE}"
 
 # Geofabrik publishes sidecar checksums beside extracts. Keep them for manual
 # verification and future automation; not every mirror exposes all algorithms.
 for suffix in md5 sha256; do
-  if curl -fsL --output "${FILE}.${suffix}" "${URL}.${suffix}"; then
+  if curl -fsL --connect-timeout 10 --max-time 30 \
+    --output "${FILE}.${suffix}" "${URL}.${suffix}"; then
     echo "Fetched ${FILE}.${suffix}"
   fi
 done

@@ -74,7 +74,7 @@ def write_file(path: pathlib.Path, data: bytes) -> None:
 
 
 def fetch_one(args) -> tuple[str, str, str | None]:
-    cell, base_url, out_dir, force, retries, timeout = args
+    cell, base_url, out_dir, force, retries, timeout, strict_missing = args
     out_path = out_dir / cell.filename
     if out_path.exists() and not force:
         return "skipped", cell.filename, None
@@ -85,6 +85,13 @@ def fetch_one(args) -> tuple[str, str, str | None]:
         try:
             write_file(out_path, fetch_bytes(url, timeout))
             return "written", cell.filename, None
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 and not strict_missing:
+                exc.close()
+                return "missing", cell.filename, "404 Not Found"
+            last_error = exc
+            if attempt < retries:
+                time.sleep(min(2.0, 0.25 * (attempt + 1)))
         except (OSError, urllib.error.URLError, ValueError) as exc:
             last_error = exc
             if attempt < retries:
@@ -102,6 +109,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--retries", type=int, default=3)
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--strict-missing", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     return ap.parse_args(argv)
 
@@ -140,10 +148,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     tasks = [
-        (cell, args.base_url, out_dir, args.force, args.retries, args.timeout)
+        (
+            cell,
+            args.base_url,
+            out_dir,
+            args.force,
+            args.retries,
+            args.timeout,
+            args.strict_missing,
+        )
         for cell in cells
     ]
-    written = skipped = 0
+    written = skipped = missing_count = 0
     failures: list[tuple[str, str | None]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         for status, filename, error in pool.map(fetch_one, tasks):
@@ -151,10 +167,16 @@ def main(argv: list[str] | None = None) -> int:
                 written += 1
             elif status == "skipped":
                 skipped += 1
+            elif status == "missing":
+                missing_count += 1
+                print(f"missing {filename}: {error}", file=sys.stderr)
             else:
                 failures.append((filename, error))
 
-    print(f"written={written} skipped={skipped} failed={len(failures)}")
+    print(
+        f"written={written} skipped={skipped} "
+        f"missing={missing_count} failed={len(failures)}"
+    )
     for filename, error in failures[:20]:
         print(f"failed {filename}: {error}", file=sys.stderr)
     if len(failures) > 20:
