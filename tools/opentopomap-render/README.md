@@ -48,11 +48,13 @@ Expected Alaska z=11 target count: 74,955 tiles.
   the Docker image.
 - `otm-docker.sh`: wraps the compose file for start/stop/logs/shell.
 - `render-region-command.py`: prints the `tirex-batch` command for a region.
+- `export-region-tiles.py`: copies rendered PNGs from the local renderer into
+  the packageable `z/x/y.png` tree.
 - `pack-mbtiles.py`: convert a rendered `z/x/y.png` tile tree into MBTiles.
 
-The Mapnik/OpenTopoMap renderer itself is the next slice. It should write PNGs
-into `tools/opentopomap-render/data/tiles/<region>/<z>/<x>/<y>.png`, after
-which `pack-mbtiles.py` and `pmtiles convert` can package them.
+The Docker renderer and exporter now write PNGs into
+`tools/opentopomap-render/data/tiles/<region>/<z>/<x>/<y>.png`, after which
+`pack-mbtiles.py` and `pmtiles convert` can package them.
 
 ## Docker Renderer Bootstrap
 
@@ -87,10 +89,17 @@ tools/opentopomap-render/scripts/otm-docker.sh shell
 
 # 6. Print the pre-render command for the region.
 tools/opentopomap-render/scripts/render-region-command.py israel_palestine_poc
+
+# 7. Export rendered tiles from the local HTTP renderer into the packable tree.
+tools/opentopomap-render/scripts/export-region-tiles.py israel_palestine_poc
 ```
 
-After Tirex renders into the server cache, the next missing piece is an export
-script that copies cached PNGs into `data/tiles/<region>/<z>/<x>/<y>.png`.
+The exporter is resumable by default: existing PNG files are skipped unless
+`--force` is passed. Use `--dry-run` before a large export:
+
+```bash
+tools/opentopomap-render/scripts/export-region-tiles.py alaska_z11 --dry-run
+```
 
 ## Scratch Paths
 

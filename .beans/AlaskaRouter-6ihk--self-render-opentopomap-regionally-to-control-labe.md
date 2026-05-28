@@ -213,4 +213,19 @@ Still missing before first rendered tile:
 
 - SRTM source selection/fetch automation.
 - Actual container import run on the server.
-- Export from Tirex/mod_tile cache into a deterministic `z/x/y.png` tree.
+
+## Local Renderer Export Slice (2026-05-28)
+
+Added `scripts/export-region-tiles.py <region>` to copy rendered PNGs from the
+local OpenTopoMap HTTP endpoint into `data/tiles/<region>/<z>/<x>/<y>.png`.
+It is resumable by default, validates PNG responses, supports `--dry-run`, and
+keeps the export shape directly compatible with `pack-mbtiles.py`.
+
+Added `tests/test_export_region_tiles.py`, which starts a loopback HTTP server
+and verifies that the `israel_palestine_poc` region exports exactly
+`3/4/3.png`.
+
+Still missing before first rendered tile:
+
+- SRTM source selection/fetch automation.
+- Actual container import run on the server.
