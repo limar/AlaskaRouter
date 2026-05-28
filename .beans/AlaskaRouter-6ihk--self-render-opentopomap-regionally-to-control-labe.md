@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-28T16:26:39Z
+updated_at: 2026-05-28T19:48:18Z
 ---
 
 ## Why
@@ -425,3 +425,31 @@ Validation:
 - `bash -n tools/opentopomap-render/scripts/prepare-copernicus-dem.sh tools/opentopomap-render/scripts/otm-docker.sh`
 - `docker compose -f tools/opentopomap-render/config/docker-compose.otm.yml config`
 - `tools/opentopomap-render/scripts/plan-copernicus-dem.py alaska_z11`
+
+
+## Alaska DEM Warp Overflow (2026-05-28)
+
+The first server run of `/alaskarouter-scripts/prepare-copernicus-dem.sh` built
+the Copernicus VRT and materialized a full Alaska 30m `raw.tif`, then failed in
+`gdalwarp` with:
+
+`ERROR 1: Integer overflow : nSrcXSize=92643, nSrcYSize=75600`
+
+This is a GDAL 2.4/image-size limitation inside `jhassler/otm-docker`, not a
+server capacity issue. Patched `prepare-copernicus-dem.sh` to keep `raw.vrt`
+for inspection but feed the individual Copernicus COG files directly into each
+`gdalwarp` command. That avoids one giant source raster while still emitting
+the OpenTopoMap-required `warp-*`, `relief-*`, and `hillshade-*` products.
+
+Validation:
+
+- `bash -n tools/opentopomap-render/scripts/prepare-copernicus-dem.sh`
+- `python3 -m unittest discover tools/opentopomap-render/tests`
+
+
+## Alaska DEM Warp Progress (2026-05-28)
+
+- Re-ran `prepare-copernicus-dem.sh` on `sol-icomp-03.lab.gdc.il.infinidat.com` under `/home/mlifshitz/tiles/AlaskaRouter` after removing stale warp outputs.
+- The patched `gdalwarp` flow passed the previous GDAL 2.4 integer overflow by streaming the 596 Copernicus source COGs directly instead of materializing a giant `raw.tif` source.
+- Current server outputs include `warp-30.tif` at roughly 46 GiB and `warp-60.tif` at roughly 13 GiB; `gdaldem hillshade` is still processing the 30 m derivative.
+- Local validation remains `bash -n tools/opentopomap-render/scripts/prepare-copernicus-dem.sh` and `python3 -m unittest discover tools/opentopomap-render/tests`.
