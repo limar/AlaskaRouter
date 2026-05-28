@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-28T16:14:02Z
+updated_at: 2026-05-28T16:26:39Z
 ---
 
 ## Why
@@ -393,3 +393,35 @@ Still missing before Alaska production z11 render:
   cover most of Alaska.
 - Run the same server-side import/render/export sequence for `alaska_z11`.
 - Apply label overrides and visually diff against upstream OpenTopoMap tiles.
+
+
+## Alaska Server Work Plan (2026-05-28)
+
+The production render should move to the Linux server instead of the local
+Mac. The available server profile is sufficient for the expensive path: Docker
+ready, `jhassler/otm-docker` already pulled, 669 GiB free disk, 32 CPUs, and
+754 GiB RAM. Local work should remain orchestration/tests; copy back only the
+final MBTiles/PMTiles artifact.
+
+Added the high-latitude DEM path for Alaska:
+
+- `plan-copernicus-dem.py` lists Copernicus GLO-30 one-degree COG URLs for a
+  configured region. `alaska_z11` plans 1,050 possible cells before 404/no-data
+  filtering.
+- `fetch-copernicus-dem.py` downloads those COGs resumably into
+  `data/docker/data/copernicus-dem/` and treats 404 cells as missing by default.
+- `prepare-copernicus-dem.sh` runs inside otm-docker and builds the same
+  `raw.tif`, `warp-*`, `relief-*`, and `hillshade-*` products that the
+  OpenTopoMap style expects under `/mnt/data/srtm`. This replaces
+  `03_dem_hillshade.sh` for Alaska.
+- Docker compose now mounts host scripts read-only at `/alaskarouter-scripts`
+  so the server container can run the Alaska-specific DEM prep script.
+- README now contains the server sequence and disk/bandwidth expectations.
+
+Validation:
+
+- `python3 -m unittest discover tools/opentopomap-render/tests`
+- `python3 -m py_compile tools/opentopomap-render/scripts/plan-copernicus-dem.py tools/opentopomap-render/scripts/fetch-copernicus-dem.py`
+- `bash -n tools/opentopomap-render/scripts/prepare-copernicus-dem.sh tools/opentopomap-render/scripts/otm-docker.sh`
+- `docker compose -f tools/opentopomap-render/config/docker-compose.otm.yml config`
+- `tools/opentopomap-render/scripts/plan-copernicus-dem.py alaska_z11`

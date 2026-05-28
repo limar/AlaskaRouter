@@ -17,3 +17,4 @@ services:
       - ../data/docker/tablespace:/mnt/db
       - ../data/docker/db:/var/lib/postgresql
       - ../data/docker/letsencrypt:/etc/letsencrypt
+      - ../scripts:/alaskarouter-scripts:ro

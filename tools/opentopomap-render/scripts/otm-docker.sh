@@ -43,13 +43,17 @@ Before entering the container, run:
 
   tools/opentopomap-render/scripts/otm-docker.sh deps
 
-Inside the container, run the OpenTopoMap import/preprocess scripts in order:
+Inside the container, run the OpenTopoMap import/preprocess scripts in order.
+For SRTM-covered regions, use the upstream DEM script. For Alaska, use the
+Copernicus DEM prep script instead of 03_dem_hillshade.sh:
 
   cd /scripts
   sh 00_setup_database.sh
   sh 01_download_water_polys.sh
   sh 02_import_osm_data.sh
-  sh 03_dem_hillshade.sh
+  # Run exactly one DEM prep step:
+  sh 03_dem_hillshade.sh                         # SRTM regions
+  /alaskarouter-scripts/prepare-copernicus-dem.sh # Alaska/Copernicus regions
   sh 04_preprocess_osm_data.sh
   sh 05_dem_contours1.sh
   sh 06_dem_contours2.sh

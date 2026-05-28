@@ -49,12 +49,20 @@ Expected Alaska z=11 target count: 74,955 tiles.
 - `fetch-srtm.py`: resumable SRTMGL1 HGT ZIP fetch for regions fully covered
   by standard SRTM. HTTP 404 cells are treated as absent no-data cells unless
   `--strict-missing` is passed.
+- `plan-copernicus-dem.py`: deterministic Copernicus GLO-30 COG URL planner
+  for high-latitude regions such as Alaska.
+- `fetch-copernicus-dem.py`: resumable Copernicus GLO-30 COG fetcher. HTTP
+  404 cells are treated as absent no-data cells unless `--strict-missing` is
+  passed.
 - `prepare-otm-docker.sh`: lays out a configured region as `osmdata.pbf` for
   the Docker image.
 - `ensure-otm-deps.sh`: installs/checks legacy GDAL helper scripts, creates
   Tirex tile cache directories, and reloads Tirex inside the running image.
 - `plan-srtm-cells.py`: lists HGT-style DEM cells and flags cells outside
   standard SRTM coverage.
+- `prepare-copernicus-dem.sh`: runs inside the Docker container and builds
+  the `raw.tif`, `warp-*`, `relief-*`, and `hillshade-*` files expected by the
+  OpenTopoMap style from Copernicus GLO-30 COGs.
 - `otm-docker.sh`: wraps the compose file for start/stop/logs/shell.
 - `render-region-command.py`: prints the `tirex-batch` command for a region.
 - `export-region-tiles.py`: copies rendered PNGs from the local renderer into
@@ -80,6 +88,8 @@ README expects:
 Our wrapper maps those paths under `tools/opentopomap-render/data/docker/` and
 mounts them at the image's expected `/mnt/data` and `/mnt/db` paths. It also
 mounts `tools/opentopomap-render/data/osm/` into the container at `/osm`.
+It mounts `tools/opentopomap-render/scripts/` read-only at
+`/alaskarouter-scripts` so Alaska-specific DEM prep can run inside the image.
 The image keeps PostgreSQL config inside the container image, so if the
 container is recreated before a durable import strategy is added, clear the
 generated `data/docker/db/` scratch directory and let the image initialize it
@@ -120,6 +130,66 @@ The exporter is resumable by default: existing PNG files are skipped unless
 
 ```bash
 tools/opentopomap-render/scripts/export-region-tiles.py alaska_z11 --dry-run
+```
+
+## Alaska Server Render
+
+Use the Linux server for production Alaska work. The confirmed target machine
+has Docker, `jhassler/otm-docker` already pulled, 669 GiB free disk, 32 CPUs,
+and 754 GiB RAM. Keep local work to scripts/tests and copy back only the final
+tile package.
+
+Expected generated volume is large but fits that server:
+
+- `alaska_z11`: 74,955 rendered PNG tiles.
+- Copernicus GLO-30 bbox plan: 1,050 one-degree COG URLs before 404/no-data
+  filtering.
+- DEM products include `raw.tif`, `warp-30.tif`, `warp-60.tif`, lower-resolution
+  warps, relief, and hillshade GeoTIFFs.
+- PostGIS import, contours, Tirex cache, MBTiles, and PMTiles all live under
+  `tools/opentopomap-render/data/` and remain disposable/rebuildable.
+
+Server sequence:
+
+```bash
+git clone <repo-url> AlaskaRouter
+cd AlaskaRouter
+
+tools/opentopomap-render/scripts/estimate-region.py alaska_z11
+tools/opentopomap-render/scripts/plan-copernicus-dem.py alaska_z11 | tee copernicus-plan.txt
+
+tools/opentopomap-render/scripts/fetch-osm.sh alaska_z11
+tools/opentopomap-render/scripts/fetch-copernicus-dem.py alaska_z11 --jobs 16
+tools/opentopomap-render/scripts/prepare-otm-docker.sh alaska_z11
+
+tools/opentopomap-render/scripts/otm-docker.sh up
+tools/opentopomap-render/scripts/otm-docker.sh deps
+tools/opentopomap-render/scripts/otm-docker.sh shell
+```
+
+Inside the container:
+
+```bash
+cd /scripts
+sh 00_setup_database.sh
+sh 01_download_water_polys.sh
+sh 02_import_osm_data.sh
+/alaskarouter-scripts/prepare-copernicus-dem.sh
+sh 04_preprocess_osm_data.sh
+sh 05_dem_contours1.sh
+sh 06_dem_contours2.sh
+```
+
+Then on the host:
+
+```bash
+tools/opentopomap-render/scripts/render-region-command.py alaska_z11
+# Run the printed tirex-batch command inside the container. Use OTM_RENDER_PROCESSES
+# conservatively at first, then raise it while watching CPU, memory, and I/O.
+tools/opentopomap-render/scripts/export-region-tiles.py alaska_z11
+tools/opentopomap-render/scripts/pack-mbtiles.py \
+  --tiles-dir tools/opentopomap-render/data/tiles/alaska_z11 \
+  --mbtiles tools/opentopomap-render/data/mbtiles/alaska_z11.mbtiles
 ```
 
 ## Scratch Paths
