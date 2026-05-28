@@ -65,3 +65,6 @@ spikes/A_maplibre/Resources-secrets/
 .claude/scheduled_tasks.lock
 AlaskaRouter/Resources/*.sqlite-shm
 AlaskaRouter/Resources/*.sqlite-wal
+
+# Codex
+.codex/
