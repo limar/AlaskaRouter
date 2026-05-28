@@ -1,0 +1,18 @@
+{
+  "regions": {
+    "alaska_z11": {
+      "title": "Alaska statewide z=11 detail",
+      "geofabrik_url": "https://download.geofabrik.de/north-america/us/alaska-latest.osm.pbf",
+      "bbox": [-180.0, 51.0, -130.0, 72.0],
+      "zooms": [11],
+      "description": "Primary v1 detail-pack target. Render only the z=11 delta, then merge with the existing z=0..10 alaska-pack.pmtiles."
+    },
+    "israel_palestine_poc": {
+      "title": "Israel/Palestine low-zoom label POC",
+      "geofabrik_url": "https://download.geofabrik.de/asia/israel-and-palestine-latest.osm.pbf",
+      "bbox": [33.9, 29.3, 36.0, 33.4],
+      "zooms": [3],
+      "description": "Small first self-render target from AlaskaRouter-6ihk for proving OpenTopoMap pixel-equivalence before applying label overrides."
+    }
+  }
+}

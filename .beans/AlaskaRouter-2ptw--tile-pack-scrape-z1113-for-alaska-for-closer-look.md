@@ -5,8 +5,10 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-25T14:34:45Z
-updated_at: 2026-05-28T10:02:57Z
+updated_at: 2026-05-28T10:37:11Z
 parent: AlaskaRouter-xtua
+blocked_by:
+    - AlaskaRouter-6ihk
 ---
 
 User feedback after vyfe shipped (2026-05-25):

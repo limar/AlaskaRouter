@@ -160,3 +160,32 @@ When we resume:
 4. Visual diff against the public OpenTopoMap.
 
 Goal for the first session: end-to-end pipeline producing one tile, no overrides applied yet — just prove we can reproduce upstream.
+
+## Rescope (2026-05-28)
+
+`AlaskaRouter-2ptw` now depends on this bean. The immediate production driver is
+not political-label overrides; it is **legally/repeatably producing Alaska z=11
+detail** without bulk-downloading public tile-server PNGs. Keep the label
+override POC as a useful small render target, but prioritize the pipeline shape
+needed for `alaska_z11`.
+
+First local slice completed:
+
+- Added `tools/opentopomap-render/README.md` with disk/bandwidth notes and the
+  v1 z=11 flow.
+- Added `config/regions.json` with `alaska_z11` and `israel_palestine_poc`
+  render targets.
+- Added `scripts/estimate-region.py`; verified `alaska_z11` = 74,955 tiles and
+  `israel_palestine_poc` = 1 tile.
+- Added `scripts/fetch-osm.sh` for configured Geofabrik PBF downloads.
+- Added `scripts/pack-mbtiles.py` for packaging rendered `z/x/y.png` tile trees
+  into MBTiles before PMTiles conversion.
+- Gitignored `tools/opentopomap-render/data/` as scratch.
+
+Next slice:
+
+1. Build or select the Docker image that can run the OpenTopoMap Mapnik stack.
+2. Clone/pin the OpenTopoMap CartoCSS source used by that image.
+3. Import the tiny `israel_palestine_poc` extract first and render one z=3 tile.
+4. Once a one-tile render works, run the Alaska import and z=11 render on the
+   server.

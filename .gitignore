@@ -36,6 +36,7 @@ ridbapi.txt
 # here; tools/build-places/run.sh writes pois.sqlite into it and the user
 # manually copies the final DB to AlaskaRouter/Resources/alaska-places.sqlite.
 tools/build-places/data/
+tools/opentopomap-render/data/
 
 # Tile packs — too large for GitHub's 100 MB/file cap (AlaskaRouter-76y3).
 # Distributed via GitHub Releases. See tools/build-pack/fetch-pack.sh to
