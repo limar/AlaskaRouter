@@ -317,3 +317,27 @@ Still missing before first rendered tile:
   container.
 - Run the import scripts.
 - High-latitude DEM source decision for Alaska production rendering.
+
+## Docker Path Fix (2026-05-28)
+
+Ran the first two otm-docker setup scripts locally:
+
+- `00_setup_database.sh` completed.
+- `01_download_water_polys.sh` downloaded and unpacked the upstream water
+  polygon sources. The full water polygon archive was 882 MiB and took about
+  42 minutes locally; the unpacked host copy is 1.2 GiB.
+
+`02_import_osm_data.sh` exposed another image contract mismatch: the image
+expects `osmdata.pbf` under `/mnt/data` and tablespace scratch under `/mnt/db`.
+Copied the downloaded `water-polygons` tree out of the live container before
+recreating it, then updated compose to mount:
+
+- `data/docker/data` -> `/mnt/data`
+- `data/docker/tablespace` -> `/mnt/db`
+- `data/osm` -> `/osm` read-only
+
+Still missing before first rendered tile:
+
+- Recreate the container with the corrected `/mnt/data` and `/mnt/db` mounts.
+- Re-run/import from the persisted water polygon and POC PBF data.
+- High-latitude DEM source decision for Alaska production rendering.

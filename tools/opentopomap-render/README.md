@@ -72,9 +72,11 @@ README expects:
 - `data/data/osmdata.pbf`
 - `data/data/srtm/`
 - `data/db`
+- `data/tablespace`
 - `data/letsencrypt`
 
 Our wrapper maps those paths under `tools/opentopomap-render/data/docker/` and
+mounts them at the image's expected `/mnt/data` and `/mnt/db` paths. It also
 mounts `tools/opentopomap-render/data/osm/` into the container at `/osm`.
 The image keeps PostgreSQL config inside the container image, so if the
 container is recreated before a durable import strategy is added, clear the

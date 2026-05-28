@@ -12,7 +12,8 @@ services:
     ports:
       - "${OTM_HTTP_PORT:-8080}:80"
     volumes:
-      - ../data/docker/data:/data
+      - ../data/docker/data:/mnt/data
       - ../data/osm:/osm:ro
+      - ../data/docker/tablespace:/mnt/db
       - ../data/docker/db:/var/lib/postgresql
       - ../data/docker/letsencrypt:/etc/letsencrypt
