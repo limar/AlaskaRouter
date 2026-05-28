@@ -16,4 +16,10 @@ fi
 
 command -v gdal_fillnodata.py
 command -v gdal_merge.py
+
+mkdir -p /mnt/tiles/opentopomap /mnt/tiles/example /mnt/tiles/test
+chown -R tirex:tirex /mnt/tiles
+
+service tirex-backend-manager restart
+service tirex-master restart
 '

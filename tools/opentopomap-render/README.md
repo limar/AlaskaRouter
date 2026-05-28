@@ -51,8 +51,8 @@ Expected Alaska z=11 target count: 74,955 tiles.
   `--strict-missing` is passed.
 - `prepare-otm-docker.sh`: lays out a configured region as `osmdata.pbf` for
   the Docker image.
-- `ensure-otm-deps.sh`: installs/checks legacy GDAL helper scripts inside the
-  running image before DEM preprocessing.
+- `ensure-otm-deps.sh`: installs/checks legacy GDAL helper scripts, creates
+  Tirex tile cache directories, and reloads Tirex inside the running image.
 - `plan-srtm-cells.py`: lists HGT-style DEM cells and flags cells outside
   standard SRTM coverage.
 - `otm-docker.sh`: wraps the compose file for start/stop/logs/shell.

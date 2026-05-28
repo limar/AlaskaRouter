@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-6ihk
 title: Self-render OpenTopoMap regionally to control labels at render time
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-31T14:13:44Z
+updated_at: 2026-05-28T16:14:02Z
 ---
 
 ## Why
@@ -160,3 +160,236 @@ When we resume:
 4. Visual diff against the public OpenTopoMap.
 
 Goal for the first session: end-to-end pipeline producing one tile, no overrides applied yet — just prove we can reproduce upstream.
+
+## Rescope (2026-05-28)
+
+`AlaskaRouter-2ptw` now depends on this bean. The immediate production driver is
+not political-label overrides; it is **legally/repeatably producing Alaska z=11
+detail** without bulk-downloading public tile-server PNGs. Keep the label
+override POC as a useful small render target, but prioritize the pipeline shape
+needed for `alaska_z11`.
+
+First local slice completed:
+
+- Added `tools/opentopomap-render/README.md` with disk/bandwidth notes and the
+  v1 z=11 flow.
+- Added `config/regions.json` with `alaska_z11` and `israel_palestine_poc`
+  render targets.
+- Added `scripts/estimate-region.py`; verified `alaska_z11` = 74,955 tiles and
+  `israel_palestine_poc` = 1 tile.
+- Added `scripts/fetch-osm.sh` for configured Geofabrik PBF downloads.
+- Added `scripts/pack-mbtiles.py` for packaging rendered `z/x/y.png` tile trees
+  into MBTiles before PMTiles conversion.
+- Gitignored `tools/opentopomap-render/data/` as scratch.
+
+Next slice:
+
+1. Build or select the Docker image that can run the OpenTopoMap Mapnik stack.
+2. Clone/pin the OpenTopoMap CartoCSS source used by that image.
+3. Import the tiny `israel_palestine_poc` extract first and render one z=3 tile.
+4. Once a one-tile render works, run the Alaska import and z=11 render on the
+   server.
+
+## Docker Bootstrap Slice (2026-05-28)
+
+Upstream check: the official `der-stefan/OpenTopoMap` repo says the raster
+renderer is Mapnik-based and includes the files needed to build an OpenTopoMap
+server. The practical Docker wrapper `lukey78/otm-docker` packages those files
+and expects a project data layout containing `data/data/osmdata.pbf`,
+`data/data/srtm/`, `data/db`, and `data/letsencrypt`.
+
+Added local wrappers around that shape:
+
+- `config/docker-compose.otm.yml` uses `jhassler/otm-docker:latest` by default,
+  with an overridable `OTM_DOCKER_IMAGE`.
+- `scripts/prepare-otm-docker.sh <region>` symlinks the configured PBF to the
+  expected `osmdata.pbf` and creates Docker scratch directories.
+- `scripts/otm-docker.sh` wraps compose up/down/logs/shell and prints the
+  ordered one-time import scripts.
+- `scripts/render-region-command.py <region>` prints the Tirex batch command
+  for the configured bbox/zoom target.
+
+Still missing before first rendered tile:
+
+- SRTM source selection/fetch automation.
+- Actual container import run on the server.
+
+## DEM Planning Slice (2026-05-28)
+
+Added `scripts/plan-srtm-cells.py <region>` and tests. The script lists
+HGT-style DEM cells for a configured region and flags cells outside standard
+SRTM coverage.
+
+Findings:
+
+- `israel_palestine_poc` needs 15 cells, all inside standard SRTM coverage.
+- `alaska_z11` spans 1,050 HGT-style cells; 450 are inside standard SRTM
+  coverage and 600 are north of 60 degrees, outside standard SRTM coverage.
+
+This means the POC can proceed with normal SRTM HGT ZIP/HGT files, but the
+Alaska production render needs a high-latitude DEM source decision before we
+spend bandwidth on elevation data.
+
+Still missing before first rendered tile:
+
+- SRTM source/fetch automation for the low-latitude POC.
+- High-latitude DEM source decision for Alaska.
+- Actual container import run on the server.
+
+## Local Renderer Export Slice (2026-05-28)
+
+Added `scripts/export-region-tiles.py <region>` to copy rendered PNGs from the
+local OpenTopoMap HTTP endpoint into `data/tiles/<region>/<z>/<x>/<y>.png`.
+It is resumable by default, validates PNG responses, supports `--dry-run`, and
+keeps the export shape directly compatible with `pack-mbtiles.py`.
+
+Added `tests/test_export_region_tiles.py`, which starts a loopback HTTP server
+and verifies that the `israel_palestine_poc` region exports exactly
+`3/4/3.png`.
+
+Still missing before first rendered tile:
+
+- SRTM source selection/fetch automation.
+- Actual container import run on the server.
+
+## SRTM Fetch Slice (2026-05-28)
+
+Added `scripts/fetch-srtm.py <region>` and tests. The script fetches
+SRTMGL1 HGT ZIP files from the ESA public DEM mirror by default, writes them
+to `data/docker/data/srtm`, validates ZIP responses, skips existing files, and
+supports `--dry-run`.
+
+The script deliberately refuses regions with cells outside standard SRTM
+coverage. For the current targets:
+
+- `israel_palestine_poc` can fetch 15 SRTMGL1 ZIPs immediately.
+- `alaska_z11` still refuses because 600 of its 1,050 HGT-style cells are
+  north of standard SRTM coverage.
+
+Also corrected `export-region-tiles.py` to default to the otm-docker tile
+route: `http://127.0.0.1:8080/otm`.
+
+Still missing before first rendered tile:
+
+- Actual container import run on the server.
+- High-latitude DEM source decision for Alaska production rendering.
+
+## POC Data Fetch Slice (2026-05-28)
+
+Fetched the small POC inputs locally:
+
+- `data/osm/israel_palestine_poc.osm.pbf`: Geofabrik Israel/Palestine extract,
+  116 MiB download, 128 MiB on disk with checksum sidecar.
+- `data/docker/data/srtm/`: 12 SRTMGL1 ZIP files, 94 MiB on disk.
+
+Three SRTMGL1 cells inside the bbox return HTTP 404 from the ESA mirror:
+`N32E033`, `N33E033`, and `N33E034`. The fetcher now treats 404s as nonfatal
+absent/no-data cells by default and offers `--strict-missing` for audits.
+
+Also added curl timeouts to `fetch-osm.sh` so checksum sidecar requests cannot
+silently block a completed PBF fetch.
+
+Still missing before first rendered tile:
+
+- Prepare Docker layout for `israel_palestine_poc`.
+- Start the renderer container and run the import scripts.
+- High-latitude DEM source decision for Alaska production rendering.
+
+## Docker Mount Fix (2026-05-28)
+
+Started the otm-docker container and verified the initial service startup. The
+container created its PostgreSQL cluster and Apache/mod_tile exposed `/otm` on
+port 8080.
+
+This exposed a wrapper bug: `osmdata.pbf` originally symlinked to a host path
+outside the `/data` bind mount, so the link was broken inside the container.
+Fixed the compose file to mount `data/osm` read-only at `/osm` and changed
+`prepare-otm-docker.sh` to point `osmdata.pbf` at `/osm/<region>.osm.pbf`.
+
+The first recreate also exposed a limitation in this Docker image: it persists
+`/var/lib/postgresql`, but keeps `/etc/postgresql` inside the container image.
+Until we add a durable import strategy, treat `data/docker/db` as disposable
+scratch if the container is recreated before the real server import.
+
+Still missing before first rendered tile:
+
+- Re-prepare Docker layout and re-check the mounted POC PBF inside the
+  container.
+- Run the import scripts.
+- High-latitude DEM source decision for Alaska production rendering.
+
+## Docker Path Fix (2026-05-28)
+
+Ran the first two otm-docker setup scripts locally:
+
+- `00_setup_database.sh` completed.
+- `01_download_water_polys.sh` downloaded and unpacked the upstream water
+  polygon sources. The full water polygon archive was 882 MiB and took about
+  42 minutes locally; the unpacked host copy is 1.2 GiB.
+
+`02_import_osm_data.sh` exposed another image contract mismatch: the image
+expects `osmdata.pbf` under `/mnt/data` and tablespace scratch under `/mnt/db`.
+Copied the downloaded `water-polygons` tree out of the live container before
+recreating it, then updated compose to mount:
+
+- `data/docker/data` -> `/mnt/data`
+- `data/docker/tablespace` -> `/mnt/db`
+- `data/osm` -> `/osm` read-only
+
+Still missing before first rendered tile:
+
+- Recreate the container with the corrected `/mnt/data` and `/mnt/db` mounts.
+- Re-run/import from the persisted water polygon and POC PBF data.
+- High-latitude DEM source decision for Alaska production rendering.
+
+
+## GDAL Helper Patch (2026-05-28)
+
+`03_dem_hillshade.sh` reached SRTM unpacking, then failed because the Docker image
+had `gdal-bin`/`python3-gdal` but not the legacy helper scripts used by
+OpenTopoMap: `gdal_fillnodata.py` and `gdal_merge.py`. Installing the image
+package `python-gdal` provides those scripts at `/usr/bin`.
+
+Added `tools/opentopomap-render/scripts/ensure-otm-deps.sh` and the
+`otm-docker.sh deps` wrapper so this patch/check is an explicit bootstrap step
+before DEM preprocessing.
+
+Still missing before first rendered tile:
+
+- Rerun `03_dem_hillshade.sh` from clean SRTM scratch.
+- Run `04_preprocess_osm_data.sh`, `05_dem_contours1.sh`, and
+  `06_dem_contours2.sh`.
+- Render and export the first POC tile.
+
+
+## First Rendered POC Tile (2026-05-28)
+
+Completed the local `israel_palestine_poc` otm-docker pipeline through:
+
+- `03_dem_hillshade.sh`
+- `04_preprocess_osm_data.sh`
+- `05_dem_contours1.sh`
+- `06_dem_contours2.sh`
+- `tirex-batch -p 1 -d map=opentopomap bbox=33.9,29.3,36.0,33.4 z=3`
+- `export-region-tiles.py israel_palestine_poc --force`
+- `pack-mbtiles.py` into `data/mbtiles/israel_palestine_poc.mbtiles`
+
+The render initially returned 404 because Tirex master listed `opentopomap`, but
+the Mapnik backend skipped the style at startup: `/var/lib/tirex/tiles` points
+to `/mnt/tiles`, and `/mnt/tiles/opentopomap` did not exist yet. Extended
+`ensure-otm-deps.sh` to create/chown the Tirex tile cache directories and
+restart `tirex-backend-manager` plus `tirex-master`. After rerunning
+`otm-docker.sh deps`, the same render request succeeded (`success=1` in
+`/var/log/tirex/jobs.log`) and export wrote `3/4/3.png`.
+
+Validation artifacts are gitignored under `tools/opentopomap-render/data/`:
+
+- `data/tiles/israel_palestine_poc/3/4/3.png`: PNG, 256x256, 4.5 KiB.
+- `data/mbtiles/israel_palestine_poc.mbtiles`: SQLite MBTiles, 1 tile, 24 KiB.
+
+Still missing before Alaska production z11 render:
+
+- Decide and fetch a high-latitude Alaska DEM source; standard SRTM does not
+  cover most of Alaska.
+- Run the same server-side import/render/export sequence for `alaska_z11`.
+- Apply label overrides and visually diff against upstream OpenTopoMap tiles.
