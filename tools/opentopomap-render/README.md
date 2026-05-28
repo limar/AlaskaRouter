@@ -21,7 +21,9 @@ server-side space for:
 
 - Geofabrik Alaska PBF: hundreds of MB compressed.
 - PostGIS import: multiple GB, HDD-friendly but slow.
-- SRTM/hillshade cache: region subset preferred, not global.
+- DEM/hillshade cache: region subset preferred, not global. Standard SRTM
+  stops at 60 degrees north, so most Alaska cells need a high-latitude DEM
+  source before the production render.
 - Rendered z=11 PNG tile tree: roughly 75k tiles.
 - MBTiles + PMTiles + merged final pack.
 
@@ -46,6 +48,8 @@ Expected Alaska z=11 target count: 74,955 tiles.
 - `fetch-osm.sh`: resumable Geofabrik PBF fetch plus sidecar checksum fetch.
 - `prepare-otm-docker.sh`: lays out a configured region as `osmdata.pbf` for
   the Docker image.
+- `plan-srtm-cells.py`: lists HGT-style DEM cells and flags cells outside
+  standard SRTM coverage.
 - `otm-docker.sh`: wraps the compose file for start/stop/logs/shell.
 - `render-region-command.py`: prints the `tirex-batch` command for a region.
 - `export-region-tiles.py`: copies rendered PNGs from the local renderer into
@@ -81,6 +85,7 @@ tools/opentopomap-render/scripts/prepare-otm-docker.sh israel_palestine_poc
 
 # 4. Add region-covering SRTM ZIP/HGT files to:
 #    tools/opentopomap-render/data/docker/data/srtm/
+tools/opentopomap-render/scripts/plan-srtm-cells.py israel_palestine_poc
 
 # 5. Start the container and run the one-time import scripts.
 tools/opentopomap-render/scripts/otm-docker.sh up

@@ -214,6 +214,28 @@ Still missing before first rendered tile:
 - SRTM source selection/fetch automation.
 - Actual container import run on the server.
 
+## DEM Planning Slice (2026-05-28)
+
+Added `scripts/plan-srtm-cells.py <region>` and tests. The script lists
+HGT-style DEM cells for a configured region and flags cells outside standard
+SRTM coverage.
+
+Findings:
+
+- `israel_palestine_poc` needs 15 cells, all inside standard SRTM coverage.
+- `alaska_z11` spans 1,050 HGT-style cells; 450 are inside standard SRTM
+  coverage and 600 are north of 60 degrees, outside standard SRTM coverage.
+
+This means the POC can proceed with normal SRTM HGT ZIP/HGT files, but the
+Alaska production render needs a high-latitude DEM source decision before we
+spend bandwidth on elevation data.
+
+Still missing before first rendered tile:
+
+- SRTM source/fetch automation for the low-latitude POC.
+- High-latitude DEM source decision for Alaska.
+- Actual container import run on the server.
+
 ## Local Renderer Export Slice (2026-05-28)
 
 Added `scripts/export-region-tiles.py <region>` to copy rendered PNGs from the
