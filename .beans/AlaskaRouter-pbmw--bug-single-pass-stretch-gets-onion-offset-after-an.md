@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-pbmw
 title: 'Bug: single-pass stretch gets onion offset after an out-and-back (A→B→A→C)'
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-05-29T15:22:17Z
-updated_at: 2026-05-29T15:47:31Z
+updated_at: 2026-05-29T16:04:23Z
 ---
 
 The last stretch after an out-and-back is rendered shifted/offset (as if it were a 2-pass stretch) when it is in fact traversed only once.
@@ -30,7 +30,7 @@ In Trip.routeRibbons (AlaskaRouter/Data/TripPasses.swift):
 - [ ] (2) Document the current algorithm — DONE (see root cause).
 - [ ] (3) Pinpoint the failure — DONE (global multiPass/rank).
 - [x] (4) Approach chosen: **Tier A now (per-leg geometric-signature overlap) as a verified checkpoint, then Tier B (sub-leg coverage onion) in the same session**, keeping Tier A as the reset fallback.
-- [ ] (5) Implement + verify on simulator (Fairbanks→Santa's→Fairbanks→C). Reset on failure.
+- [x] (5) Implemented + verified on simulator (Fairbanks→Santa's Sleigh→Fairbanks→Yukon River Camp): double drawn double, single drawn single, doubled corridor renders as clean parallel lines. User confirmed best result so far.
 
 ## Constraints
 We are at the best ribbon-rendering point so far; the onion ((())) currently looks beautiful for clean out-and-backs. Do NOT regress that. Reset the change if the fix doesn't hold.
@@ -56,3 +56,24 @@ Tuning knobs: `coverageCellsPerDegree` (grid resolution), `minCoverageRunMeters`
 Verified: `xcodebuild test` → DataInvariantTests 12/12 pass, incl. new `testRouteRibbonsDoubleMidLegRetrace` (centered head + doubled tail + doubled return) and all Tier A / existing onion tests still green.
 
 Still pending: **visual verification on the simulator** — both the reported A→B→A→C (Fairbanks→Santa's Sleigh→Fairbanks→C) and the look of the onion overall. Tier A is committed separately (afd73ec) as the reset fallback if Tier B regresses the look.
+
+## Tier B artifact — fixing (dilated coverage read)
+
+On-device (Fairbanks→Santa's Sleigh→Fairbanks→Yukon River Camp): single/double classification is CORRECT, but the doubled stretch fragmented into dozens of short round-capped ribbon stubs that read as fat dots / "pregnant ants" instead of the clean two parallel lines Tier A produced.
+
+Cause: coverage was read at each edge's exact midpoint cell; OSRM forward vs return geometry isn't vertex-aligned, so coverage flickered 1↔2 along the shared corridor → many tiny sub-ribbons → round-cap blobs at every join.
+
+Fix: read coverage from a DILATED neighbourhood (midpoint cell + its 8 neighbours, ~±56 m) so a shared corridor reads constant coverage and collapses to one clean ribbon per direction, while still allowing genuine mid-leg coverage changes. Keeps all 12 unit tests valid.
+
+## Summary of Changes
+
+Root cause: `Trip.routeRibbons` set ribbon offset from a trip-wide `multiPass` flag + a global per-direction rank, so any trip with ≥2 passes shifted *every* ribbon off-centre — including roads driven only once (the reported A→B→A→C bug).
+
+Fix shipped in three commits on `claude/ecstatic-bouman-ed317a` (based on 84670ab):
+- **afd73ec (Tier A)** — offset is overlap-driven via per-leg direction-invariant road signatures. Legs sharing a road nest into onion lanes; a leg whose road no other leg shares stays centered (offset 0). Pass detection retained only as the ribbon-merge boundary.
+- **e90e595 (Tier B)** — coverage computed at SUB-LEG granularity by rasterizing every edge onto a ~56 m grid, so retraces that begin mid-leg (A→B→C routing back through part of A→B) also double correctly. A leg can emit several ribbons when its overlap count changes partway.
+- **2f8769b (de-speckle)** — coverage read from a dilated neighbourhood (midpoint cell + 8 neighbours) so a shared corridor reads constant coverage and renders as one clean ribbon per direction instead of fragmenting into round-capped 'pregnant ant' stubs.
+
+Tuning knobs in TripPasses.swift: `coverageCellsPerDegree`, `minCoverageRunMeters`.
+
+Tests: DataInvariantTests 12/12 pass, incl. new `testRouteRibbonsCenterLoneStretchAfterOutAndBack`, `testRouteRibbonsCenterSharpTurnWithoutRetrace`, `testRouteRibbonsDoubleMidLegRetrace`; existing onion behaviour preserved.

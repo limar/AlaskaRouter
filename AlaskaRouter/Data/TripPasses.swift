@@ -178,10 +178,12 @@ extension Trip {
         //    edge's midpoint (rather than per whole leg) is what catches a
         //    retrace that begins mid-leg.
         let q = Trip.coverageCellsPerDegree
+        func quant(_ v: Double) -> Int64 { Int64((v * q).rounded()) }
+        func packKey(_ qlat: Int64, _ qlon: Int64) -> Int64 {
+            (qlat << 32) ^ (qlon & 0xFFFF_FFFF)
+        }
         func cellKey(_ c: CLLocationCoordinate2D) -> Int64 {
-            let la = Int64((c.latitude * q).rounded())
-            let lo = Int64((c.longitude * q).rounded())
-            return (la << 32) ^ (lo & 0xFFFF_FFFF)
+            packKey(quant(c.latitude), quant(c.longitude))
         }
         let stepDeg = 1.0 / q / 2.0     // sample edges at ~half a cell
         var cellLegs: [Int64: Set<Int>] = [:]
@@ -204,26 +206,37 @@ extension Trip {
             }
         }
 
-        // Per-cell lane multiplier per leg (only where coverage ≥ 2). The
-        // canonical direction is the lowest-index covering leg's; same-
-        // direction traversals nest (−0.5, −1.5, …), opposite-direction
-        // traversals start at −0.5 and separate by travel side. Computed per
-        // cell, so it stays consistent along a shared corridor.
-        var cellLaneMult: [Int64: [Int: Double]] = [:]
-        for (key, set) in cellLegs where set.count >= 2 {
-            let members = set.sorted()
-            let canonical = legs[members[0]].dir
+        // Lane multiplier for a leg at a point, from the DILATED neighbourhood
+        // (the midpoint cell + its 8 neighbours, ~±56 m). Dilation absorbs the
+        // small along-track misalignment between OSRM's forward and return
+        // geometry so a shared corridor reads a *constant* coverage instead of
+        // flickering 1↔2 — which otherwise fragments the ribbon into dozens of
+        // round-capped stubs ("pregnant ants"). Canonical direction is the
+        // lowest-index covering leg's; same-direction traversals nest
+        // (−0.5, −1.5, …), opposite-direction ones start at −0.5 and separate
+        // by travel side.
+        func laneMultiplier(forLeg li: Int, at p: CLLocationCoordinate2D) -> Double {
+            let clat = quant(p.latitude), clon = quant(p.longitude)
+            var set: Set<Int> = []
+            for dLat in -1 ... 1 {
+                for dLon in -1 ... 1 {
+                    if let s = cellLegs[packKey(clat + Int64(dLat), clon + Int64(dLon))] {
+                        set.formUnion(s)
+                    }
+                }
+            }
+            guard set.count >= 2 else { return 0 }
+            let canonical = legs[set.min()!].dir
             var forwardRank = 0
             var backwardRank = 0
-            var m: [Int: Double] = [:]
-            for idx in members {
+            for idx in set.sorted() {
                 let dot = legs[idx].dir.0 * canonical.0 + legs[idx].dir.1 * canonical.1
-                let rank: Int
-                if dot >= 0 { rank = forwardRank; forwardRank += 1 }
-                else        { rank = backwardRank; backwardRank += 1 }
-                m[idx] = -(Double(rank) + 0.5)
+                let isForward = dot >= 0
+                let rank = isForward ? forwardRank : backwardRank
+                if isForward { forwardRank += 1 } else { backwardRank += 1 }
+                if idx == li { return -(Double(rank) + 0.5) }
             }
-            cellLaneMult[key] = m
+            return 0
         }
 
         // 4. Per leg → per-edge multiplier (read at the edge midpoint), then
@@ -243,7 +256,7 @@ extension Trip {
                     latitude: (a.latitude + b.latitude) / 2,
                     longitude: (a.longitude + b.longitude) / 2
                 )
-                mult[k] = cellLaneMult[cellKey(mid)]?[li] ?? 0
+                mult[k] = laneMultiplier(forLeg: li, at: mid)
                 lengths[k] = SmartInsert.haversine(a, b)
             }
             Trip.dissolveShortRuns(&mult, lengths: lengths, minRun: Trip.minCoverageRunMeters)
