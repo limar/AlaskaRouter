@@ -17,6 +17,8 @@ fi
 command -v gdal_fillnodata.py
 command -v gdal_merge.py
 
+/alaskarouter-scripts/patch-otm-dem-helpers.sh
+
 mkdir -p /mnt/tiles/opentopomap /mnt/tiles/example /mnt/tiles/test
 chown -R tirex:tirex /mnt/tiles
 

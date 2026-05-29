@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-28T19:48:18Z
+updated_at: 2026-05-29T14:57:35Z
 ---
 
 ## Why
@@ -453,3 +453,16 @@ Validation:
 - The patched `gdalwarp` flow passed the previous GDAL 2.4 integer overflow by streaming the 596 Copernicus source COGs directly instead of materializing a giant `raw.tif` source.
 - Current server outputs include `warp-30.tif` at roughly 46 GiB and `warp-60.tif` at roughly 13 GiB; `gdaldem hillshade` is still processing the 30 m derivative.
 - Local validation remains `bash -n tools/opentopomap-render/scripts/prepare-copernicus-dem.sh` and `python3 -m unittest discover tools/opentopomap-render/tests`.
+
+
+## Alaska Cropped DEM and Tiled Contours (2026-05-29)
+
+- The first successful Alaska DEM rerun still produced an accidental full-world Mercator strip for `warp-60.tif` (`-180..+180`) because `gdalwarp` was not constrained to the target region extent. That made `phyghtmap` fail with memory errors.
+- Added `DEM_TARGET_EXTENT` support to `prepare-copernicus-dem.sh` and reran the server prep with `DEM_TARGET_EXTENT="-180 51 -130 72"`. The corrected `warp-60.tif` is now `92662 x 85436` and bounded to `180W..130W`, `51N..72N`.
+- Added an OTM helper patch step so the bundled peak/saddle C tools register all GDAL drivers and tolerate DEM-outside coordinates when using the VRT compatibility `raw.tif`.
+- Added tiled Copernicus contour generation because full-region `phyghtmap` still exhausted memory during NumPy contouring. The tiled run uses 15000 px GeoTIFF chunks and emits normal `contour*.pbf` files for the upstream `06_dem_contours2.sh` import.
+
+Validation:
+
+- `bash -n tools/opentopomap-render/scripts/prepare-copernicus-dem.sh tools/opentopomap-render/scripts/patch-otm-dem-helpers.sh tools/opentopomap-render/scripts/prepare-copernicus-contours.sh tools/opentopomap-render/scripts/ensure-otm-deps.sh`
+- `python3 -m unittest discover tools/opentopomap-render/tests`
