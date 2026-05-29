@@ -142,61 +142,9 @@ extension Trip {
         return out
     }
 
-    /// True when there are 2+ blocks (i.e. any separator survived). Single-block
-    /// trips render in one color (no per-block coloring on the map).
-    var isMultiBlock: Bool { blocks.count >= 2 }
-
     private func colorForBlock(_ idx: Int) -> TripColor {
         if idx == 0 { return color }
         let pool = Trip.blockPaletteRotation.filter { $0 != color }
         return pool[(idx - 1) % pool.count]
-    }
-
-    /// Slice the route geometry (snapped if available, otherwise straight-line
-    /// between waypoints) into per-block coordinate runs. Each run is the
-    /// stretch of road colored as that block. Adjacent blocks share the
-    /// boundary waypoint's coord so colors meet seamlessly without gaps.
-    ///
-    /// The road *leaving* a block-boundary waypoint takes the color of the
-    /// NEXT block — i.e. block N+1's line starts at the last waypoint of
-    /// block N.
-    func blockGeometries(snappedCoords: [CLLocationCoordinate2D]?) -> [(block: TripBlock, coords: [CLLocationCoordinate2D])] {
-        let allBlocks = self.blocks
-        let orderedStops = orderedWaypoints
-        guard !allBlocks.isEmpty, orderedStops.count >= 2 else { return [] }
-
-        let coords = snappedCoords ?? orderedStops.map(\.coordinate)
-        guard coords.count >= 2 else { return [] }
-
-        // Map each waypoint to its index in `coords`.
-        let indexByID: [UUID: Int]
-        if snappedCoords == nil {
-            indexByID = Dictionary(uniqueKeysWithValues: orderedStops.enumerated().map { ($1.id, $0) })
-        } else {
-            var m: [UUID: Int] = [:]
-            for wp in orderedStops {
-                var bestIdx = 0
-                var bestDist = Double.infinity
-                for (i, c) in coords.enumerated() {
-                    let d = SmartInsert.haversine(c, wp.coordinate)
-                    if d < bestDist { bestDist = d; bestIdx = i }
-                }
-                m[wp.id] = bestIdx
-            }
-            indexByID = m
-        }
-
-        var result: [(TripBlock, [CLLocationCoordinate2D])] = []
-        for (k, b) in allBlocks.enumerated() {
-            // Block 0 starts at its own first waypoint; later blocks start at
-            // the previous block's last waypoint so colors meet at the seam.
-            let startWp = (k == 0) ? b.waypoints.first! : allBlocks[k - 1].waypoints.last!
-            let endWp = b.waypoints.last!
-            let startIdx = indexByID[startWp.id] ?? 0
-            let endIdx = indexByID[endWp.id] ?? (coords.count - 1)
-            guard endIdx > startIdx else { continue }
-            result.append((b, Array(coords[startIdx...endIdx])))
-        }
-        return result
     }
 }

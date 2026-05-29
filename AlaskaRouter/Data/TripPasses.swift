@@ -65,15 +65,6 @@ extension Trip {
     /// junction stubs and forward/return geometry-simplification mismatches.
     private static let minCoverageRunMeters: Double = 120.0
 
-    /// The trip's full driven path as a single polyline. Retained for callers
-    /// that don't need the multi-pass split.
-    func fullRouteCoords(snappedCoords: [CLLocationCoordinate2D]?) -> [CLLocationCoordinate2D]? {
-        if let snap = snappedCoords, snap.count >= 2 { return snap }
-        let stops = orderedWaypoints
-        guard stops.count >= 2 else { return nil }
-        return stops.map(\.coordinate)
-    }
-
     /// Decompose the trip into renderable ribbons.
     ///
     /// 1. Slice the base polyline into directed legs (one per stop pair),
