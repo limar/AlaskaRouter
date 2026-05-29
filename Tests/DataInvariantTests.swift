@@ -251,4 +251,35 @@ final class DataInvariantTests: XCTestCase {
         XCTAssertEqual(ribbons[2].offsetMultiplier, -0.5)
         XCTAssertTrue(ribbons.allSatisfy { !$0.isStraightLineFallback })
     }
+
+    // MARK: - Road-stretch lengths (AlaskaRouter-ssl1)
+
+    func testLegDistancesStraightLineFallback() {
+        let trip = TestFactories.trip(stops: [(0, 0, "A"), (0, 1, "B"), (0, 2, "C")])
+        let legs = trip.legDistancesMeters(snappedCoords: nil)
+        XCTAssertEqual(legs.count, 2)
+        XCTAssertEqual(legs[0], legs[1], accuracy: 1.0)        // equal 1° lon hops
+        XCTAssertEqual(legs[0], 111_320, accuracy: 2_000)      // ~111 km per degree
+        XCTAssertEqual(trip.totalDistanceMeters(snappedCoords: nil),
+                       legs[0] + legs[1], accuracy: 1.0)
+    }
+
+    func testLegDistancesFollowSnappedPolyline() {
+        let trip = TestFactories.trip(stops: [(0, 0, "A"), (0, 1, "B")])
+        let snap = [
+            CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            CLLocationCoordinate2D(latitude: 0.5, longitude: 0.5),   // northward detour
+            CLLocationCoordinate2D(latitude: 0, longitude: 1),
+        ]
+        let road = trip.legDistancesMeters(snappedCoords: snap)
+        let straight = trip.legDistancesMeters(snappedCoords: nil)
+        XCTAssertEqual(road.count, 1)
+        XCTAssertGreaterThan(road[0], straight[0])   // the detour is longer than the straight line
+    }
+
+    func testDistanceFormatUnits() {
+        XCTAssertEqual(DistanceFormat.string(meters: 23_000, useMiles: false), "23 km")
+        XCTAssertEqual(DistanceFormat.string(meters: 23_000, useMiles: true), "14 mi")
+        XCTAssertEqual(DistanceFormat.string(meters: 400, useMiles: false), "0.4 km") // sub-10 keeps a decimal
+    }
 }

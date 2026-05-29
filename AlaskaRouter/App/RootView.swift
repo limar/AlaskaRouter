@@ -264,6 +264,7 @@ struct RootView: View {
                     trip: trip,
                     detent: $bottomSheetDetent,
                     mode: $sheetMode,
+                    snappedRouteCoords: snappedRouteCoords,
                     onTapWaypoint: handleSheetWaypointTap,
                     onWaypointDeleted: handleSheetWaypointDeleted
                 )
@@ -820,7 +821,7 @@ struct RootView: View {
         let a = ordered[idx - 1].coordinate
         let b = ordered[idx].coordinate
         let meters = SmartInsert.haversine(a, b)
-        return String(format: "%.0f km from previous", meters / 1000)
+        return "\(DistanceFormat.string(meters: meters, useMiles: tweaksStore.distanceUnitIsMiles)) from previous"
     }
 
     /// Other 1-based stop indices that share the selected waypoint's coord
@@ -896,8 +897,7 @@ struct RootView: View {
             if nearest == nil || d < nearest!.1 { nearest = (wp, d) }
         }
         guard let (wp, meters) = nearest else { return nil }
-        let km = meters / 1000
-        return String(format: "%.0f km from %@", km, wp.label ?? "the route")
+        return "\(DistanceFormat.string(meters: meters, useMiles: tweaksStore.distanceUnitIsMiles)) from \(wp.label ?? "the route")"
     }
 
     private func zoomForCategory(_ category: String) -> Double {

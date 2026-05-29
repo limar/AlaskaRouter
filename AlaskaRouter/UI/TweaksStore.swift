@@ -50,6 +50,15 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(useLooseMatcher, forKey: K.useLooseMatcher) }
     }
 
+    // MARK: - Units (AlaskaRouter-ssl1)
+
+    /// Show distances in miles instead of kilometers. Personal preference;
+    /// applied to every distance display (stop legs, block totals, trip total,
+    /// callouts).
+    var distanceUnitIsMiles: Bool {
+        didSet { UserDefaults.standard.set(distanceUnitIsMiles, forKey: K.distanceUnitIsMiles) }
+    }
+
     // MARK: - Place markers (AlaskaRouter-vyfe spike harness)
 
     /// Visual treatment for the ~33k place markers rendered on the map.
@@ -112,6 +121,7 @@ final class TweaksStore {
         dotFontWeight          = Defaults.dotFontWeight
         dotFontSizeRatio       = Defaults.dotFontSizeRatio
         useLooseMatcher        = Defaults.useLooseMatcher
+        distanceUnitIsMiles    = Defaults.distanceUnitIsMiles
         placeMarkerStyle       = Defaults.placeMarkerStyle
         labelSizeMultiplier    = Defaults.labelSizeMultiplier
         cancelButtonStyle      = Defaults.cancelButtonStyle
@@ -128,6 +138,7 @@ final class TweaksStore {
         dotFontWeight          = (d.object(forKey: K.dotFontWeight)          as? Double) ?? Defaults.dotFontWeight
         dotFontSizeRatio       = (d.object(forKey: K.dotFontSizeRatio)       as? Double) ?? Defaults.dotFontSizeRatio
         useLooseMatcher        = (d.object(forKey: K.useLooseMatcher)        as? Bool)   ?? Defaults.useLooseMatcher
+        distanceUnitIsMiles    = (d.object(forKey: K.distanceUnitIsMiles)    as? Bool)   ?? Defaults.distanceUnitIsMiles
         placeMarkerStyle       = (d.object(forKey: K.placeMarkerStyle)       as? Int)    ?? Defaults.placeMarkerStyle
         labelSizeMultiplier    = (d.object(forKey: K.labelSizeMultiplier)    as? Double) ?? Defaults.labelSizeMultiplier
         cancelButtonStyle      = (d.object(forKey: K.cancelButtonStyle)      as? Int)    ?? Defaults.cancelButtonStyle
@@ -141,6 +152,7 @@ final class TweaksStore {
         static let dotFontWeight          = "tweak.dot.font.weight"
         static let dotFontSizeRatio       = "tweak.dot.font.sizeRatio"
         static let useLooseMatcher        = "tweak.search.useLooseMatcher"
+        static let distanceUnitIsMiles    = "tweak.units.distanceIsMiles"
         static let placeMarkerStyle       = "tweak.places.markerStyle"
         static let labelSizeMultiplier    = "tweak.places.labelSizeMultiplier"
         static let cancelButtonStyle      = "tweak.cancel.style"
@@ -157,6 +169,7 @@ final class TweaksStore {
         static let dotFontWeight: Double          = 0.50   // between .bold (0.4) and .heavy (0.56)
         static let dotFontSizeRatio: Double       = 0.54
         static let useLooseMatcher: Bool          = true   // milestone 2 on by default; flip OFF to A/B
+        static let distanceUnitIsMiles: Bool      = false  // km by default
         static let placeMarkerStyle: Int          = 3      // vyfe iteration 6 winner: translucent + halo
         static let labelSizeMultiplier: Double    = 1.0    // unchanged from style defaults
         // y7l0 spike — initial recommendations:

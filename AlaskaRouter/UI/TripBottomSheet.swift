@@ -50,6 +50,9 @@ struct TripBottomSheet: View {
     let trip: Trip
     @Binding var detent: TripSheetDetent
     @Binding var mode: SheetMode
+    /// Snapped road geometry for the active trip (nil when offline / not yet
+    /// routed) — used to compute road-stretch lengths (AlaskaRouter-ssl1).
+    var snappedRouteCoords: [CLLocationCoordinate2D]? = nil
     let onTapWaypoint: (Waypoint) -> Void
     let onWaypointDeleted: (DeletedStopSnapshot) -> Void
 
@@ -250,7 +253,7 @@ struct TripBottomSheet: View {
     /// fetching tiles dynamically.
     private var statStrip: some View {
         HStack(spacing: 0) {
-            statCell(label: "Distance", value: "\(distanceText) km")
+            statCell(label: "Distance", value: distanceText)
             statDivider
             statCell(label: "Stops", value: stopsCount)
             statDivider
@@ -415,8 +418,7 @@ struct TripBottomSheet: View {
     /// rounded pill, which the mock-alignment work in AlaskaRouter-9634
     /// flagged as the root cause of "separators visibly resemble waystops.")
     private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String, isSynthetic: Bool = false, isCollapsed: Bool = false, onToggle: @escaping () -> Void = {}) -> some View {
-        let count = stopCountInBlock(blockIndex: blockIndex)
-        return HStack(spacing: 10) {
+        HStack(spacing: 10) {
             // Disclosure chevron — tap the header to collapse/expand the block
             // (AlaskaRouter-xq6w). Points down when open, right when collapsed.
             Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
@@ -440,7 +442,7 @@ struct TripBottomSheet: View {
                     .font(.sheetSerif(14, weight: .semibold))
                     .foregroundStyle(SheetPalette.textStrong)
                     .lineLimit(1)
-                Text(count == 1 ? "1 stop" : "\(count) stops")
+                Text(blockSubline(blockIndex: blockIndex))
                     .font(.sheetSans(10.5))
                     .tracking(0.4)
                     .foregroundStyle(SheetPalette.textMuted)
@@ -572,10 +574,28 @@ struct TripBottomSheet: View {
         .buttonStyle(.plain)
     }
 
+    /// Distances in miles (vs km) per the user's tweak setting. Read here so
+    /// SwiftUI tracks the dependency and displays update when it toggles.
+    private var useMiles: Bool { TweaksStore.shared.distanceUnitIsMiles }
+
     private func kindHint(for wp: Waypoint) -> String {
-        // Friendly category label; lat/long was useless here so it's gone
-        // (AlaskaRouter-tluk).
-        CategoryLabel.display(wp.category)
+        // Friendly category label + the road length of the leg arriving at
+        // this stop (replaced the useless lat/long — tluk → ssl1).
+        let cat = CategoryLabel.display(wp.category)
+        guard let m = trip.distanceIntoStopMeters(order: wp.order, snappedCoords: snappedRouteCoords),
+              m > 0 else { return cat }
+        return "\(cat) · \(DistanceFormat.string(meters: m, useMiles: useMiles))"
+    }
+
+    /// Block header subline: "N stops" plus the block's road length.
+    private func blockSubline(blockIndex: Int) -> String {
+        let count = stopCountInBlock(blockIndex: blockIndex)
+        let stopsText = count == 1 ? "1 stop" : "\(count) stops"
+        let blocks = trip.blocks
+        guard blockIndex >= 0, blockIndex < blocks.count else { return stopsText }
+        let m = trip.blockDistanceMeters(blocks[blockIndex], snappedCoords: snappedRouteCoords)
+        guard m > 0 else { return stopsText }
+        return "\(stopsText) · \(DistanceFormat.string(meters: m, useMiles: useMiles))"
     }
 
     private func stopCountInBlock(blockIndex: Int) -> Int {
@@ -853,20 +873,17 @@ struct TripBottomSheet: View {
         return "\(trip.separators.count + 1)"
     }
 
+    /// Total trip length — road distance (snapped) when available, else
+    /// straight-line — formatted in the chosen unit (AlaskaRouter-ssl1).
     private var distanceText: String {
-        let coords = trip.orderedWaypoints.map(\.coordinate)
-        guard coords.count >= 2 else { return "0" }
-        var meters: Double = 0
-        for i in 1..<coords.count {
-            let a = CLLocation(latitude: coords[i - 1].latitude, longitude: coords[i - 1].longitude)
-            let b = CLLocation(latitude: coords[i].latitude, longitude: coords[i].longitude)
-            meters += a.distance(from: b)
-        }
-        return String(format: "%.0f", meters / 1000)
+        DistanceFormat.string(
+            meters: trip.totalDistanceMeters(snappedCoords: snappedRouteCoords),
+            useMiles: useMiles
+        )
     }
 
     private var summaryLine: String {
-        "\(stopsCount) stops · \(distanceText) km"
+        "\(stopsCount) stops · \(distanceText)"
     }
 
     private var tripsSubtitle: String {

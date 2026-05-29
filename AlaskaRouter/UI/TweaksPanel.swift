@@ -48,6 +48,15 @@ struct TweaksPanel: View {
                 }
 
                 Section {
+                    Toggle("Distances in miles", isOn: $tweaks.distanceUnitIsMiles)
+                } header: {
+                    Text("Units")
+                } footer: {
+                    Text("Show all distances (stop legs, block totals, trip total, callouts) in miles instead of kilometers.")
+                        .font(.footnote)
+                }
+
+                Section {
                     Toggle("Loose matcher", isOn: $tweaks.useLooseMatcher)
                 } header: {
                     Text("Search")
