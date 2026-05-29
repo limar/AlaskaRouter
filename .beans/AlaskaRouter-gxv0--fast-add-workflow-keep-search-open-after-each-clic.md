@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-gxv0
 title: Fast-add workflow — keep search open after each + click
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-24T15:58:44Z
-updated_at: 2026-05-24T16:01:28Z
+updated_at: 2026-05-29T14:44:57Z
 parent: AlaskaRouter-ka6b
 ---
 

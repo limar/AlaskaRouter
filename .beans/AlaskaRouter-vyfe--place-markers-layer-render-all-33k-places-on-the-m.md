@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-vyfe
 title: Place-markers layer — render all 33k places on the map, zoom-tiered
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T17:00:31Z
+updated_at: 2026-05-29T14:40:36Z
 parent: AlaskaRouter-0z7e
 ---
 

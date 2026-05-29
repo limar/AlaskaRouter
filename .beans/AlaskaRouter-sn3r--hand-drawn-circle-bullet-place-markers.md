@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-sn3r
 title: Hand-drawn circle-bullet place markers
-status: todo
+status: scrapped
 type: task
 priority: low
 created_at: 2026-05-19T07:18:32Z
-updated_at: 2026-05-25T08:41:17Z
+updated_at: 2026-05-29T14:42:18Z
 parent: AlaskaRouter-0z7e
 ---
 

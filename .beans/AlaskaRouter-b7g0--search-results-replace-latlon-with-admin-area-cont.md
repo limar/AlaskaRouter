@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-b7g0
 title: 'Search results: replace lat/lon with admin-area context line'
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-24T18:54:28Z
-updated_at: 2026-05-25T08:39:16Z
+updated_at: 2026-05-29T14:46:19Z
 parent: AlaskaRouter-xtua
 ---
 

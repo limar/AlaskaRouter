@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-0z7e
 title: BIGTASK Universal map landmark clickability (cities, peaks, gas, lakes, …)
-status: in-progress
+status: completed
 type: epic
 priority: high
 created_at: 2026-05-19T07:59:29Z
-updated_at: 2026-05-25T08:55:23Z
+updated_at: 2026-05-29T14:43:00Z
 parent: AlaskaRouter-xtua
 ---
 

@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-rr71
 title: Remove the 'Removed from trip — Undo' toast
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-05-24T15:58:44Z
-updated_at: 2026-05-24T16:01:28Z
+updated_at: 2026-05-29T14:44:26Z
 parent: AlaskaRouter-ka6b
 ---
 

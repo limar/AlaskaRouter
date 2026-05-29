@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-p9xr
 title: 'Bug: bottom sheet drag-to-detent jumps and rebounds'
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-05-24T15:06:25Z
-updated_at: 2026-05-24T15:13:50Z
+updated_at: 2026-05-29T14:43:11Z
 parent: AlaskaRouter-ka6b
 ---
 

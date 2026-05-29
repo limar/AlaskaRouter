@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-y7l0
 title: Cancel button design spike + map-touch scrim + count-capped dropdown
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-26T15:55:52Z
-updated_at: 2026-05-26T16:14:25Z
+updated_at: 2026-05-29T14:45:11Z
 parent: AlaskaRouter-ka6b
 ---
 

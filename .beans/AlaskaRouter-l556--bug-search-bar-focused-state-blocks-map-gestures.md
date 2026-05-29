@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-l556
 title: 'Bug: search-bar focused state blocks map gestures'
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-05-24T09:55:56Z
-updated_at: 2026-05-24T10:03:32Z
+updated_at: 2026-05-29T14:43:53Z
 parent: AlaskaRouter-ka6b
 ---
 

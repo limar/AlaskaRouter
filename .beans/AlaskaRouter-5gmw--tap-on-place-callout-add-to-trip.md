@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-5gmw
 title: Tap-on-place callout + add-to-trip
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:54Z
-updated_at: 2026-05-25T19:16:07Z
+updated_at: 2026-05-29T14:41:05Z
 parent: AlaskaRouter-0z7e
 ---
 

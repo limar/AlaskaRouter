@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-pufj
 title: Always create default block. Any waypoint will be inside some block.
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-05-21T15:06:48Z
-updated_at: 2026-05-23T17:38:46Z
+updated_at: 2026-05-29T14:45:41Z
 parent: AlaskaRouter-xtua
 ---
 

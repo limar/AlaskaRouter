@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-4r8l
 title: Tap-on-empty-map → drop-pin callout (admin info + add to trip)
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-25T08:42:55Z
-updated_at: 2026-05-25T19:31:14Z
+updated_at: 2026-05-29T14:40:45Z
 parent: AlaskaRouter-0z7e
 ---
 

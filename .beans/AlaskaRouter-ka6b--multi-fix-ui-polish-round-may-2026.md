@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ka6b
 title: Multi-fix UI polish round (May 2026)
-status: in-progress
+status: completed
 type: epic
 priority: high
 created_at: 2026-05-24T09:55:55Z
-updated_at: 2026-05-24T09:55:55Z
+updated_at: 2026-05-29T14:45:18Z
 parent: AlaskaRouter-xtua
 ---
 

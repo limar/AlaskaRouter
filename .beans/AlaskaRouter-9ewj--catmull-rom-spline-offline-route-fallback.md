@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-9ewj
 title: Catmull-Rom spline offline route fallback
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-19T07:17:08Z
-updated_at: 2026-05-19T07:17:08Z
+updated_at: 2026-05-29T14:57:23Z
 parent: AlaskaRouter-xtua
 ---
 

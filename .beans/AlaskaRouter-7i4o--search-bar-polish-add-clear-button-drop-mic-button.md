@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-7i4o
 title: Search bar polish — add clear button, drop mic button
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-05-24T09:55:56Z
-updated_at: 2026-05-24T10:09:15Z
+updated_at: 2026-05-29T14:44:34Z
 parent: AlaskaRouter-ka6b
 ---
 

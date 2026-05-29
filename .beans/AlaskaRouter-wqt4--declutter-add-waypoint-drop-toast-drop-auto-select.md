@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-wqt4
 title: Declutter Add Waypoint — drop toast, drop auto-select
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-24T09:55:55Z
-updated_at: 2026-05-24T10:09:15Z
+updated_at: 2026-05-29T14:44:20Z
 parent: AlaskaRouter-ka6b
 ---
 

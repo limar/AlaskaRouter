@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-4rly
 title: 'Bug: default block stops have inconsistent indentation'
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-05-24T15:58:44Z
-updated_at: 2026-05-24T16:01:28Z
+updated_at: 2026-05-29T14:43:24Z
 parent: AlaskaRouter-ka6b
 ---
 

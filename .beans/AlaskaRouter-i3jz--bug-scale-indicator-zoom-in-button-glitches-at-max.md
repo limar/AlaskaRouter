@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-i3jz
 title: 'Bug: scale indicator + zoom-in button glitches at max zoom'
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-05-24T15:06:25Z
-updated_at: 2026-05-24T15:13:50Z
+updated_at: 2026-05-29T14:43:35Z
 parent: AlaskaRouter-ka6b
 ---
 
