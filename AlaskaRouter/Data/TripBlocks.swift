@@ -76,8 +76,13 @@ extension Trip {
 
         // Map separators to the index of the waypoint they sit AFTER.
         let stopIndexByID = Dictionary(uniqueKeysWithValues: stops.enumerated().map { ($1.id, $0) })
-        // Active separators = ones whose anchor still exists. Sort by the
-        // anchor waypoint's position so blocks come out in route order.
+        // Active separators = ones whose anchor still exists, sorted by the
+        // anchor waypoint's position so blocks come out in route order. Two
+        // separators anchored to the SAME stop describe one boundary, so we
+        // collapse to the first per position — this keeps `blocks` total (it
+        // must never crash on a stray duplicate left by an upstream edit; the
+        // edit paths themselves dedupe so duplicates don't persist).
+        var seenSplit = Set<Int>()
         let active: [(splitAfterIndex: Int, sep: BlockSeparator)] = separators.compactMap { s in
             guard let id = s.afterWaypointID, let idx = stopIndexByID[id] else { return nil }
             // Separator after the last stop is degenerate (no following stops).
@@ -85,36 +90,33 @@ extension Trip {
             return (idx, s)
         }
         .sorted { $0.splitAfterIndex < $1.splitAfterIndex }
+        .filter { seenSplit.insert($0.splitAfterIndex).inserted }
 
-        // Walk stops and slice into blocks at each separator boundary.
+        // Walk stops and slice into blocks at each boundary. A block's LEADING
+        // separator is the boundary that BEGINS it (the previous split), not
+        // the one that ends it; block 0 has none. Because `active` is sorted
+        // and de-duplicated, each split is strictly greater than the previous,
+        // so `startIdx <= endIdx` always holds.
         var result: [TripBlock] = []
         var startIdx = 0
-        var blockIndex = 0
-        for (splitAfter, sep) in active {
-            let segment = Array(stops[startIdx...splitAfter])
-            let color = colorForBlock(blockIndex)
+        var leadingSep: BlockSeparator? = nil
+        func emitBlock(endingAt endIdx: Int) {
+            let idx = result.count
             result.append(TripBlock(
-                id: blockIndex == 0 ? "block-0" : sep.id.uuidString,
-                index: blockIndex,
-                waypoints: segment,
-                leadingSeparator: blockIndex == 0 ? nil : sep,
-                color: color
+                id: leadingSep.map { $0.id.uuidString } ?? "block-0",
+                index: idx,
+                waypoints: Array(stops[startIdx ... endIdx]),
+                leadingSeparator: leadingSep,
+                color: colorForBlock(idx)
             ))
-            startIdx = splitAfter + 1
-            blockIndex += 1
         }
-        // Final tail block.
+        for (splitAfter, sep) in active {
+            emitBlock(endingAt: splitAfter)
+            startIdx = splitAfter + 1
+            leadingSep = sep            // this separator BEGINS the next block
+        }
         if startIdx <= stops.count - 1 {
-            let segment = Array(stops[startIdx...(stops.count - 1)])
-            // The leading separator is the LAST one (sits before this block).
-            let leadSep = blockIndex == 0 ? nil : active.last?.sep
-            result.append(TripBlock(
-                id: blockIndex == 0 ? "block-0" : (leadSep?.id.uuidString ?? "block-\(blockIndex)"),
-                index: blockIndex,
-                waypoints: segment,
-                leadingSeparator: leadSep,
-                color: colorForBlock(blockIndex)
-            ))
+            emitBlock(endingAt: stops.count - 1)
         }
         return result
     }

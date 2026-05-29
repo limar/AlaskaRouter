@@ -671,21 +671,29 @@ struct TripBottomSheet: View {
 
         var stopIndex = 0
         var lastWaypointID: UUID? = nil
+        // Whether a separator already anchors to `lastWaypointID`. Two block
+        // headers landing adjacent (no stop between them) would otherwise both
+        // anchor to the same stop — an empty block, and a duplicate boundary
+        // that crashes `Trip.blocks`. Keep the first, delete the rest.
+        var anchoredCurrentStop = false
         for item in items {
             switch item {
             case .stop(let wp):
                 wp.order = stopIndex
                 stopIndex += 1
                 lastWaypointID = wp.id
+                anchoredCurrentStop = false
             case .blockHeader(let separator, _, _, _):
                 // Block 0's synthetic header (separator == nil) is fixed
                 // and shouldn't appear in the reorder set (`moveDisabled`
                 // suppresses it); skip defensively.
                 guard let sep = separator else { continue }
-                if let prev = lastWaypointID {
+                if let prev = lastWaypointID, !anchoredCurrentStop {
                     sep.afterWaypointID = prev
+                    anchoredCurrentStop = true
                 } else {
-                    // Separator at the very top (no preceding stop) → delete.
+                    // No preceding stop (top), or a separator already anchors
+                    // this stop (two adjacent headers) → redundant, delete.
                     modelContext.delete(sep)
                 }
             }
@@ -737,19 +745,25 @@ struct TripBottomSheet: View {
         }
     }
 
-    /// Removes separators that have no anchor or whose anchor is the very
-    /// last waypoint (no following stops → degenerate block).
+    /// Removes separators that are degenerate (no anchor, anchor deleted, or
+    /// anchor is the last waypoint → no following stops) and collapses
+    /// duplicate-anchor separators down to one per stop (two separators on the
+    /// same stop describe one boundary and crash `Trip.blocks`). Iterates a
+    /// snapshot because `modelContext.delete` mutates `trip.separators`. This
+    /// also heals a trip whose separator set was corrupted by an earlier edit.
     private func pruneDegenerateSeparators() {
         let stops = trip.orderedWaypoints
         let stopIDs = Set(stops.map(\.id))
         let lastID = stops.last?.id
-        for sep in trip.separators {
-            guard let anchor = sep.afterWaypointID else {
+        var anchorsKept = Set<UUID>()
+        for sep in Array(trip.separators) {
+            guard let anchor = sep.afterWaypointID,
+                  stopIDs.contains(anchor),
+                  anchor != lastID,
+                  anchorsKept.insert(anchor).inserted
+            else {
                 modelContext.delete(sep)
                 continue
-            }
-            if !stopIDs.contains(anchor) || anchor == lastID {
-                modelContext.delete(sep)
             }
         }
     }

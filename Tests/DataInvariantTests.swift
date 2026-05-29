@@ -68,6 +68,49 @@ final class DataInvariantTests: XCTestCase {
         XCTAssertEqual(trip.listItems.count, 5)
     }
 
+    func testBlocksThreeBlocksHaveDistinctLeadingSeparators() {
+        // AlaskaRouter-tiiz. With 2 separators (3 blocks) the old code assigned
+        // each block the separator at its END, so the last separator was
+        // duplicated across two blocks → "ID occurs multiple times" warning and
+        // the wrong leadingSeparator. Each block's leading separator must be the
+        // one that BEGINS it, and all list IDs must be unique.
+        let trip = TestFactories.trip(
+            stops: [(0, 0, "A"), (0, 1, "B"), (0, 2, "C"), (0, 3, "D")],
+            separatorAfterOrders: [0, 1]
+        )
+
+        let blocks = trip.blocks
+
+        XCTAssertEqual(blocks.count, 3)
+        XCTAssertEqual(blocks.map { $0.waypoints.map(\.label) }, [["A"], ["B"], ["C", "D"]])
+        XCTAssertNil(blocks[0].leadingSeparator)
+        XCTAssertNotNil(blocks[1].leadingSeparator)
+        XCTAssertNotNil(blocks[2].leadingSeparator)
+        XCTAssertNotEqual(blocks[1].leadingSeparator?.id, blocks[2].leadingSeparator?.id)
+        XCTAssertEqual(Set(trip.listItems.map(\.id)).count, trip.listItems.count)
+    }
+
+    func testBlocksToleratesDuplicateAnchorSeparators() {
+        // AlaskaRouter-tiiz. A bad reorder used to anchor two separators to the
+        // SAME stop, which made `Trip.blocks` slice an inverted range and crash
+        // ("Range requires lowerBound <= upperBound"). The derived getter must
+        // be total: two separators on one stop describe a single boundary.
+        let trip = TestFactories.trip(
+            stops: [(0, 0, "A"), (0, 1, "B"), (0, 2, "C")],
+            separatorAfterOrders: [0]
+        )
+        let anchorID = trip.orderedWaypoints[0].id
+        let duplicate = BlockSeparator(afterWaypointID: anchorID)
+        duplicate.trip = trip
+        trip.separators.append(duplicate)
+
+        let blocks = trip.blocks   // must not crash
+
+        XCTAssertEqual(blocks.count, 2)
+        XCTAssertEqual(blocks.map { $0.waypoints.map(\.label) }, [["A"], ["B", "C"]])
+        XCTAssertEqual(Set(trip.listItems.map(\.id)).count, trip.listItems.count)
+    }
+
     func testSnapCacheHydratesOnlyForMatchingKey() {
         let trip = Trip(name: "Cache Test")
         let coords = [
