@@ -1,21 +1,25 @@
-// AlaskaRouter-3bot — Pass-aware route rendering, step-by-step rebuild.
+// AlaskaRouter-3bot / AlaskaRouter-pbmw — Pass-aware route rendering.
 //
-// Step 1 (done): one polyline at offset 0 for the whole trip route.
-// Step 2 (now):  detect passes (maximal runs of legs with no direction
-//                reversal) and emit one RoutePass per pass, each with its
-//                full-extent polyline + absolute lineOffset.
+// The route is decomposed into RouteRibbons: short directed polylines, each
+// carrying a block color and a perpendicular lineOffset. Coincident roads
+// (out-and-backs, return legs, retraces) are fanned out into nested "onion"
+// lanes so the user can count how many times the route passes any point.
 //
-// Subsequent steps will add: color-per-block, more pass ranks (3+ passes),
-// onion polish.
+// Offset is OVERLAP-DRIVEN (AlaskaRouter-pbmw): a stretch of road is only
+// shifted off-center when it is actually traversed more than once. A road
+// driven a single time stays centered (offset 0), even if the trip contains
+// out-and-backs elsewhere. This is the fix for "the lone stretch after an
+// out-and-back was wrongly shifted as if it were a second pass."
 
 import Foundation
 import CoreLocation
 
-/// One ribbon — a maximal run of consecutive legs within a pass that
-/// belong to the same block (and therefore share a color). One pass that
-/// crosses N blocks emits N ribbons, all at the same offset, meeting at
-/// block-boundary waypoints. Ready for the renderer to drop straight into
-/// a single MLNLineStyleLayer with native lineOffset.
+/// One ribbon — a maximal run of consecutive legs within a pass that share the
+/// same block color AND the same offset lane. One traversal that crosses N
+/// blocks emits N ribbons (same offset, meeting at block-boundary waypoints);
+/// a traversal whose overlap count changes mid-pass splits there too. Ready
+/// for the renderer to drop straight into an MLNLineStyleLayer with native
+/// lineOffset.
 struct RouteRibbon: Identifiable {
     /// Stable per-ribbon id (used in the layer-id fingerprint).
     let id: Int
@@ -27,12 +31,13 @@ struct RouteRibbon: Identifiable {
     /// zooms (without this, low-zoom thin lines leave a gap).
     ///
     /// Values per the locked onion spec:
-    ///   - single pass             → 0      (no offset, centered)
-    ///   - 1st lane, left          → -0.5   (rank 0)
-    ///   - 2nd lane, left          → -1.5   (rank 1)
-    ///   - nth lane, left          → -(rank + 0.5)
+    ///   - single coverage (road driven once) → 0      (no offset, centered)
+    ///   - 1st lane, left                       → -0.5   (rank 0)
+    ///   - 2nd lane, left                       → -1.5   (rank 1)
+    ///   - nth lane, left                       → -(rank + 0.5)
     /// Negative in MapLibre's convention means "left of travel direction";
-    /// opposite-direction passes therefore land on opposite absolute sides.
+    /// opposite-direction passes therefore land on opposite absolute sides,
+    /// so an out-and-back at -0.5/-0.5 separates into two visible lanes.
     let offsetMultiplier: Double
     /// Block color this ribbon should render in. Determined by the block
     /// of the leg's *destination* waypoint (the same convention used by
@@ -61,14 +66,17 @@ extension Trip {
 
     /// Decompose the trip into renderable ribbons.
     ///
-    /// Step 1 — identify passes (maximal runs of consecutive legs with no
-    /// direction reversal). Out-and-back = 2 passes. Forward only = 1.
-    ///
-    /// Step 2 — within each pass, split at every block boundary so each
-    /// emitted ribbon is one polyline + one block color + one offset.
-    /// All ribbons of one pass share the same offset, so a multi-block
-    /// pass renders as visually-continuous segments that just change
-    /// color at each block boundary.
+    /// 1. Slice the base polyline into directed legs (one per stop pair),
+    ///    each carrying its block color, direction vector and a
+    ///    direction-invariant road signature.
+    /// 2. Group legs into passes (contiguous runs with no direction reversal)
+    ///    — passes are the *merge units*, so ribbons never span a U-turn and
+    ///    out-and-backs stay as two clean directed ribbons.
+    /// 3. Group legs by road signature to find real geographic overlap. Legs
+    ///    sharing a road are fanned into nested lanes; legs whose road no
+    ///    other leg shares stay centered (offset 0).
+    /// 4. Walk each pass, emitting a ribbon whenever the block color or the
+    ///    offset lane changes.
     func routeRibbons(snappedCoords: [CLLocationCoordinate2D]?) -> [RouteRibbon] {
         let stops = orderedWaypoints
         guard stops.count >= 2 else { return [] }
@@ -99,82 +107,9 @@ extension Trip {
             return result
         }()
 
-        // 1. Compute leg direction vectors (waypoint i → i+1 in lat/lon).
-        struct Leg {
-            let startStop: Int
-            let endStop: Int
-            let dir: (Double, Double)
-        }
-        var legs: [Leg] = []
-        for i in 0 ..< stops.count - 1 {
-            let s = stops[i].coordinate
-            let e = stops[i + 1].coordinate
-            legs.append(Leg(
-                startStop: i, endStop: i + 1,
-                dir: (e.latitude - s.latitude, e.longitude - s.longitude)
-            ))
-        }
-
-        // 2. Group consecutive legs into passes by detecting direction
-        //    reversals (dot product < 0 against the previous leg's vector).
-        var passLegRanges: [[Int]] = []  // each entry = list of leg indices
-        var current: [Int] = []
-        for (i, leg) in legs.enumerated() {
-            if let prevIdx = current.last {
-                let prev = legs[prevIdx].dir
-                let dot = leg.dir.0 * prev.0 + leg.dir.1 * prev.1
-                if dot < 0 {
-                    passLegRanges.append(current)
-                    current = [i]
-                    continue
-                }
-            }
-            current.append(i)
-        }
-        if !current.isEmpty { passLegRanges.append(current) }
-
-        // 3. Classify each pass's direction against the first pass
-        //    (canonical), and track rank within each direction.
-        struct PassDescriptor {
-            let legIndices: [Int]
-            let isSameDirAsCanonical: Bool
-            let rank: Int
-        }
-        var canonicalVec: (Double, Double)? = nil
-        var forwardRank = 0
-        var backwardRank = 0
-        var descriptors: [PassDescriptor] = []
-        for legIndices in passLegRanges {
-            // End-to-end vector of this pass.
-            let firstLeg = legs[legIndices.first!]
-            let lastLeg  = legs[legIndices.last!]
-            let s = stops[firstLeg.startStop].coordinate
-            let e = stops[lastLeg.endStop].coordinate
-            let vec: (Double, Double) = (e.latitude - s.latitude, e.longitude - s.longitude)
-            if canonicalVec == nil {
-                canonicalVec = vec
-            }
-            let canonical = canonicalVec!
-            let dot = vec.0 * canonical.0 + vec.1 * canonical.1
-            let same = dot >= 0
-            let rank: Int
-            if same {
-                rank = forwardRank
-                forwardRank += 1
-            } else {
-                rank = backwardRank
-                backwardRank += 1
-            }
-            descriptors.append(PassDescriptor(
-                legIndices: legIndices,
-                isSameDirAsCanonical: same,
-                rank: rank
-            ))
-        }
-
-        // 4. Resolve color per leg from the block model. The road LEAVING
-        //    block N's last stop takes block N+1's color (segment "enters"
-        //    the new block) — matches the rest of TripBlocks's convention.
+        // Block color lookup: the road LEAVING block N's last stop takes
+        // block N+1's color (segment "enters" the new block as it arrives at
+        // the destination) — matches the rest of TripBlocks's convention.
         let blocksByWaypointID: [UUID: TripColor] = {
             var m: [UUID: TripColor] = [:]
             for b in self.blocks {
@@ -183,28 +118,94 @@ extension Trip {
             return m
         }()
 
-        // 5. For each pass, walk its legs and split into ribbons at every
-        //    block-color boundary. Each ribbon = one polyline + one color
-        //    + the pass's offset. Multi-block passes emit multiple
-        //    ribbons that meet at the boundary waypoint (continuous in
-        //    the visual lane, just changing color).
-        let multiPass = descriptors.count >= 2
+        // 1. Build legs. Each is a directed slice of the base polyline plus
+        //    its direction vector, block color, and road signature. Degenerate
+        //    legs (zero-length slice) are dropped.
+        struct Leg {
+            let dir: (Double, Double)
+            let coords: [CLLocationCoordinate2D]
+            let color: TripColor
+            let signature: String
+        }
+        var legs: [Leg] = []
+        for i in 0 ..< stops.count - 1 {
+            let s = stops[i].coordinate
+            let e = stops[i + 1].coordinate
+            let si = waypointIndexes[i]
+            let ei = waypointIndexes[i + 1]
+            let lo = min(si, ei)
+            let hi = max(si, ei)
+            guard hi > lo else { continue }
+            var coords = Array(baseCoords[lo...hi])
+            if si > ei { coords.reverse() }
+            legs.append(Leg(
+                dir: (e.latitude - s.latitude, e.longitude - s.longitude),
+                coords: coords,
+                color: blocksByWaypointID[stops[i + 1].id] ?? self.color,
+                signature: Trip.roadSignature(coords)
+            ))
+        }
+        guard !legs.isEmpty else { return [] }
+
+        // 2. Group consecutive legs into passes (contiguous runs with no
+        //    direction reversal — dot product < 0 against the previous leg).
+        //    Passes bound ribbon merging so out-and-backs render as two
+        //    separate directed ribbons rather than one folded polyline.
+        var passes: [[Int]] = []        // arrays of indices into `legs`
+        var current: [Int] = []
+        for i in legs.indices {
+            if let prev = current.last {
+                let p = legs[prev].dir
+                let dot = legs[i].dir.0 * p.0 + legs[i].dir.1 * p.1
+                if dot < 0 {
+                    passes.append(current)
+                    current = [i]
+                    continue
+                }
+            }
+            current.append(i)
+        }
+        if !current.isEmpty { passes.append(current) }
+
+        // 3. Overlap-driven offset. Group legs by road signature; legs that
+        //    share a signature traverse the same road and get nested lanes.
+        //    Lane magnitude grows per same-direction traversal; opposite
+        //    directions both start at -0.5 and separate by travel side. A leg
+        //    whose road no other leg shares (group size 1) stays centered.
+        var legsBySignature: [String: [Int]] = [:]
+        for i in legs.indices {
+            legsBySignature[legs[i].signature, default: []].append(i)
+        }
+        var legMultiplier = [Double](repeating: 0, count: legs.count)
+        for (_, members) in legsBySignature where members.count >= 2 {
+            // `members` are in ascending leg index = trip order.
+            let canonical = legs[members[0]].dir
+            var forwardRank = 0
+            var backwardRank = 0
+            for idx in members {
+                let dot = legs[idx].dir.0 * canonical.0 + legs[idx].dir.1 * canonical.1
+                let rank: Int
+                if dot >= 0 { rank = forwardRank; forwardRank += 1 }
+                else        { rank = backwardRank; backwardRank += 1 }
+                legMultiplier[idx] = -(Double(rank) + 0.5)
+            }
+        }
+
+        // 4. Emit ribbons. Walk each pass in order; flush a ribbon whenever
+        //    the block color or the offset lane changes. Consecutive legs that
+        //    share both colors and lane merge into one continuous ribbon.
         var out: [RouteRibbon] = []
         var ribbonIdx = 0
-
-        for d in descriptors {
-            // Offset for this whole pass.
-            let multiplier: Double = multiPass ? -(Double(d.rank) + 0.5) : 0
-
-            // Walk legs in pass order, grouping by color.
+        for pass in passes {
             var curCoords: [CLLocationCoordinate2D] = []
             var curColor: TripColor? = nil
-            func flushCurrent() {
+            var curMult = 0.0
+            func flush() {
                 guard !curCoords.isEmpty, let color = curColor else { return }
                 out.append(RouteRibbon(
                     id: ribbonIdx,
                     coords: curCoords,
-                    offsetMultiplier: multiplier,
+                    offsetMultiplier: curMult,
                     color: color,
                     isStraightLineFallback: !useSnap
                 ))
@@ -212,36 +213,55 @@ extension Trip {
                 curCoords = []
                 curColor = nil
             }
-
-            for legIdx in d.legIndices {
-                let leg = legs[legIdx]
-                let destID = stops[leg.endStop].id
-                let legColor = blocksByWaypointID[destID] ?? self.color
-
-                // Pull this leg's coord slice from the base polyline.
-                let s = waypointIndexes[leg.startStop]
-                let e = waypointIndexes[leg.endStop]
-                let lo = min(s, e)
-                let hi = max(s, e)
-                guard hi > lo else { continue }
-                var legCoords = Array(baseCoords[lo...hi])
-                if s > e { legCoords.reverse() }
-
+            for idx in pass {
+                let leg = legs[idx]
+                let mult = legMultiplier[idx]
                 if curColor == nil {
-                    curColor = legColor
-                    curCoords = legCoords
-                } else if curColor == legColor {
-                    // Same color → extend ribbon. Drop duplicate join point.
-                    curCoords.append(contentsOf: legCoords.dropFirst())
+                    curColor = leg.color
+                    curMult = mult
+                    curCoords = leg.coords
+                } else if curColor == leg.color && curMult == mult {
+                    // Same color + lane → extend. Drop duplicate join point.
+                    curCoords.append(contentsOf: leg.coords.dropFirst())
                 } else {
-                    // Color change → flush this ribbon, start new one.
-                    flushCurrent()
-                    curColor = legColor
-                    curCoords = legCoords
+                    flush()
+                    curColor = leg.color
+                    curMult = mult
+                    curCoords = leg.coords
                 }
             }
-            flushCurrent()
+            flush()
         }
         return out
+    }
+
+    /// Direction-invariant signature of a polyline: subsample to a fixed
+    /// budget, quantize each point to a ~56 m grid, sort, and join. Two legs
+    /// that trace the same road — in either direction — hash equal, which is
+    /// how an out-and-back's two legs are recognised as the same road. This is
+    /// the leg-granularity heuristic (Tier A): it catches whole-leg retraces
+    /// and out-and-backs, but not a retrace that begins mid-leg (handled by
+    /// the sub-leg coverage pass, Tier B).
+    static func roadSignature(_ coords: [CLLocationCoordinate2D]) -> String {
+        guard !coords.isEmpty else { return "" }
+        func q(_ c: CLLocationCoordinate2D) -> String {
+            let qLat = Int((c.latitude * 2000).rounded())   // 1/2000° ≈ 56 m
+            let qLon = Int((c.longitude * 2000).rounded())
+            return "\(qLat),\(qLon)"
+        }
+        let budget = 12
+        let n = coords.count
+        var samples: [String] = []
+        if n <= budget {
+            samples.reserveCapacity(n)
+            for c in coords { samples.append(q(c)) }
+        } else {
+            samples.reserveCapacity(budget)
+            for i in 0 ..< budget {
+                let idx = Int(Double(i) * Double(n - 1) / Double(budget - 1))
+                samples.append(q(coords[idx]))
+            }
+        }
+        return samples.sorted().joined(separator: "|")
     }
 }

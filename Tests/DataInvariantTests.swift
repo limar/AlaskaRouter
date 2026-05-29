@@ -135,4 +135,41 @@ final class DataInvariantTests: XCTestCase {
         XCTAssertEqual(ribbons.map(\.offsetMultiplier), [-0.5, -0.5])
         XCTAssertTrue(ribbons.allSatisfy(\.isStraightLineFallback))
     }
+
+    func testRouteRibbonsCenterLoneStretchAfterOutAndBack() {
+        // AlaskaRouter-pbmw regression. A→B→A→C: the A–B road is driven twice
+        // (out-and-back) and must be doubled, but the final A→C stretch is
+        // driven once and must stay CENTERED (offset 0). The old algorithm
+        // shifted every ribbon once the trip had ≥2 passes anywhere.
+        let trip = TestFactories.trip(stops: [
+            (0, 0, "A"),
+            (0, 1, "B"),
+            (0, 0, "A Return"),
+            (0, -1, "C"),
+        ])
+
+        let ribbons = trip.routeRibbons(snappedCoords: nil)
+
+        XCTAssertEqual(ribbons.count, 3)
+        // The doubled A–B road: two ribbons on opposite travel sides.
+        XCTAssertEqual(ribbons[0].offsetMultiplier, -0.5)
+        XCTAssertEqual(ribbons[1].offsetMultiplier, -0.5)
+        // The lone A→C stretch is centered — the bug.
+        XCTAssertEqual(ribbons[2].offsetMultiplier, 0)
+    }
+
+    func testRouteRibbonsCenterSharpTurnWithoutRetrace() {
+        // A sharp turn (direction reversal at B) over roads that do NOT
+        // overlap must stay centered. The old algorithm split this into two
+        // "passes" and shifted both off-center even though nothing is doubled.
+        let trip = TestFactories.trip(stops: [
+            (0, 0, "A"),
+            (2, 0, "B"),
+            (1, 1, "C"),
+        ])
+
+        let ribbons = trip.routeRibbons(snappedCoords: nil)
+
+        XCTAssertTrue(ribbons.allSatisfy { $0.offsetMultiplier == 0 })
+    }
 }
