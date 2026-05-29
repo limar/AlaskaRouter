@@ -11,6 +11,7 @@ import CoreLocation
 ///                  insert, brief toast with Undo.
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
 
     @State private var searchQuery: String = ""
@@ -34,10 +35,7 @@ struct RootView: View {
     /// TripStore.setActive. The actual resolution still happens in TripStore.
     @AppStorage("activeTripID") private var activeTripIDObserved: String = ""
 
-    @State private var mapCamera: MapViewCamera = .center(
-        .init(latitude: 63.95, longitude: -148.9),
-        zoom: LaunchArgs.initialZoom ?? 8.5
-    )
+    @State private var mapCamera: MapViewCamera = RootView.makeInitialCamera()
 
     // Routing layer state
     private let routingProvider: any RoutingProvider = OSRMProvider()
@@ -377,6 +375,11 @@ struct RootView: View {
         .onChange(of: tripGeometryKey) { _, newKey in
             scheduleSnapForCurrentTrip(key: newKey)
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Save the current view when leaving the foreground so the next
+            // launch reopens where the user was (AlaskaRouter-2ufd).
+            if newPhase != .active { persistLastMapView() }
+        }
         // First location fix after a locate-me tap → focus the camera.
         // (We don't use MapLibreSwiftUI's tracking mode for showsUserLocation
         // anymore — the blue puck is rendered as our own SymbolStyleLayer,
@@ -611,6 +614,46 @@ struct RootView: View {
             mapCamera = .center(coord, zoom: z)
         }
         pendingLocateMeFocus = false
+    }
+
+    // MARK: - Last-view persistence (AlaskaRouter-2ufd)
+
+    private static let lastCenterLatKey = "lastMapCenterLat"
+    private static let lastCenterLonKey = "lastMapCenterLon"
+    private static let lastZoomKey = "lastMapZoom"
+
+    /// Default Alaska framing used on a fresh install (no saved view yet).
+    private static let defaultCenter = CLLocationCoordinate2D(latitude: 63.95, longitude: -148.9)
+    private static let defaultZoom = 8.5
+
+    /// Seed the camera from the last view the user left the app on, so the map
+    /// opens where they were rather than at a fixed point far from the route.
+    /// Skipped when `initialZoom` is set so screenshot / UI-test launches stay
+    /// deterministic; falls back to the Alaska default when nothing is saved.
+    private static func makeInitialCamera() -> MapViewCamera {
+        let d = UserDefaults.standard
+        if LaunchArgs.initialZoom == nil, d.object(forKey: lastZoomKey) != nil {
+            let center = CLLocationCoordinate2D(
+                latitude: d.double(forKey: lastCenterLatKey),
+                longitude: d.double(forKey: lastCenterLonKey)
+            )
+            let zoom = d.double(forKey: lastZoomKey)
+            if CLLocationCoordinate2DIsValid(center), zoom > 0 {
+                return .center(center, zoom: zoom)
+            }
+        }
+        return .center(defaultCenter, zoom: LaunchArgs.initialZoom ?? defaultZoom)
+    }
+
+    /// Persist the current map center + zoom so the next launch restores it.
+    /// Only the `.centered` state carries an explicit coordinate; tracking
+    /// states (locate-me) are skipped, leaving the last explicit view saved.
+    private func persistLastMapView() {
+        guard case let .centered(center, zoom, _, _, _) = mapCamera.state else { return }
+        let d = UserDefaults.standard
+        d.set(center.latitude, forKey: Self.lastCenterLatKey)
+        d.set(center.longitude, forKey: Self.lastCenterLonKey)
+        d.set(zoom, forKey: Self.lastZoomKey)
     }
 
     /// Current camera zoom regardless of camera mode. Used so locate-me
