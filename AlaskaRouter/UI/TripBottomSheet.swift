@@ -71,6 +71,11 @@ struct TripBottomSheet: View {
     // Delete confirmation
     @State private var tripPendingDelete: Trip?
 
+    // Collapsed blocks (AlaskaRouter-xq6w). Keyed by the block header's stable
+    // TripListItem id ("block-0" or "sep-<uuid>"). Ephemeral per session — a
+    // viewing convenience to tame long itineraries.
+    @State private var collapsedBlockIDs: Set<String> = []
+
     var body: some View {
         GeometryReader { geo in
             let targetHeight = detent.height(in: geo.size.height)
@@ -310,11 +315,11 @@ struct TripBottomSheet: View {
     /// with embedded block dividers"). Block separators are rendered as
     /// HEADER strips, not stop-shaped rows — so they read as section titles.
     private var waypointList: some View {
-        let items = trip.listItems
+        let entries = visibleEntries()
         let stopColorByID = stopColorByIDMap()
         return List {
-            ForEach(items) { item in
-                row(for: item, stopColorByID: stopColorByID)
+            ForEach(entries, id: \.item.id) { entry in
+                row(for: entry.item, stopColorByID: stopColorByID)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
@@ -333,6 +338,37 @@ struct TripBottomSheet: View {
         .scrollContentBackground(.hidden)
         .background(Color.clear)
         .environment(\.defaultMinListRowHeight, 1)
+    }
+
+    /// The rows actually shown, each paired with its index in the full
+    /// `trip.listItems`. Stops of collapsed blocks are omitted; the block's
+    /// header row always remains. The retained full index lets the reorder /
+    /// delete handlers translate visible offsets back to model operations
+    /// (AlaskaRouter-xq6w).
+    private func visibleEntries() -> [(full: Int, item: TripListItem)] {
+        var out: [(Int, TripListItem)] = []
+        var collapsedNow = false
+        for (i, item) in trip.listItems.enumerated() {
+            switch item {
+            case .blockHeader:
+                collapsedNow = collapsedBlockIDs.contains(item.id)
+                out.append((i, item))
+            case .stop:
+                if !collapsedNow { out.append((i, item)) }
+            }
+        }
+        return out
+    }
+
+    /// Toggle a block's collapsed state, animating the stop rows in/out.
+    private func toggleCollapse(_ headerID: String) {
+        withAnimation(.snappy(duration: 0.28)) {
+            if collapsedBlockIDs.contains(headerID) {
+                collapsedBlockIDs.remove(headerID)
+            } else {
+                collapsedBlockIDs.insert(headerID)
+            }
+        }
     }
 
     /// Map each waypoint's id to the color of the block it belongs to. Used to
@@ -356,13 +392,19 @@ struct TripBottomSheet: View {
             // top of the list and hide the drag handle so users can't try to
             // reorder or delete it (pufj).
             let isSynthetic = (separator == nil)
+            let headerID = item.id
+            let isCollapsed = collapsedBlockIDs.contains(headerID)
             blockHeaderRow(
                 blockIndex: blockIndex,
                 color: swiftUIColor(color),
                 displayName: displayName,
-                isSynthetic: isSynthetic
+                isSynthetic: isSynthetic,
+                isCollapsed: isCollapsed,
+                onToggle: { toggleCollapse(headerID) }
             )
-            .moveDisabled(isSynthetic)
+            // Collapsed blocks can't be dragged (xq6w) — the handle is hidden
+            // and reorder is suppressed; you expand to rearrange.
+            .moveDisabled(isSynthetic || isCollapsed)
             .deleteDisabled(isSynthetic)
         }
     }
@@ -372,9 +414,16 @@ struct TripBottomSheet: View {
     /// don't confuse a block separator for a waypoint. (Was previously a
     /// rounded pill, which the mock-alignment work in AlaskaRouter-9634
     /// flagged as the root cause of "separators visibly resemble waystops.")
-    private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String, isSynthetic: Bool = false) -> some View {
+    private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String, isSynthetic: Bool = false, isCollapsed: Bool = false, onToggle: @escaping () -> Void = {}) -> some View {
         let count = stopCountInBlock(blockIndex: blockIndex)
         return HStack(spacing: 10) {
+            // Disclosure chevron — tap the header to collapse/expand the block
+            // (AlaskaRouter-xq6w). Points down when open, right when collapsed.
+            Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                .font(.sheetSans(11, weight: .bold))
+                .foregroundStyle(SheetPalette.textMuted)
+                .frame(width: 14)
+
             // Square chip with number — clearly different from the round
             // pip on a stop row.
             ZStack {
@@ -400,10 +449,10 @@ struct TripBottomSheet: View {
             Spacer(minLength: 0)
 
             // Drag handle — block headers participate in reorder like any
-            // other list row (.onMove). Block 0's synthetic header is fixed
-            // (no underlying separator to reorder), so the drag handle is
-            // suppressed for it.
-            if !isSynthetic {
+            // other list row (.onMove). Suppressed for block 0's fixed
+            // synthetic header AND for collapsed blocks (xq6w: a collapsed
+            // block can't be dragged — expand it first).
+            if !isSynthetic && !isCollapsed {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
@@ -424,6 +473,10 @@ struct TripBottomSheet: View {
             }
             .opacity(blockIndex == 0 ? 0 : 1)
         )
+        // Tap anywhere on the header to collapse/expand. Distinct from the
+        // long-press drag that initiates reorder.
+        .contentShape(Rectangle())
+        .onTapGesture { onToggle() }
     }
 
     /// Stop row — small white-fill numbered pip with colored stroke, serif
@@ -666,8 +719,18 @@ struct TripBottomSheet: View {
     ///     immediately preceding it (or deletes the separator if no waypoint
     ///     precedes it, which makes the separator degenerate)
     private func reorderListItems(from source: IndexSet, to destination: Int) {
-        var items = trip.listItems
-        items.move(fromOffsets: source, toOffset: destination)
+        // `.onMove` hands back offsets into the VISIBLE (collapse-filtered)
+        // list. Translate them to offsets in the full `trip.listItems` before
+        // mutating, so collapsed blocks' hidden stops travel correctly and the
+        // dragged row lands before/after a collapsed block (which stays
+        // collapsed) — AlaskaRouter-xq6w.
+        let entries = visibleEntries()
+        let full = trip.listItems
+        guard let srcVisible = source.first, srcVisible < entries.count else { return }
+        let srcFull = entries[srcVisible].full
+        let destFull = (destination < entries.count) ? entries[destination].full : full.count
+        var items = full
+        items.move(fromOffsets: IndexSet(integer: srcFull), toOffset: destFull)
 
         var stopIndex = 0
         var lastWaypointID: UUID? = nil
@@ -703,10 +766,11 @@ struct TripBottomSheet: View {
     }
 
     private func deleteListItems(at offsets: IndexSet) {
-        let items = trip.listItems
+        // Offsets index the VISIBLE (collapse-filtered) list (xq6w).
+        let entries = visibleEntries()
         for idx in offsets {
-            guard idx < items.count else { continue }
-            switch items[idx] {
+            guard idx < entries.count else { continue }
+            switch entries[idx].item {
             case .stop(let wp):
                 deleteWaypoint(wp, renumberAfter: false)
             case .blockHeader(let separator, _, _, _):
