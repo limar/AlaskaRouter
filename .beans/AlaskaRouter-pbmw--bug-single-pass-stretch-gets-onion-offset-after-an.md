@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-05-29T15:22:17Z
-updated_at: 2026-05-29T15:40:48Z
+updated_at: 2026-05-29T15:47:31Z
 ---
 
 The last stretch after an out-and-back is rendered shifted/offset (as if it were a 2-pass stretch) when it is in fact traversed only once.
@@ -44,3 +44,15 @@ Verified: `xcodebuild test` → DataInvariantTests 11/11 pass, including new `te
 Limitation (handed to Tier B): a whole-leg signature can't catch a retrace that begins *mid-leg* (A→B→C where the C routing drives back through part of A→B). Tier B adds sub-leg coverage counting.
 
 Still pending: visual verification on the simulator (Fairbanks→Santa's Sleigh→Fairbanks→C).
+
+## Tier B — landed (sub-leg coverage onion)
+
+Reworked `Trip.routeRibbons` to compute offset at SUB-LEG granularity. Every leg edge is rasterized onto a ~56 m grid; coverage = number of distinct legs per cell, read at each edge's midpoint. Lanes are assigned per cell (canonical = lowest-index covering leg; same-direction nest, opposite-direction separate by travel side). Short constant-coverage runs (<120 m) are dissolved into a neighbour to kill junction speckle and forward/return geometry-mismatch noise. A leg can now emit several ribbons when its overlap count changes partway along it.
+
+Catches the mid-leg retrace case (A→B→C where the C routing drives back through part of A→B) that the Tier A whole-leg signature could not.
+
+Tuning knobs: `coverageCellsPerDegree` (grid resolution), `minCoverageRunMeters` (speckle threshold).
+
+Verified: `xcodebuild test` → DataInvariantTests 12/12 pass, incl. new `testRouteRibbonsDoubleMidLegRetrace` (centered head + doubled tail + doubled return) and all Tier A / existing onion tests still green.
+
+Still pending: **visual verification on the simulator** — both the reported A→B→A→C (Fairbanks→Santa's Sleigh→Fairbanks→C) and the look of the onion overall. Tier A is committed separately (afd73ec) as the reset fallback if Tier B regresses the look.

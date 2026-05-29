@@ -172,4 +172,40 @@ final class DataInvariantTests: XCTestCase {
 
         XCTAssertTrue(ribbons.allSatisfy { $0.offsetMultiplier == 0 })
     }
+
+    func testRouteRibbonsDoubleMidLegRetrace() {
+        // Tier B (AlaskaRouter-pbmw). A→B→C where the snapped routing to C
+        // drives back through PART of A→B. The overlap begins mid-leg, so a
+        // whole-leg signature can't see it; sub-leg coverage must split leg
+        // A→B into a centered head (the un-retraced stub) and a doubled tail.
+        //
+        // Geometry: A=(0,0) → B=(0,2) forward, then back to C=(0,0.5).
+        // The lon 0.5…2 stretch is driven twice; lon 0…0.5 once.
+        let snapped = [
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.5),
+            CLLocationCoordinate2D(latitude: 0, longitude: 1.0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 1.5),
+            CLLocationCoordinate2D(latitude: 0, longitude: 2.0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 1.5),
+            CLLocationCoordinate2D(latitude: 0, longitude: 1.0),
+            CLLocationCoordinate2D(latitude: 0, longitude: 0.5),
+        ]
+        let trip = TestFactories.trip(stops: [
+            (0, 0.0, "A"),
+            (0, 2.0, "B"),
+            (0, 0.5, "C"),
+        ])
+
+        let ribbons = trip.routeRibbons(snappedCoords: snapped)
+
+        XCTAssertEqual(ribbons.count, 3)
+        // Head of A→B (lon 0…0.5): driven once → centered.
+        XCTAssertEqual(ribbons[0].offsetMultiplier, 0)
+        // Tail of A→B (lon 0.5…2): doubled → offset.
+        XCTAssertEqual(ribbons[1].offsetMultiplier, -0.5)
+        // Return B→C over the same tail: doubled, opposite travel side.
+        XCTAssertEqual(ribbons[2].offsetMultiplier, -0.5)
+        XCTAssertTrue(ribbons.allSatisfy { !$0.isStraightLineFallback })
+    }
 }
