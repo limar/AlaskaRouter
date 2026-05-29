@@ -573,8 +573,9 @@ struct TripBottomSheet: View {
     }
 
     private func kindHint(for wp: Waypoint) -> String {
-        let cat = wp.category?.replacingOccurrences(of: "_", with: " ") ?? "stop"
-        return "\(cat) · \(String(format: "%.3f, %.3f", wp.lat, wp.lon))"
+        // Friendly category label; lat/long was useless here so it's gone
+        // (AlaskaRouter-tluk).
+        CategoryLabel.display(wp.category)
     }
 
     private func stopCountInBlock(blockIndex: Int) -> Int {

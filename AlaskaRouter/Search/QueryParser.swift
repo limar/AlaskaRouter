@@ -33,6 +33,12 @@ enum QueryParser {
         ("gas station",       "fuel"),
         ("post office",       "post"),
         ("ranger",            "ranger_station"),
+        // Settlement descriptors — so "Fairbanks town" / "Bethel city" strip
+        // the descriptor and find the named settlement (AlaskaRouter-tluk).
+        ("city",              "settlement_major"),
+        ("town",              "settlement"),
+        ("village",           "settlement"),
+        ("hamlet",            "settlement"),
         ("fuel",              "fuel"),
         ("gas",               "fuel"),
         ("petrol",            "fuel"),

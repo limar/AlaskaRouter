@@ -22,15 +22,12 @@ struct PreviewCallout: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
-                    HStack(spacing: 4) {
-                        Text(result.category.replacingOccurrences(of: "_", with: " "))
-                        Text("·")
-                        Text(String(format: "%.3f, %.3f",
-                                    result.coord.latitude,
-                                    result.coord.longitude))
-                    }
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.secondary)
+                    // Friendly category label; lat/long dropped as useless —
+                    // the admin-area line below gives location context
+                    // (AlaskaRouter-tluk).
+                    Text(CategoryLabel.display(result.category))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 Button(action: onDismiss) {

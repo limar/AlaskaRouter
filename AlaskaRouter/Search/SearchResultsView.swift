@@ -65,7 +65,7 @@ struct SearchResultsView: View {
                         // fallback that still disambiguates from adjacent
                         // Canada when the v2+ multi-region work lands).
                         HStack(spacing: 4) {
-                            Text(result.category.replacingOccurrences(of: "_", with: " "))
+                            Text(CategoryLabel.display(result.category))
                             Text("·")
                             Text(locationLine(for: result))
                             if result.stage == SearchStage.editDistance.rawValue {

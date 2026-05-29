@@ -17,6 +17,27 @@ final class SearchTests: XCTestCase {
         XCTAssertEqual(parsed.categoryHints, ["fuel"])
     }
 
+    func testQueryParserMapsTownAndCityToSettlement() {
+        // AlaskaRouter-tluk: descriptor is stripped from the name and applied
+        // as a settlement category hint, so "Fairbanks town" finds Fairbanks.
+        let town = QueryParser.parse("Fairbanks town")
+        XCTAssertEqual(town.nameTokens, ["fairbanks"])
+        XCTAssertEqual(town.categoryHints, ["settlement"])
+
+        let city = QueryParser.parse("Bethel city")
+        XCTAssertEqual(city.nameTokens, ["bethel"])
+        XCTAssertEqual(city.categoryHints, ["settlement_major"])
+    }
+
+    func testCategoryLabelHumanizesKeys() {
+        XCTAssertEqual(CategoryLabel.display("settlement"), "Town")
+        XCTAssertEqual(CategoryLabel.display("settlement_major"), "City")
+        XCTAssertEqual(CategoryLabel.display("fuel"), "Gas")
+        XCTAssertEqual(CategoryLabel.display("river_crossing"), "River crossing")
+        XCTAssertEqual(CategoryLabel.display("brand_new_key"), "Brand New Key") // fallback
+        XCTAssertEqual(CategoryLabel.display(nil), "Stop")
+    }
+
     func testEditDistanceTreatsPrefixesAsExactMatches() {
         XCTAssertEqual(EditDistance.minTokenDistance(qToken: "den", against: "Denali National Park"), 0)
     }
@@ -32,6 +53,7 @@ final class SearchTests: XCTestCase {
             ("Atagun pas", "atigun"),
             ("Wrangell visitor center", "wrangell"),
             ("Chena hot spring", "chena"),
+            ("Fairbanks town", "fairbanks"),
         ]
         for testCase in cases {
             let service = SearchService(db: PlacesDB(bundleResource: "alaska-places"))

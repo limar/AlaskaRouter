@@ -153,7 +153,7 @@ struct StopCallout: View {
     }
 
     private var detailLine: String {
-        let category = (waypoint.category ?? "stop").replacingOccurrences(of: "_", with: " ")
+        let category = CategoryLabel.display(waypoint.category)
         if let d = distanceFromPrevText {
             return "\(category) · \(d)"
         }
