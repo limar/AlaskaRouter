@@ -1,0 +1,43 @@
+---
+# AlaskaRouter-io69
+title: 'Bug: reorder drop has visible disappear→pause→reappear (SwiftUI internal, not our code path)'
+status: todo
+type: bug
+priority: normal
+created_at: 2026-05-30T13:44:05Z
+updated_at: 2026-05-30T13:44:05Z
+parent: AlaskaRouter-e0vm
+---
+
+User-spotted regression: dropping a moved stop or separator visibly disappears for 200+ms, then reappears at some position, *then* animates to the final position with a freshly-updated title. Reads as fade/identity-change instead of clean slide.
+
+## What we measured (NSLog timings, no debugger)
+The .onMove handler is essentially free:
+- Separator drop: setup=1.5ms loop=0.1ms prune=0.5ms total-sync=2.2ms
+- Stop drop:      setup=0.4ms loop=0.2ms prune=0.1ms total-sync=0.7ms
+
+The runloop comes back to our deferred block within ~8ms after the handler returns (DispatchQueue.main.async timing). So nothing in our code path is the fat thing:
+- Not the mutation loop
+- Not pruneDegenerateSeparators
+- Not modelContext.save() (we deferred it; gap before it ran was still 8ms)
+- Not body re-renders (those would block the runloop too)
+
+The 200+ms 'pause' is inside SwiftUI's own List drop-animation transition.
+
+## Approaches tried + outcomes
+- AlaskaRouter-x5ss — swap Button wrap for .simultaneousGesture(TapGesture) on blockHeaderRow. No effect. SCRAPPED.
+- AlaskaRouter-sopx — defer syncTripRouteLayer (ribbon recompute) to next runloop via DispatchQueue.main.async. No effect (ribbons render *after* the drop animation anyway). SCRAPPED.
+- Defer modelContext.save() inside reorderListItems. Was already part of x5ss/sopx exploration; no effect.
+- Ablation: remove the Color.clear stop-indent placeholder in waypointRow + matching band placeholder. Tested — no effect on animation (left in commit history reverted).
+
+## Suspect (not confirmed, not investigated further)
+View-identity drift during the .onMove, plausibly induced by the conditional Group { if synthetic || collapsed { Color.clear } else { dragDots } } inside blockHeaderRow (from exf0), or by the recent dot-column / placeholder structure in waypointRow. Animation-Hitches Instruments would tell us — deferred (further investigation would block development).
+
+## Decision
+Deferred. The bug exists but does not block usability — the drop completes, the data is correct, the title updates. Revisit when:
+- A clearer hypothesis arises (e.g. matches a known SwiftUI issue)
+- We have an Instruments session available
+- Or we naturally restructure the row view tree as part of another refinement
+
+## Where we stopped
+File state at 08ac804 (exf0 — separator mobility + dot column). All diagnostics + ablation reverted. Cooperation with user worked well; learned NSLog → unified-log streaming via xcrun simctl spawn booted log stream as a debugger-free console technique.
