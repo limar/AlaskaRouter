@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-30T05:56:02Z
+updated_at: 2026-05-30T06:35:00Z
 ---
 
 ## Why
@@ -476,3 +476,17 @@ The first full Alaska contour import reached the upstream `06_dem_contours2.sh` 
 Added `scripts/import-contours-in-chunks.py` so Alaska imports one generated `contour-warp-60_*.pbf` per `osm2pgsql` process: first with `--create`, remaining files with `--append`. The helper records imported filenames under `/mnt/data/srtm/.contour-import-state/`, supports `--pattern` to exclude stale POC contour files, and supports `--flat-nodes` so the slim node store can live under `/mnt/db`.
 
 Server run started under `/home/mlifshitz/tiles/AlaskaRouter/logs/import-contours-chunked.log` with 42 Alaska chunks, `--cache 32000`, and `/mnt/db/contours-flat-nodes.bin`. Early status: first two chunks imported, third chunk running; no segfault yet.
+
+
+
+## Alaska Chunked Contour Import Failure (2026-05-30)
+
+The detached chunked import did not complete. It imported 4 of 42 Alaska contour chunks, then failed on `contour-warp-60_1_5_lon-147.62_-139.53lat69.32_72.00_local-source.osm.pbf`. No `import-contours-in-chunks` or `osm2pgsql` process remained after the failure.
+
+Observed error in `logs/import-contours-chunked.log`:
+
+- `SQL command failed: ERROR: invalid memory alloc request size 1073741824`
+- `DB copy thread failed: Executing SQL`
+- `CalledProcessError` from the chunked helper while running `osm2pgsql --append ... contour-warp-60_1_5...pbf`
+
+Diagnosis so far: the previous all-at-once crash was avoided, but the generated contour data is still too pathological for the old `osm2pgsql`/PostgreSQL path. The failure occurred while copying an enormous `planet_osm_ways` row containing a very large node-ref array with IDs around 4.01B. This points at the generated contour ways being too long / too dense for the importer, possibly amplified by the 1B tile ID stride and 10m contour interval. Next fix should reduce contour way complexity before import: regenerate contours with smaller tiles and/or less dense contour settings, and reconsider the ID allocation so generated IDs stay comfortably low while remaining unique.
