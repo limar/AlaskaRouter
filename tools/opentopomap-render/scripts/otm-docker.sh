@@ -56,11 +56,38 @@ Copernicus DEM prep script instead of 03_dem_hillshade.sh:
   /alaskarouter-scripts/prepare-copernicus-dem.sh # Alaska/Copernicus regions
   sh 04_preprocess_osm_data.sh
   sh 05_dem_contours1.sh
-  # Run exactly one contour import step:
+  CONTOUR_TILE_SIZE=5000 \
+    CONTOUR_OUTPUT_FORMAT=xml \
+    CONTOUR_OUTPUT_DIR=contours-5000-xml \
+    CONTOUR_MAX_NODES_PER_TILE=1000000 \
+    CONTOUR_MAX_NODES_PER_WAY=2000 \
+    CONTOUR_ID_STRIDE=5000000 \
+    /alaskarouter-scripts/prepare-copernicus-contours.sh
+  /alaskarouter-scripts/validate-contour-pbf.py \
+    --max-way-nodes 5000 \
+    --max-id 2000000000 \
+    --max-id-span 5000000 \
+    /mnt/data/srtm/contours-5000-xml/contour*.osm
+  CONTOUR_TILE_SIZE=5000 \
+    CONTOUR_OUTPUT_FORMAT=pbf \
+    CONTOUR_OUTPUT_DIR=contours-5000 \
+    CONTOUR_MAX_NODES_PER_TILE=1000000 \
+    CONTOUR_MAX_NODES_PER_WAY=2000 \
+    CONTOUR_ID_STRIDE=5000000 \
+    /alaskarouter-scripts/prepare-copernicus-contours.sh
+  # Run exactly one production contour import step:
   sh 06_dem_contours2.sh                                     # small regions
   /alaskarouter-scripts/import-contours-in-chunks.py \
     --recreate \
+    --database contours_probe \
+    --pattern 'contour-warp-60_*.osm' \
+    --srtm-dir /mnt/data/srtm/contours-5000-xml \
+    --cache 32000 \
+    --flat-nodes /mnt/db/contours-probe-flat-nodes.bin       # Alaska probe
+  /alaskarouter-scripts/import-contours-in-chunks.py \
+    --recreate \
     --pattern 'contour-warp-60_*.pbf' \
+    --srtm-dir /mnt/data/srtm/contours-5000 \
     --cache 32000 \
     --flat-nodes /mnt/db/contours-flat-nodes.bin              # Alaska
 

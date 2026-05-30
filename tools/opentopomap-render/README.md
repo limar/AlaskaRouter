@@ -63,6 +63,10 @@ Expected Alaska z=11 target count: 74,955 tiles.
 - `prepare-copernicus-dem.sh`: runs inside the Docker container and builds
   the `raw.tif`, `warp-*`, `relief-*`, and `hillshade-*` files expected by the
   OpenTopoMap style from Copernicus GLO-30 COGs.
+- `prepare-copernicus-contours.sh`: retile the large Alaska `warp-60.tif`
+  and generates bounded contour files. Defaults to PBF for production; set
+  `CONTOUR_OUTPUT_FORMAT=xml` for a validation/probe run that does not require
+  `osmium` in the container.
 - `otm-docker.sh`: wraps the compose file for start/stop/logs/shell.
 - `render-region-command.py`: prints the `tirex-batch` command for a region.
 - `export-region-tiles.py`: copies rendered PNGs from the local renderer into
@@ -177,11 +181,25 @@ sh 02_import_osm_data.sh
 /alaskarouter-scripts/prepare-copernicus-dem.sh
 sh 04_preprocess_osm_data.sh
 sh 05_dem_contours1.sh
+CONTOUR_TILE_SIZE=5000 \
+CONTOUR_OUTPUT_FORMAT=xml \
+CONTOUR_OUTPUT_DIR=contours-5000-xml \
+CONTOUR_MAX_NODES_PER_TILE=1000000 \
+CONTOUR_MAX_NODES_PER_WAY=2000 \
+CONTOUR_ID_STRIDE=5000000 \
+/alaskarouter-scripts/prepare-copernicus-contours.sh
+/alaskarouter-scripts/validate-contour-pbf.py \
+  --max-way-nodes 5000 \
+  --max-id 2000000000 \
+  --max-id-span 5000000 \
+  /mnt/data/srtm/contours-5000-xml/contour*.osm
 /alaskarouter-scripts/import-contours-in-chunks.py \
   --recreate \
-  --pattern 'contour-warp-60_*.pbf' \
+  --database contours_probe \
+  --pattern 'contour-warp-60_*.osm' \
+  --srtm-dir /mnt/data/srtm/contours-5000-xml \
   --cache 32000 \
-  --flat-nodes /mnt/db/contours-flat-nodes.bin
+  --flat-nodes /mnt/db/contours-xml-flat-nodes.bin
 ```
 
 Alaska's generated contour set is too large for the upstream
@@ -191,6 +209,38 @@ helper imports the first `contour*.pbf` with `--create` and the rest with
 marker file under `/mnt/data/srtm/.contour-import-state/`. Use a flat-nodes
 file on the server so the slim node store does not inflate PostgreSQL scratch
 tables.
+
+Before importing a new contour batch, validate it. XML validation works with
+only Python in the current `jhassler/otm-docker` container. PBF validation also
+works, but requires `osmium` on `PATH` because the validator streams PBF input
+through `osmium cat -f osm`.
+
+```bash
+/alaskarouter-scripts/validate-contour-pbf.py \
+  --max-way-nodes 5000 \
+  --max-id 2000000000 \
+  --max-id-span 5000000 \
+  /mnt/data/srtm/contours-5000-xml/contour*.osm
+```
+
+After the XML probe imports cleanly, generate the production PBF contour set
+with the same safety bounds:
+
+```bash
+CONTOUR_TILE_SIZE=5000 \
+CONTOUR_OUTPUT_FORMAT=pbf \
+CONTOUR_OUTPUT_DIR=contours-5000 \
+CONTOUR_MAX_NODES_PER_TILE=1000000 \
+CONTOUR_MAX_NODES_PER_WAY=2000 \
+CONTOUR_ID_STRIDE=5000000 \
+/alaskarouter-scripts/prepare-copernicus-contours.sh
+/alaskarouter-scripts/import-contours-in-chunks.py \
+  --recreate \
+  --pattern 'contour-warp-60_*.pbf' \
+  --srtm-dir /mnt/data/srtm/contours-5000 \
+  --cache 32000 \
+  --flat-nodes /mnt/db/contours-flat-nodes.bin
+```
 
 Then on the host:
 

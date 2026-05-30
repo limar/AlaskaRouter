@@ -490,3 +490,51 @@ Observed error in `logs/import-contours-chunked.log`:
 - `CalledProcessError` from the chunked helper while running `osm2pgsql --append ... contour-warp-60_1_5...pbf`
 
 Diagnosis so far: the previous all-at-once crash was avoided, but the generated contour data is still too pathological for the old `osm2pgsql`/PostgreSQL path. The failure occurred while copying an enormous `planet_osm_ways` row containing a very large node-ref array with IDs around 4.01B. This points at the generated contour ways being too long / too dense for the importer, possibly amplified by the 1B tile ID stride and 10m contour interval. Next fix should reduce contour way complexity before import: regenerate contours with smaller tiles and/or less dense contour settings, and reconsider the ID allocation so generated IDs stay comfortably low while remaining unique.
+
+
+## Alaska Failed-Tile Contour Proof (2026-05-30)
+
+Confirmed the `invalid memory alloc request size 1073741824` was not a Docker
+container RAM cap. PostgreSQL rejects single allocations around 1 GiB, and the
+old 15000 px contour chunk could still produce importer input large enough to
+hit that per-allocation limit even on a server with ample RAM.
+
+Added a fail-fast contour validator and changed the Alaska contour generator
+defaults to smaller, bounded contour files:
+
+- `CONTOUR_TILE_SIZE=5000`
+- `CONTOUR_MAX_NODES_PER_TILE=1000000`
+- `CONTOUR_MAX_NODES_PER_WAY=2000`
+- `CONTOUR_ID_STRIDE=5000000`
+- `CONTOUR_OUTPUT_FORMAT=xml|pbf`
+
+The XML mode exists for early failure on the current `jhassler/otm-docker`
+image, which does not include `osmium`; XML can be scanned with Python alone.
+Production can still generate PBF with the same bounds to keep disk usage and
+import volume lower.
+
+Server proof on `sol-icomp-03.lab.gdc.il.infinidat.com` under
+`/home/mlifshitz/tiles/AlaskaRouter`:
+
+- Retiled the previously failing source tile
+  `/mnt/data/srtm/contour-tiles/warp-60_1_5.tif` into 9 separate 5000 px tiles.
+- Generated XML contours for those 9 tiles with bounded nodes/ways and low ID
+  stride.
+- Validated all generated XML with
+  `/alaskarouter-scripts/validate-contour-pbf.py --max-way-nodes 5000 --max-id 2000000000 --max-id-span 5000000`.
+- Imported the validated XML proof into disposable database `contours_probe`
+  with `import-contours-in-chunks.py --recreate --pattern '*.osm' --cache 8000`.
+- Probe import completed without the PostgreSQL 1 GiB allocation failure.
+  `planet_osm_line` now contains 63,825 rows and `planet_osm_ways` contains
+  62,337 rows in `contours_probe`.
+
+Next production step: sync the updated scripts to the server, generate a
+bounded PBF contour set for the full Alaska `warp-60.tif`, then run the chunked
+PBF import. If PBF import shows a new pathological file, rerun that local area
+in XML validation mode before retrying.
+
+Validation:
+
+- `python3 -m unittest tools/opentopomap-render/tests/test_validate_contours.py tools/opentopomap-render/tests/test_import_contours.py`
+- `python3 -m py_compile tools/opentopomap-render/scripts/validate-contour-pbf.py tools/opentopomap-render/scripts/import-contours-in-chunks.py`
+- `bash -n tools/opentopomap-render/scripts/prepare-copernicus-contours.sh tools/opentopomap-render/scripts/otm-docker.sh`
