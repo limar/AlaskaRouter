@@ -57,15 +57,6 @@ extension Trip {
         legDistancesMeters(snappedCoords: snappedCoords).reduce(0, +)
     }
 
-    /// Distance into a stop in metres — the leg arriving at the stop at
-    /// `order` (nil for the first stop, which has no preceding leg).
-    func distanceIntoStopMeters(order: Int, snappedCoords: [CLLocationCoordinate2D]?) -> Double? {
-        guard order >= 1 else { return nil }
-        let legs = legDistancesMeters(snappedCoords: snappedCoords)
-        guard order - 1 < legs.count else { return nil }
-        return legs[order - 1]
-    }
-
     /// Distance in metres covered by a block — the sum of legs whose
     /// DESTINATION stop is in the block. Matches the ribbon-coloring
     /// convention (the road leaving block N's last stop belongs to block N+1),

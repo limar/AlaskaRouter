@@ -320,9 +320,16 @@ struct TripBottomSheet: View {
     private var waypointList: some View {
         let entries = visibleEntries()
         let stopColorByID = stopColorByIDMap()
+        // Computed once per render: per-leg road lengths (indexed by position
+        // in orderedWaypoints) + a waypoint→position map, so the rail can label
+        // each leg by POSITION rather than the `.order` field (jhw8).
+        let legs = trip.legDistancesMeters(snappedCoords: snappedRouteCoords)
+        let posByID = Dictionary(
+            uniqueKeysWithValues: trip.orderedWaypoints.enumerated().map { ($1.id, $0) }
+        )
         return List {
             ForEach(entries, id: \.item.id) { entry in
-                row(for: entry.item, stopColorByID: stopColorByID)
+                row(for: entry.item, stopColorByID: stopColorByID, legs: legs, posByID: posByID)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
@@ -386,10 +393,10 @@ struct TripBottomSheet: View {
     }
 
     @ViewBuilder
-    private func row(for item: TripListItem, stopColorByID: [UUID: Color]) -> some View {
+    private func row(for item: TripListItem, stopColorByID: [UUID: Color], legs: [Double], posByID: [UUID: Int]) -> some View {
         switch item {
         case .stop(let wp):
-            waypointRow(wp, accent: stopColorByID[wp.id] ?? tripAccent)
+            waypointRow(wp, accent: stopColorByID[wp.id] ?? tripAccent, legs: legs, posByID: posByID)
         case let .blockHeader(separator, blockIndex, color, displayName):
             // Block 0's header is synthetic (separator == nil) — pin it at the
             // top of the list and hide the drag handle so users can't try to
@@ -486,69 +493,103 @@ struct TripBottomSheet: View {
     /// block (including block 0) has a header per pufj, so all stops sit
     /// uniformly indented relative to the header above them
     /// (AlaskaRouter-4rly fixed the conditional-indent bug here).
-    private func waypointRow(_ wp: Waypoint, accent: Color) -> some View {
-        return HStack(spacing: 10) {
-            // Numbered pip — white fill, 1.6pt colored stroke, tabular digit.
-            // Dark mode adds a thin cream ring just outside the colored stroke
-            // (AlaskaRouter-yxve) so the block-color identity lifts off the
-            // warm-sepia sheet background; in light mode pipOuterRing is
-            // .clear so the extra Circle is a no-op.
-            ZStack {
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 22, height: 22)
-                Circle()
-                    .stroke(accent, lineWidth: 1.6)
-                    .frame(width: 22, height: 22)
-                Circle()
-                    .stroke(SheetPalette.pipOuterRing, lineWidth: 0.8)
-                    .frame(width: 24.4, height: 24.4)
-                Text("\(wp.order + 1)")
-                    .font(.sheetSans(10, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(accent)
-            }
+    private func waypointRow(_ wp: Waypoint, accent: Color, legs: [Double], posByID: [UUID: Int]) -> some View {
+        let railWidth: CGFloat = 24
+        let railColor = accent.opacity(0.45)
+        // Index by POSITION in orderedWaypoints (not the `.order` field, which
+        // isn't guaranteed 0-based), so the first stop never gets an incoming
+        // leg and each label is the stretch arriving at this stop (jhw8).
+        let pos = posByID[wp.id] ?? 0
+        let hasIncoming = pos >= 1
+        let isLast = pos >= legs.count          // legs.count == stops − 1
+        let legText: String? = {
+            guard pos >= 1, pos - 1 < legs.count, legs[pos - 1] > 0 else { return nil }
+            return DistanceFormat.string(meters: legs[pos - 1], useMiles: useMiles)
+        }()
 
-            Button(action: { onTapWaypoint(wp) }) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(wp.label ?? "Untitled stop")
-                        .font(.sheetSerif(15, weight: .semibold))
-                        .foregroundStyle(SheetPalette.textStrong)
-                        .lineLimit(1)
-                    Text(kindHint(for: wp))
-                        .font(.sheetSans(11.5))
+        return VStack(spacing: 0) {
+            // Incoming-leg band — the leg distance sits ON the connector,
+            // between the previous pip and this one. Skipped for the first stop.
+            if hasIncoming, let legText {
+                ZStack {
+                    Rectangle()
+                        .fill(railColor)
+                        .frame(width: 1.5)
+                    Text(legText)
+                        .font(.sheetSans(9.5, weight: .semibold))
+                        .tracking(0.2)
                         .foregroundStyle(SheetPalette.textMuted)
-                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 4)
+                        .background(SheetPalette.cardFill)   // break the line behind the text
                 }
+                .frame(width: railWidth)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .frame(height: 17)
             }
-            .buttonStyle(.plain)
 
-            // Trash — instant delete; the Undo toast (AlaskaRouter-j5w1) is
-            // the safety net so no confirmation alert here.
-            //
-            // Visual: filled destructive circle + WHITE trash on top (matches
-            // the "+" and "✓" pattern from yxve so all action affordances
-            // share one "colored disc, white inner symbol" language).
-            Button(action: { deleteWaypoint(wp) }) {
-                Image(systemName: "trash")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(SheetPalette.destructive, in: Circle())
+            HStack(spacing: 10) {
+                // Timeline rail: top + bottom half-segments (block-colored)
+                // with the numbered pip riding on it. Top hidden for the first
+                // stop, bottom hidden for the last (AlaskaRouter-jhw8, mock).
+                ZStack {
+                    VStack(spacing: 0) {
+                        Rectangle().fill(hasIncoming ? railColor : Color.clear)
+                        Rectangle().fill(isLast ? Color.clear : railColor)
+                    }
+                    .frame(width: 1.5)
+
+                    // Numbered pip — white fill, 1.6pt colored stroke; a faint
+                    // cream outer ring (dark mode) lifts it off the sheet.
+                    ZStack {
+                        Circle().fill(Color.white).frame(width: 22, height: 22)
+                        Circle().stroke(accent, lineWidth: 1.6).frame(width: 22, height: 22)
+                        Circle().stroke(SheetPalette.pipOuterRing, lineWidth: 0.8).frame(width: 24.4, height: 24.4)
+                        Text("\(wp.order + 1)")
+                            .font(.sheetSans(10, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(accent)
+                    }
+                }
+                .frame(width: railWidth)
+
+                Button(action: { onTapWaypoint(wp) }) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(wp.label ?? "Untitled stop")
+                            .font(.sheetSerif(15, weight: .semibold))
+                            .foregroundStyle(SheetPalette.textStrong)
+                            .lineLimit(1)
+                        Text(kindHint(for: wp))
+                            .font(.sheetSans(11.5))
+                            .foregroundStyle(SheetPalette.textMuted)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
 
-            // Drag handle — the iOS-native .onMove integration uses this.
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
+                // Trash — instant delete; the Undo toast (AlaskaRouter-j5w1) is
+                // the safety net so no confirmation alert here.
+                Button(action: { deleteWaypoint(wp) }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(SheetPalette.destructive, in: Circle())
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                // Drag handle — the iOS-native .onMove integration uses this.
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
+            }
+            .padding(.vertical, 8)
         }
-        .padding(.leading, 22)   // uniform indent under the block header (4rly)
+        .padding(.leading, 14)
         .padding(.trailing, 4)
-        .padding(.vertical, 8)
     }
 
     private var addBlockRow: some View {
@@ -579,12 +620,9 @@ struct TripBottomSheet: View {
     private var useMiles: Bool { TweaksStore.shared.distanceUnitIsMiles }
 
     private func kindHint(for wp: Waypoint) -> String {
-        // Friendly category label + the road length of the leg arriving at
-        // this stop (replaced the useless lat/long — tluk → ssl1).
-        let cat = CategoryLabel.display(wp.category)
-        guard let m = trip.distanceIntoStopMeters(order: wp.order, snappedCoords: snappedRouteCoords),
-              m > 0 else { return cat }
-        return "\(cat) · \(DistanceFormat.string(meters: m, useMiles: useMiles))"
+        // Friendly category label only. The leg distance moved onto the
+        // timeline rail (jhw8) so it reads as the stretch between two stops.
+        CategoryLabel.display(wp.category)
     }
 
     /// Block header subline: "N stops" plus the block's road length.
