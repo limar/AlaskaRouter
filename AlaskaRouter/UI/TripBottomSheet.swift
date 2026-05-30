@@ -445,9 +445,13 @@ struct TripBottomSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
+                    // Italic + muted — quieter "section label" voice, distinct
+                    // from waypoint names (solid serif semibold). Matches the
+                    // mock's auto-name treatment for block headers.
                     Text(displayName)
                         .font(.sheetSerif(14, weight: .semibold))
-                        .foregroundStyle(SheetPalette.textStrong)
+                        .italic()
+                        .foregroundStyle(SheetPalette.textMuted)
                         .lineLimit(1)
                     Text(blockSubline(blockIndex: blockIndex))
                         .font(.sheetSans(10.5))
