@@ -572,17 +572,11 @@ struct TripBottomSheet: View {
                 }
                 .buttonStyle(.plain)
 
-                // Trash — instant delete; the Undo toast (AlaskaRouter-j5w1) is
-                // the safety net so no confirmation alert here.
-                Button(action: { deleteWaypoint(wp) }) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
-                        .background(SheetPalette.destructive, in: Circle())
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                // No in-row trash button (AlaskaRouter-24t5) — delete is the
+                // Apple-standard swipe-to-delete from List's .onDelete on the
+                // ForEach. The gesture's reveal-then-tap is the confirmation;
+                // we previously stacked a Button + toast on top, which made
+                // the row's trailing edge shout DELETE on every line.
 
                 // Drag handle — the iOS-native .onMove integration uses this.
                 Image(systemName: "line.3.horizontal")

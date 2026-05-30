@@ -281,31 +281,12 @@ struct RootView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            if let added = recentlyAddedWaypoint {
-                VStack {
-                    Spacer()
-                    TripEditToast(
-                        kind: .added,
-                        waypointLabel: added.label ?? "(stop)",
-                        onUndo: { undoAdd(added) }
-                    )
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 110)   // sits above the bottom sheet
-                }
-                .id(added.id)
-            } else if let deleted = recentlyDeletedSnapshot {
-                VStack {
-                    Spacer()
-                    TripEditToast(
-                        kind: .removed,
-                        waypointLabel: deleted.label ?? "(stop)",
-                        onUndo: { undoDelete(deleted) }
-                    )
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 110)
-                }
-                .id(deleted.id)
-            }
+            // Add/Removed toasts dropped (AlaskaRouter-upw4): the newly-added
+            // row appearing in the list (and swipe-to-delete being the explicit
+            // gesture) is feedback enough; the toast was noise on top. The
+            // underlying state (recentlyAddedWaypoint, recentlyDeletedSnapshot)
+            // is kept so a different feedback channel (haptic, shake-to-undo,
+            // ⌘Z) can be wired up later without rewiring the mutation paths.
 
             // First-launch welcome card — once-only, gated by UserDefaults.
             if showWelcome {
