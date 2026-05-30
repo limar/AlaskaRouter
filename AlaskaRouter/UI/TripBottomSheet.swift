@@ -412,11 +412,12 @@ struct TripBottomSheet: View {
                 isCollapsed: isCollapsed,
                 onToggle: { toggleCollapse(headerID) }
             )
-            // Block headers don't participate in reorder anymore (tsvw refine):
-            // moving whole road stretches isn't a real use case, and the
-            // trailing chevron now occupies the slot a drag handle used to.
-            // Stops remain draggable; headers are tap-to-collapse only.
-            .moveDisabled(true)
+            // Separator headers are draggable again (AlaskaRouter-exf0). Moving
+            // a header slides the SEPARATOR — the boundary between two blocks
+            // — to anchor at a different waypoint; it doesn't reorder road
+            // stretches. Synthetic block 0 has no separator; collapsed headers
+            // are locked (their dot column is hidden anyway).
+            .moveDisabled(isSynthetic || isCollapsed)
             .deleteDisabled(isSynthetic)
         }
     }
@@ -427,12 +428,37 @@ struct TripBottomSheet: View {
     /// rounded pill, which the mock-alignment work in AlaskaRouter-9634
     /// flagged as the root cause of "separators visibly resemble waystops.")
     private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String, isSynthetic: Bool = false, isCollapsed: Bool = false, onToggle: @escaping () -> Void = {}) -> some View {
+        let dragColWidth: CGFloat = 12
         // Wrapping the header in a Button (vs the previous .onTapGesture) lets
         // SwiftUI's gesture system route tap-vs-swipe correctly — .onTapGesture
         // was swallowing List's horizontal swipe, so the separator's
         // swipe-to-delete affordance went missing (AlaskaRouter-00iw).
-        Button(action: onToggle) {
+        return Button(action: onToggle) {
             HStack(spacing: 10) {
+                // Leading drag column — 6-dot grip when the separator is
+                // movable, invisible spacer otherwise (synthetic block 0 or
+                // collapsed). Reserving the column even when empty keeps the
+                // leading edge aligned with stop rows so the column reads as
+                // one grip rail down the list (AlaskaRouter-exf0).
+                Group {
+                    if isSynthetic || isCollapsed {
+                        Color.clear
+                    } else {
+                        HStack(spacing: 2) {
+                            ForEach(0 ..< 2, id: \.self) { _ in
+                                VStack(spacing: 2) {
+                                    ForEach(0 ..< 3, id: \.self) { _ in
+                                        Circle()
+                                            .fill(SheetPalette.textStrong.opacity(0.45))
+                                            .frame(width: 2, height: 2)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(width: dragColWidth)
+
                 // Square chip with number — clearly different from the round
                 // pip on a stop row.
                 ZStack {
@@ -471,7 +497,8 @@ struct TripBottomSheet: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
             }
-            .padding(.horizontal, 12)
+            .padding(.leading, 14)
+            .padding(.trailing, 14)
             .padding(.vertical, 8)
             .background(SheetPalette.blockHeaderBg)
             .overlay(
@@ -502,6 +529,13 @@ struct TripBottomSheet: View {
         // mock-aligned). Same reserved column on the leg band above so the
         // rail's x-position stays continuous.
         let dragColWidth: CGFloat = 12
+        // Extra leading indent for stops only — placed between the drag
+        // column and the rail so the pip sits past the block-header chip
+        // (AlaskaRouter-exf0). Currently 0; the HStack's natural 10pt
+        // spacing on each side of the placeholder still contributes the gap
+        // that lands the rail center on the chip right edge. Mirrored on the
+        // leg band so the rail stays aligned.
+        let stopIndentExtra: CGFloat = 0
         let railColor = accent.opacity(0.45)
         // Index by POSITION in orderedWaypoints (not the `.order` field, which
         // isn't guaranteed 0-based), so the first stop never gets an incoming
@@ -519,7 +553,8 @@ struct TripBottomSheet: View {
             // between the previous pip and this one. Skipped for the first stop.
             if hasIncoming, let legText {
                 HStack(spacing: 10) {
-                    Color.clear.frame(width: dragColWidth)   // mirror the main row's leading column
+                    Color.clear.frame(width: dragColWidth)        // mirror dot column
+                    Color.clear.frame(width: stopIndentExtra)     // mirror stop indent
                     ZStack {
                         Rectangle()
                             .fill(railColor)
@@ -565,6 +600,9 @@ struct TripBottomSheet: View {
                     }
                 }
                 .frame(width: dragColWidth)
+
+                // Extra indent: pushes pip past the block-header chip x.
+                Color.clear.frame(width: stopIndentExtra)
 
                 // Timeline rail: top + bottom half-segments (block-colored)
                 // with the numbered pip riding on it. Top hidden for the first
