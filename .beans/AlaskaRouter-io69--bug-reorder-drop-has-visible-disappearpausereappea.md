@@ -5,7 +5,7 @@ status: todo
 type: bug
 priority: normal
 created_at: 2026-05-30T13:44:05Z
-updated_at: 2026-05-30T13:44:05Z
+updated_at: 2026-05-30T17:26:04Z
 parent: AlaskaRouter-e0vm
 ---
 
@@ -41,3 +41,15 @@ Deferred. The bug exists but does not block usability — the drop completes, th
 
 ## Where we stopped
 File state at 08ac804 (exf0 — separator mobility + dot column). All diagnostics + ablation reverted. Cooperation with user worked well; learned NSLog → unified-log streaming via xcrun simctl spawn booted log stream as a debugger-free console technique.
+
+
+
+## New evidence (user, 2026-05-30 evening)
+User reproduced from scratch after data loss: they built a fresh trip incrementally and noticed the flicker DID NOT happen on the short-leg version of the trip. When they added the final 817 km Deadhorse → North Pole leg (significantly extending the snapped polyline), the disappear-pause-reappear came back.
+
+This is consistent with the heavy-recompute hypothesis (Trip.routeRibbons cost scales with polyline length — cell registration, lane assignment, dilated neighborhood reads all run per-edge). Even though sopx deferred syncTripRouteLayer and it didn't help, that defer only moves the recompute to the next runloop pass — the cost still lands on the main thread, just one frame later. The body re-render that follows the .onMove handler still triggers a synchronous trip.blocks/listItems pass on the new data, and the ribbon recompute lands shortly after.
+
+So io69 is real, polyline-length-driven, and reproducible. Concrete next investigation when revisited: profile routeRibbons under a long polyline + a separator move and see whether the cell registration / lane-assignment phase is the dominant cost. Possible mitigations:
+- Cache leg geometry (signatures, cells, lanes) by snapped-polyline identity; only recompute the per-leg COLORS on a separator move.
+- Move the heavy computation to a background queue and update MLN layers on main.
+- Reduce dilated neighborhood lookups (3×3 → 1×1) for trips with very long polylines.
