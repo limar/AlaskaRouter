@@ -13,6 +13,7 @@ struct StopCallout: View {
     let positionLabel: String              // "STOP 3 OF 5"
     let additionalPassNumbers: [Int]       // other 1-based stop indices visiting this coord (ykuf step 4)
     let distanceFromPrevText: String?      // "45 km from previous" (nil for stop 1)
+    let distanceToNextText: String?        // "78 km to next" (nil for the last stop)
     let canPrev: Bool
     let canNext: Bool
     let onPrev: () -> Void
@@ -52,10 +53,24 @@ struct StopCallout: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                     }
+                    // Category on its own line; distances grouped beneath as
+                    // a visual pair (AlaskaRouter-wrso option 1).
                     Text(detailLine)
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(1)
+                    if let prevLine = distanceFromPrevText {
+                        Text(prevLine)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    if let nextLine = distanceToNextText {
+                        Text(nextLine)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 4)
                 Button(action: onClose) {
@@ -153,11 +168,10 @@ struct StopCallout: View {
     }
 
     private var detailLine: String {
-        let category = CategoryLabel.display(waypoint.category)
-        if let d = distanceFromPrevText {
-            return "\(category) · \(d)"
-        }
-        return category
+        // Category only; the "from previous" and "to next" distances are now
+        // their own lines beneath this one so the distance pair reads as a
+        // group (AlaskaRouter-wrso).
+        CategoryLabel.display(waypoint.category)
     }
 
     private func iconForCategory(_ category: String?) -> String {

@@ -244,6 +244,7 @@ struct RootView: View {
                         positionLabel: "STOP \(idx + 1) OF \(ordered.count)",
                         additionalPassNumbers: additionalPassNumbers(for: wp, in: ordered),
                         distanceFromPrevText: distanceFromPrevText(idx: idx, in: ordered),
+                        distanceToNextText: distanceToNextText(idx: idx, in: ordered),
                         canPrev: idx > 0,
                         canNext: idx < ordered.count - 1,
                         onPrev: { handleStopCalloutPrev(in: ordered, currentIdx: idx) },
@@ -814,14 +815,40 @@ struct RootView: View {
         }
     }
 
-    /// Straight-line distance to the previous stop, formatted as "45 km".
-    /// Returns nil for stop 0 (no previous).
+    /// Road distance to the previous stop (along the snapped polyline; falls
+    /// back to straight-line haversine when offline / unrouted). Uses the same
+    /// Trip.legDistancesMeters source as the bottom sheet so the two surfaces
+    /// agree (AlaskaRouter-wrso bug).
     private func distanceFromPrevText(idx: Int, in ordered: [Waypoint]) -> String? {
         guard idx > 0, idx < ordered.count else { return nil }
-        let a = ordered[idx - 1].coordinate
-        let b = ordered[idx].coordinate
-        let meters = SmartInsert.haversine(a, b)
-        return "\(DistanceFormat.string(meters: meters, useMiles: tweaksStore.distanceUnitIsMiles)) from previous"
+        let meters = legMeters(legIndex: idx - 1, in: ordered)
+        let name = ordered[idx - 1].label ?? "previous"
+        return "\(DistanceFormat.string(meters: meters, useMiles: tweaksStore.distanceUnitIsMiles)) from \(name)"
+    }
+
+    /// Road distance to the next stop (snapped, with straight-line fallback).
+    /// Returns nil for the last stop. See `distanceFromPrevText` for the source.
+    private func distanceToNextText(idx: Int, in ordered: [Waypoint]) -> String? {
+        guard idx >= 0, idx + 1 < ordered.count else { return nil }
+        let meters = legMeters(legIndex: idx, in: ordered)
+        let name = ordered[idx + 1].label ?? "next"
+        return "\(DistanceFormat.string(meters: meters, useMiles: tweaksStore.distanceUnitIsMiles)) to \(name)"
+    }
+
+    /// Metres for leg `legIndex` (ordered[legIndex] → ordered[legIndex+1]).
+    /// Mirrors the bottom sheet's source so distances are consistent across
+    /// surfaces: road via the snapped polyline when available, straight-line
+    /// haversine otherwise.
+    private func legMeters(legIndex: Int, in ordered: [Waypoint]) -> Double {
+        if let trip = activeTrip {
+            let legs = trip.legDistancesMeters(snappedCoords: snappedRouteCoords)
+            if legIndex >= 0, legIndex < legs.count, legs[legIndex] > 0 {
+                return legs[legIndex]
+            }
+        }
+        let a = ordered[legIndex].coordinate
+        let b = ordered[legIndex + 1].coordinate
+        return SmartInsert.haversine(a, b)
     }
 
     /// Other 1-based stop indices that share the selected waypoint's coord
