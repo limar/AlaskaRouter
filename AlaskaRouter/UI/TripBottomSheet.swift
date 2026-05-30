@@ -560,12 +560,15 @@ struct TripBottomSheet: View {
                             .fill(railColor)
                             .frame(width: 1.5)
                         Text(legText)
-                            .font(.sheetSans(9.5, weight: .semibold))
+                            .font(.sheetSans(10, weight: .bold))
                             .tracking(0.2)
-                            .foregroundStyle(SheetPalette.textMuted)
+                            .foregroundStyle(accent)
                             .fixedSize()
                             .padding(.horizontal, 4)
-                            .background(SheetPalette.cardFill)   // break the line behind the text
+                            .padding(.vertical, 2)
+                            .background(Capsule()
+                                .fill(Color.white)
+                                .strokeBorder(accent, lineWidth: 0.8))
                     }
                     .frame(width: railWidth)
                     Spacer(minLength: 0)
