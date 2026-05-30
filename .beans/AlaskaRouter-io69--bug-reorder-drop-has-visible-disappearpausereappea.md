@@ -5,7 +5,7 @@ status: todo
 type: bug
 priority: normal
 created_at: 2026-05-30T13:44:05Z
-updated_at: 2026-05-30T17:26:04Z
+updated_at: 2026-05-30T18:06:52Z
 parent: AlaskaRouter-e0vm
 ---
 
@@ -53,3 +53,10 @@ So io69 is real, polyline-length-driven, and reproducible. Concrete next investi
 - Cache leg geometry (signatures, cells, lanes) by snapped-polyline identity; only recompute the per-leg COLORS on a separator move.
 - Move the heavy computation to a background queue and update MLN layers on main.
 - Reduce dilated neighborhood lookups (3×3 → 1×1) for trips with very long polylines.
+
+
+
+## Another attempt (2026-05-30 night) — also didn't help
+Wrapped reorderListItems's entire body (the move + the SwiftData mutation loop + prune + save) in withTransaction(Transaction(disablesAnimations: true)) on the hypothesis that SwiftData property cascades (wp.order, sep.afterWaypointID, then trip.blocks / trip.listItems / per-block displayName recomputations) were getting pulled into SwiftUI's move-animation transaction and causing the row's visual transition to fade/identity-change instead of slide. **No perceptible difference** — same disappear-pause-reappear pattern. Reverted.
+
+Decision: stop guessing. Profiling with Instruments (Animation Hitches or Time Profiler) is the next legitimate step; further hypothesis-bash is wasting time. Deferred until the user (or future maintainer) has appetite for an Instruments session.
