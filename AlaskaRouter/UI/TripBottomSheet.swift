@@ -498,6 +498,10 @@ struct TripBottomSheet: View {
     /// (AlaskaRouter-4rly fixed the conditional-indent bug here).
     private func waypointRow(_ wp: Waypoint, accent: Color, legs: [Double], posByID: [UUID: Int]) -> some View {
         let railWidth: CGFloat = 24
+        // 6-dot drag handle column on the leading edge (AlaskaRouter-zvhr,
+        // mock-aligned). Same reserved column on the leg band above so the
+        // rail's x-position stays continuous.
+        let dragColWidth: CGFloat = 14
         let railColor = accent.opacity(0.45)
         // Index by POSITION in orderedWaypoints (not the `.order` field, which
         // isn't guaranteed 0-based), so the first stop never gets an incoming
@@ -514,24 +518,50 @@ struct TripBottomSheet: View {
             // Incoming-leg band — the leg distance sits ON the connector,
             // between the previous pip and this one. Skipped for the first stop.
             if hasIncoming, let legText {
-                ZStack {
-                    Rectangle()
-                        .fill(railColor)
-                        .frame(width: 1.5)
-                    Text(legText)
-                        .font(.sheetSans(9.5, weight: .semibold))
-                        .tracking(0.2)
-                        .foregroundStyle(SheetPalette.textMuted)
-                        .fixedSize()
-                        .padding(.horizontal, 4)
-                        .background(SheetPalette.cardFill)   // break the line behind the text
+                HStack(spacing: 10) {
+                    Color.clear.frame(width: dragColWidth)   // mirror the main row's leading column
+                    ZStack {
+                        Rectangle()
+                            .fill(railColor)
+                            .frame(width: 1.5)
+                        Text(legText)
+                            .font(.sheetSans(9.5, weight: .semibold))
+                            .tracking(0.2)
+                            .foregroundStyle(SheetPalette.textMuted)
+                            .fixedSize()
+                            .padding(.horizontal, 4)
+                            .background(SheetPalette.cardFill)   // break the line behind the text
+                    }
+                    .frame(width: railWidth)
+                    Spacer(minLength: 0)
                 }
-                .frame(width: railWidth)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: 17)
             }
 
             HStack(spacing: 10) {
+                // 6-dot drag handle on the leading edge (AlaskaRouter-zvhr,
+                // mock-aligned). Two columns × three rows of small filled
+                // circles, ~32% alpha. Lighter weight than line.3.horizontal
+                // and indents the stop visibly beneath its block header.
+                HStack(spacing: 4) {
+                    ForEach(0 ..< 2, id: \.self) { _ in
+                        VStack(spacing: 4) {
+                            ForEach(0 ..< 3, id: \.self) { _ in
+                                Circle()
+                                    // Bumped from mock-faithful 32% textMuted
+                                    // to 45% textStrong (darker base) — the
+                                    // mock had a solid white background; we
+                                    // sit on a translucent sheet over a warm
+                                    // map. (See AlaskaRouter-1ag5 for the
+                                    // systemic fix.)
+                                    .fill(SheetPalette.textStrong.opacity(0.45))
+                                    .frame(width: 2.5, height: 2.5)
+                            }
+                        }
+                    }
+                }
+                .frame(width: dragColWidth)
+
                 // Timeline rail: top + bottom half-segments (block-colored)
                 // with the numbered pip riding on it. Top hidden for the first
                 // stop, bottom hidden for the last (AlaskaRouter-jhw8, mock).
@@ -572,21 +602,14 @@ struct TripBottomSheet: View {
                 }
                 .buttonStyle(.plain)
 
-                // No in-row trash button (AlaskaRouter-24t5) — delete is the
-                // Apple-standard swipe-to-delete from List's .onDelete on the
-                // ForEach. The gesture's reveal-then-tap is the confirmation;
-                // we previously stacked a Button + toast on top, which made
-                // the row's trailing edge shout DELETE on every line.
-
-                // Drag handle — the iOS-native .onMove integration uses this.
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
+                // Trailing edge is intentionally empty (AlaskaRouter-24t5 +
+                // AlaskaRouter-zvhr): delete is swipe-only, drag handle moved
+                // to the leading edge.
             }
             .padding(.vertical, 8)
         }
         .padding(.leading, 14)
-        .padding(.trailing, 4)
+        .padding(.trailing, 14)
     }
 
     private var addBlockRow: some View {
