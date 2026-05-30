@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-30T14:32:15Z
+updated_at: 2026-05-30T14:37:24Z
 ---
 
 ## Why
@@ -547,3 +547,7 @@ Validation:
 
 - python3 -m unittest tools/opentopomap-render/tests/test_import_contours.py tools/opentopomap-render/tests/test_validate_contours.py
 - python3 -m py_compile tools/opentopomap-render/scripts/import-contours-in-chunks.py
+
+## Alaska Batched Import Handoff Correction (2026-05-30)
+
+The first batched restart exposed a Python 3.6 compatibility bug: subprocess.run(text=True) is not available inside jhassler/otm-docker. Patch import-contours-in-chunks.py to use universal_newlines=True instead. Also remove the ambiguous handoff marker for contour-warp-60_05_09_lon-158.42_-155.72lat67.41_67.43_local-source.osm.pbf because the log did not show a full Osm2pgsql completion for that file after the old parent process was stopped; reimport it from the last unambiguous marker rather than risk silently omitting contours.

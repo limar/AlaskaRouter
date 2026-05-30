@@ -81,7 +81,7 @@ def database_exists(name):
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
+        universal_newlines=True,
     )
     return any(line.split("|", 1)[0].strip() == name for line in result.stdout.splitlines())
 
