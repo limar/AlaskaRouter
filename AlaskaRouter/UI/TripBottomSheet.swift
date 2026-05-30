@@ -501,7 +501,7 @@ struct TripBottomSheet: View {
         // 6-dot drag handle column on the leading edge (AlaskaRouter-zvhr,
         // mock-aligned). Same reserved column on the leg band above so the
         // rail's x-position stays continuous.
-        let dragColWidth: CGFloat = 14
+        let dragColWidth: CGFloat = 12
         let railColor = accent.opacity(0.45)
         // Index by POSITION in orderedWaypoints (not the `.order` field, which
         // isn't guaranteed 0-based), so the first stop never gets an incoming
@@ -543,19 +543,23 @@ struct TripBottomSheet: View {
                 // mock-aligned). Two columns × three rows of small filled
                 // circles, ~32% alpha. Lighter weight than line.3.horizontal
                 // and indents the stop visibly beneath its block header.
-                HStack(spacing: 4) {
+                // Mock-faithful tight grid: 2pt circles, 2pt gaps
+                // (4pt center-to-center) so the cluster reads as one compact
+                // glyph rather than a sparse halftone pattern.
+                HStack(spacing: 2) {
                     ForEach(0 ..< 2, id: \.self) { _ in
-                        VStack(spacing: 4) {
+                        VStack(spacing: 2) {
                             ForEach(0 ..< 3, id: \.self) { _ in
                                 Circle()
-                                    // Bumped from mock-faithful 32% textMuted
-                                    // to 45% textStrong (darker base) — the
-                                    // mock had a solid white background; we
-                                    // sit on a translucent sheet over a warm
-                                    // map. (See AlaskaRouter-1ag5 for the
-                                    // systemic fix.)
+                                    // 45% textStrong (darker base than the
+                                    // mock's 32% textMuted) — compensates for
+                                    // the translucent-sheet contrast issue
+                                    // tracked in AlaskaRouter-1ag5. Diameter
+                                    // pulled back to 2pt now that the pip
+                                    // shrank (3lr9) so dots/pip stay
+                                    // proportional.
                                     .fill(SheetPalette.textStrong.opacity(0.45))
-                                    .frame(width: 2.5, height: 2.5)
+                                    .frame(width: 2, height: 2)
                             }
                         }
                     }
@@ -572,14 +576,16 @@ struct TripBottomSheet: View {
                     }
                     .frame(width: 1.5)
 
-                    // Numbered pip — white fill, 1.6pt colored stroke; a faint
-                    // cream outer ring (dark mode) lifts it off the sheet.
+                    // Numbered pip — smaller (AlaskaRouter-3lr9, mock-aligned):
+                    // 22pt → 17pt diameter, stroke 1.6 → 1.4, outer ring
+                    // scaled proportionally, digit 10 → 9pt. Lighter weight,
+                    // gives the rail more presence as the block-identity carrier.
                     ZStack {
-                        Circle().fill(Color.white).frame(width: 22, height: 22)
-                        Circle().stroke(accent, lineWidth: 1.6).frame(width: 22, height: 22)
-                        Circle().stroke(SheetPalette.pipOuterRing, lineWidth: 0.8).frame(width: 24.4, height: 24.4)
+                        Circle().fill(Color.white).frame(width: 17, height: 17)
+                        Circle().stroke(accent, lineWidth: 1.4).frame(width: 17, height: 17)
+                        Circle().stroke(SheetPalette.pipOuterRing, lineWidth: 0.6).frame(width: 18.8, height: 18.8)
                         Text("\(wp.order + 1)")
-                            .font(.sheetSans(10, weight: .bold))
+                            .font(.sheetSans(9, weight: .bold))
                             .monospacedDigit()
                             .foregroundStyle(accent)
                     }
