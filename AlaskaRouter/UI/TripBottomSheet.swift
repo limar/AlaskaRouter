@@ -412,9 +412,11 @@ struct TripBottomSheet: View {
                 isCollapsed: isCollapsed,
                 onToggle: { toggleCollapse(headerID) }
             )
-            // Collapsed blocks can't be dragged (xq6w) — the handle is hidden
-            // and reorder is suppressed; you expand to rearrange.
-            .moveDisabled(isSynthetic || isCollapsed)
+            // Block headers don't participate in reorder anymore (tsvw refine):
+            // moving whole road stretches isn't a real use case, and the
+            // trailing chevron now occupies the slot a drag handle used to.
+            // Stops remain draggable; headers are tap-to-collapse only.
+            .moveDisabled(true)
             .deleteDisabled(isSynthetic)
         }
     }
@@ -425,67 +427,64 @@ struct TripBottomSheet: View {
     /// rounded pill, which the mock-alignment work in AlaskaRouter-9634
     /// flagged as the root cause of "separators visibly resemble waystops.")
     private func blockHeaderRow(blockIndex: Int, color: Color, displayName: String, isSynthetic: Bool = false, isCollapsed: Bool = false, onToggle: @escaping () -> Void = {}) -> some View {
-        HStack(spacing: 10) {
-            // Disclosure chevron — tap the header to collapse/expand the block
-            // (AlaskaRouter-xq6w). Points down when open, right when collapsed.
-            Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                .font(.sheetSans(11, weight: .bold))
-                .foregroundStyle(SheetPalette.textMuted)
-                .frame(width: 14)
+        // Wrapping the header in a Button (vs the previous .onTapGesture) lets
+        // SwiftUI's gesture system route tap-vs-swipe correctly — .onTapGesture
+        // was swallowing List's horizontal swipe, so the separator's
+        // swipe-to-delete affordance went missing (AlaskaRouter-00iw).
+        Button(action: onToggle) {
+            HStack(spacing: 10) {
+                // Square chip with number — clearly different from the round
+                // pip on a stop row.
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(color)
+                        .frame(width: 22, height: 22)
+                    Text("\(blockIndex + 1)")
+                        .font(.sheetSans(11, weight: .bold))
+                        .foregroundStyle(.white)
+                }
 
-            // Square chip with number — clearly different from the round
-            // pip on a stop row.
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(color)
-                    .frame(width: 22, height: 22)
-                Text("\(blockIndex + 1)")
-                    .font(.sheetSans(11, weight: .bold))
-                    .foregroundStyle(.white)
-            }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(displayName)
+                        .font(.sheetSerif(14, weight: .semibold))
+                        .foregroundStyle(SheetPalette.textStrong)
+                        .lineLimit(1)
+                    Text(blockSubline(blockIndex: blockIndex))
+                        .font(.sheetSans(10.5))
+                        .tracking(0.4)
+                        .foregroundStyle(SheetPalette.textMuted)
+                }
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(displayName)
-                    .font(.sheetSerif(14, weight: .semibold))
-                    .foregroundStyle(SheetPalette.textStrong)
-                    .lineLimit(1)
-                Text(blockSubline(blockIndex: blockIndex))
-                    .font(.sheetSans(10.5))
-                    .tracking(0.4)
-                    .foregroundStyle(SheetPalette.textMuted)
-            }
+                Spacer(minLength: 0)
 
-            Spacer(minLength: 0)
-
-            // Drag handle — block headers participate in reorder like any
-            // other list row (.onMove). Suppressed for block 0's fixed
-            // synthetic header AND for collapsed blocks (xq6w: a collapsed
-            // block can't be dragged — expand it first).
-            if !isSynthetic && !isCollapsed {
-                Image(systemName: "line.3.horizontal")
+                // Trailing-edge disclosure chevron — always visible so the
+                // tap-to-collapse affordance is discoverable (AlaskaRouter-tsvw,
+                // refined after the first try lost the affordance). Block
+                // reordering is intentionally dropped — moving whole road
+                // stretches around isn't a real use case; stop rows remain
+                // draggable.
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(SheetPalette.blockHeaderBg)
+            .overlay(
+                // Top hairline divides this block from the previous block.
+                // Suppressed via opacity on the very first row (which sits at
+                // the top of the card).
+                VStack {
+                    Rectangle()
+                        .fill(SheetPalette.cardBorder)
+                        .frame(height: 0.5)
+                    Spacer()
+                }
+                .opacity(blockIndex == 0 ? 0 : 1)
+            )
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(SheetPalette.blockHeaderBg)
-        .overlay(
-            // Top hairline divides this block from the previous block.
-            // Suppressed via opacity on the very first row (which sits at
-            // the top of the card).
-            VStack {
-                Rectangle()
-                    .fill(SheetPalette.cardBorder)
-                    .frame(height: 0.5)
-                Spacer()
-            }
-            .opacity(blockIndex == 0 ? 0 : 1)
-        )
-        // Tap anywhere on the header to collapse/expand. Distinct from the
-        // long-press drag that initiates reorder.
-        .contentShape(Rectangle())
-        .onTapGesture { onToggle() }
+        .buttonStyle(.plain)
     }
 
     /// Stop row — small white-fill numbered pip with colored stroke, serif
