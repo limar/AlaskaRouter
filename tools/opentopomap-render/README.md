@@ -177,8 +177,20 @@ sh 02_import_osm_data.sh
 /alaskarouter-scripts/prepare-copernicus-dem.sh
 sh 04_preprocess_osm_data.sh
 sh 05_dem_contours1.sh
-sh 06_dem_contours2.sh
+/alaskarouter-scripts/import-contours-in-chunks.py \
+  --recreate \
+  --pattern 'contour-warp-60_*.pbf' \
+  --cache 32000 \
+  --flat-nodes /mnt/db/contours-flat-nodes.bin
 ```
+
+Alaska's generated contour set is too large for the upstream
+`06_dem_contours2.sh` all-at-once import with `osm2pgsql` 1.2. The chunked
+helper imports the first `contour*.pbf` with `--create` and the rest with
+`--append`, avoiding the single-process node counter crash and recording a
+marker file under `/mnt/data/srtm/.contour-import-state/`. Use a flat-nodes
+file on the server so the slim node store does not inflate PostgreSQL scratch
+tables.
 
 Then on the host:
 

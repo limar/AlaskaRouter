@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-29T14:57:35Z
+updated_at: 2026-05-30T05:56:02Z
 ---
 
 ## Why
@@ -466,3 +466,13 @@ Validation:
 
 - `bash -n tools/opentopomap-render/scripts/prepare-copernicus-dem.sh tools/opentopomap-render/scripts/patch-otm-dem-helpers.sh tools/opentopomap-render/scripts/prepare-copernicus-contours.sh tools/opentopomap-render/scripts/ensure-otm-deps.sh`
 - `python3 -m unittest discover tools/opentopomap-render/tests`
+
+
+
+## Alaska Chunked Contour Import (2026-05-30)
+
+The first full Alaska contour import reached the upstream `06_dem_contours2.sh` step and failed in `osm2pgsql` 1.2 with `Segmentation fault (core dumped)` after a single process had parsed roughly 2.0B contour nodes. The generated contour PBFs themselves were present, but the all-at-once `contour*.pbf` import left `planet_osm_line` empty.
+
+Added `scripts/import-contours-in-chunks.py` so Alaska imports one generated `contour-warp-60_*.pbf` per `osm2pgsql` process: first with `--create`, remaining files with `--append`. The helper records imported filenames under `/mnt/data/srtm/.contour-import-state/`, supports `--pattern` to exclude stale POC contour files, and supports `--flat-nodes` so the slim node store can live under `/mnt/db`.
+
+Server run started under `/home/mlifshitz/tiles/AlaskaRouter/logs/import-contours-chunked.log` with 42 Alaska chunks, `--cache 32000`, and `/mnt/db/contours-flat-nodes.bin`. Early status: first two chunks imported, third chunk running; no segfault yet.

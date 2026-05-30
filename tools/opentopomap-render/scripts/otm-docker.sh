@@ -56,7 +56,13 @@ Copernicus DEM prep script instead of 03_dem_hillshade.sh:
   /alaskarouter-scripts/prepare-copernicus-dem.sh # Alaska/Copernicus regions
   sh 04_preprocess_osm_data.sh
   sh 05_dem_contours1.sh
-  sh 06_dem_contours2.sh
+  # Run exactly one contour import step:
+  sh 06_dem_contours2.sh                                     # small regions
+  /alaskarouter-scripts/import-contours-in-chunks.py \
+    --recreate \
+    --pattern 'contour-warp-60_*.pbf' \
+    --cache 32000 \
+    --flat-nodes /mnt/db/contours-flat-nodes.bin              # Alaska
 
 For large regions, run these inside screen/tmux on the server.
 EOF
