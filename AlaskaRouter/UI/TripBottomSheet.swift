@@ -646,9 +646,18 @@ struct TripBottomSheet: View {
                 }
                 .buttonStyle(.plain)
 
-                // Trailing edge is intentionally empty (AlaskaRouter-24t5 +
-                // AlaskaRouter-zvhr): delete is swipe-only, drag handle moved
-                // to the leading edge.
+                // Neutral minus button (Step A of AlaskaRouter-53x1, tracked
+                // by AlaskaRouter-4r06). Tap = immediate delete, same path as
+                // swipe — gives the trailing edge a visible affordance and a
+                // tappable alternative to the gesture for accessibility.
+                Button(action: { deleteWaypoint(wp) }) {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(SheetPalette.textMuted)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             .padding(.vertical, 8)
         }
