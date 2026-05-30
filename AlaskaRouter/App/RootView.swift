@@ -50,7 +50,14 @@ struct RootView: View {
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
 
 
-    private var activeTrip: Trip? { TripStore.resolveActive(from: trips) }
+    private var activeTrip: Trip? {
+        // Read activeTripIDObserved here so SwiftUI tracks the @AppStorage
+        // dependency — TripStore.setActive writes UserDefaults["activeTripID"]
+        // directly (bypassing the wrapper), and without an in-body access of
+        // the wrapper SwiftUI wouldn't notice and the trip wouldn't switch.
+        _ = activeTripIDObserved
+        return TripStore.resolveActive(from: trips)
+    }
 
     /// Computed string read from the @Observable TweaksStore. Body reading
     /// this property gives SwiftUI a dependency edge so any tweak change
