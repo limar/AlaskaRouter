@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-30T06:35:00Z
+updated_at: 2026-05-30T14:32:15Z
 ---
 
 ## Why
@@ -538,3 +538,12 @@ Validation:
 - `python3 -m unittest tools/opentopomap-render/tests/test_validate_contours.py tools/opentopomap-render/tests/test_import_contours.py`
 - `python3 -m py_compile tools/opentopomap-render/scripts/validate-contour-pbf.py tools/opentopomap-render/scripts/import-contours-in-chunks.py`
 - `bash -n tools/opentopomap-render/scripts/prepare-copernicus-contours.sh tools/opentopomap-render/scripts/otm-docker.sh`
+
+## Alaska Batched Contour Import Plan (2026-05-30)
+
+The one-PBF-per-osm2pgsql import proved stable but too slow, reaching roughly 337 chunks after several hours. Added a bounded batching mode to import-contours-in-chunks.py so we can resume from the existing marker file and reduce osm2pgsql startup overhead without recreating the contours database. Planned production resume: stop the current single-file importer only after preserving the marker state, then restart without --recreate using --batch-size 8 and --batch-max-bytes 250000000.
+
+Validation:
+
+- python3 -m unittest tools/opentopomap-render/tests/test_import_contours.py tools/opentopomap-render/tests/test_validate_contours.py
+- python3 -m py_compile tools/opentopomap-render/scripts/import-contours-in-chunks.py

@@ -3,8 +3,8 @@
 
 The upstream OpenTopoMap script imports every contour PBF in one osm2pgsql
 process. Alaska's contour set is large enough to crash osm2pgsql 1.2 after the
-process counter passes roughly two billion nodes, so this helper imports one
-PBF per osm2pgsql process and appends the remaining files.
+process counter passes roughly two billion nodes, so this helper imports bounded
+batches and records each successfully imported file for resumability.
 """
 
 import argparse
@@ -28,6 +28,18 @@ def parse_args(argv):
     parser.add_argument("--owner", default="tirex")
     parser.add_argument("--style", default="/home/otm/db/contours.style")
     parser.add_argument("--cache", default="5000")
+    parser.add_argument(
+        "--batch-size",
+        default=1,
+        type=int,
+        help="Maximum files per osm2pgsql invocation. Use >1 to reduce startup overhead.",
+    )
+    parser.add_argument(
+        "--batch-max-bytes",
+        default=0,
+        type=int,
+        help="Optional maximum total input bytes per batch. 0 disables the limit.",
+    )
     parser.add_argument(
         "--flat-nodes",
         default=None,
@@ -88,8 +100,55 @@ def mark_imported(marker, filename, dry_run):
         file.write(f"{filename}\n")
 
 
+def pending_files(files, imported):
+    for path in files:
+        if path.name in imported:
+            print(f"# skip already imported {path.name}", flush=True)
+            continue
+        yield path
+
+
+def file_size(path, dry_run):
+    if dry_run:
+        return 0
+    return path.stat().st_size
+
+
+def batches(paths, batch_size, batch_max_bytes, dry_run=False):
+    if batch_size < 1:
+        raise ValueError("--batch-size must be at least 1")
+    if batch_max_bytes < 0:
+        raise ValueError("--batch-max-bytes must not be negative")
+
+    batch = []
+    batch_bytes = 0
+    for path in paths:
+        size = file_size(path, dry_run)
+        would_exceed_count = len(batch) >= batch_size
+        would_exceed_bytes = (
+            batch_max_bytes > 0 and batch and batch_bytes + size > batch_max_bytes
+        )
+        if would_exceed_count or would_exceed_bytes:
+            yield batch
+            batch = []
+            batch_bytes = 0
+
+        batch.append(path)
+        batch_bytes += size
+
+    if batch:
+        yield batch
+
+
 def main(argv=None):
     args = parse_args(argv or sys.argv[1:])
+    if args.batch_size < 1:
+        print("--batch-size must be at least 1", file=sys.stderr)
+        return 2
+    if args.batch_max_bytes < 0:
+        print("--batch-max-bytes must not be negative", file=sys.stderr)
+        return 2
+
     srtm_dir = args.srtm_dir.resolve()
     state_dir = args.state_dir or srtm_dir / ".contour-import-state"
     marker = state_dir / f"{args.database}.imported"
@@ -126,11 +185,12 @@ def main(argv=None):
 
     imported = read_imported(marker)
     imported_count = len(imported)
-    for path in files:
-        if path.name in imported:
-            print(f"# skip already imported {path.name}", flush=True)
-            continue
-
+    for batch in batches(
+        pending_files(files, imported),
+        args.batch_size,
+        args.batch_max_bytes,
+        args.dry_run,
+    ):
         mode = "--create" if imported_count == 0 else "--append"
         command = [
             "osm2pgsql",
@@ -145,10 +205,11 @@ def main(argv=None):
         ]
         if args.flat_nodes:
             command.extend(["--flat-nodes", args.flat_nodes])
-        command.append(str(path))
+        command.extend(str(path) for path in batch)
         run(command, args.dry_run)
-        mark_imported(marker, path.name, args.dry_run)
-        imported_count += 1
+        for path in batch:
+            mark_imported(marker, path.name, args.dry_run)
+            imported_count += 1
 
     run(
         [

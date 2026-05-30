@@ -239,6 +239,8 @@ CONTOUR_ID_STRIDE=5000000 \
   --pattern 'contour-warp-60_*.pbf' \
   --srtm-dir /mnt/data/srtm/contours-5000 \
   --cache 32000 \
+  --batch-size 8 \
+  --batch-max-bytes 250000000 \
   --flat-nodes /mnt/db/contours-flat-nodes.bin
 ```
 
