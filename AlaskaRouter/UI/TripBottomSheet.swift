@@ -79,6 +79,11 @@ struct TripBottomSheet: View {
     // viewing convenience to tame long itineraries.
     @State private var collapsedBlockIDs: Set<String> = []
 
+    // The stop currently armed for the swipe-reveal delete (AlaskaRouter-0rh9,
+    // Step B of 53x1). Single value, so arming a new row automatically dismisses
+    // any other. nil = no row armed.
+    @State private var armedDeleteID: UUID? = nil
+
     var body: some View {
         GeometryReader { geo in
             let targetHeight = detent.height(in: geo.size.height)
@@ -576,93 +581,148 @@ struct TripBottomSheet: View {
                 .frame(height: 17)
             }
 
-            HStack(spacing: 10) {
-                // 6-dot drag handle on the leading edge (AlaskaRouter-zvhr,
-                // mock-aligned). Two columns × three rows of small filled
-                // circles, ~32% alpha. Lighter weight than line.3.horizontal
-                // and indents the stop visibly beneath its block header.
-                // Mock-faithful tight grid: 2pt circles, 2pt gaps
-                // (4pt center-to-center) so the cluster reads as one compact
-                // glyph rather than a sparse halftone pattern.
-                HStack(spacing: 2) {
-                    ForEach(0 ..< 2, id: \.self) { _ in
-                        VStack(spacing: 2) {
-                            ForEach(0 ..< 3, id: \.self) { _ in
-                                Circle()
-                                    // 45% textStrong (darker base than the
-                                    // mock's 32% textMuted) — compensates for
-                                    // the translucent-sheet contrast issue
-                                    // tracked in AlaskaRouter-1ag5. Diameter
-                                    // pulled back to 2pt now that the pip
-                                    // shrank (3lr9) so dots/pip stay
-                                    // proportional.
-                                    .fill(SheetPalette.textStrong.opacity(0.45))
-                                    .frame(width: 2, height: 2)
-                            }
-                        }
-                    }
-                }
-                .frame(width: dragColWidth)
-
-                // Extra indent: pushes pip past the block-header chip x.
-                Color.clear.frame(width: stopIndentExtra)
-
-                // Timeline rail: top + bottom half-segments (block-colored)
-                // with the numbered pip riding on it. Top hidden for the first
-                // stop, bottom hidden for the last (AlaskaRouter-jhw8, mock).
-                ZStack {
-                    VStack(spacing: 0) {
-                        Rectangle().fill(hasIncoming ? railColor : Color.clear)
-                        Rectangle().fill(isLast ? Color.clear : railColor)
-                    }
-                    .frame(width: 1.5)
-
-                    // Numbered pip — smaller (AlaskaRouter-3lr9, mock-aligned):
-                    // 22pt → 17pt diameter, stroke 1.6 → 1.4, outer ring
-                    // scaled proportionally, digit 10 → 9pt. Lighter weight,
-                    // gives the rail more presence as the block-identity carrier.
+            // Step B of 53x1 (AlaskaRouter-0rh9) — swipe-reveal: tap minus
+            // arms the row, content slides left, red Delete reveals trailing.
+            let isArmed = (armedDeleteID == wp.id)
+            ZStack(alignment: .trailing) {
+                // Trailing-layer red Delete — sits behind the row content,
+                // revealed when content slides left.
+                Button(action: {
+                    deleteWaypoint(wp)
+                    armedDeleteID = nil
+                }) {
+                    // Approximation of iOS's swipe-to-delete pill: system red
+                    // (dark-mode-aware via UIColor.systemRed), rounded corners,
+                    // SF Symbol trash icon + "Delete" label stacked. The pill
+                    // is inset a few points so it reads as a pill rather than
+                    // filling the row edge-to-edge. Corner radius / inset are
+                    // educated guesses since Apple doesn't expose the exact
+                    // values — colour and glyph are the stable contracts.
+                    // .fixedSize() on the content prevents the wrap-into-many
+                    // -lines bug at width 0; .clipped() hides overflow.
                     ZStack {
-                        Circle().fill(Color.white).frame(width: 17, height: 17)
-                        Circle().stroke(accent, lineWidth: 1.4).frame(width: 17, height: 17)
-                        Circle().stroke(SheetPalette.pipOuterRing, lineWidth: 0.6).frame(width: 18.8, height: 18.8)
-                        Text("\(wp.order + 1)")
-                            .font(.sheetSans(9, weight: .bold))
-                            .monospacedDigit()
-                            .foregroundStyle(accent)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(uiColor: .systemRed))
+                            .padding(.vertical, 4)
+                            .padding(.trailing, 4)
+                        VStack(spacing: 2) {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Delete")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .fixedSize()
                     }
-                }
-                .frame(width: railWidth)
-
-                Button(action: { onTapWaypoint(wp) }) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(wp.label ?? "Untitled stop")
-                            .font(.sheetSerif(15, weight: .semibold))
-                            .foregroundStyle(SheetPalette.textStrong)
-                            .lineLimit(1)
-                        Text(kindHint(for: wp))
-                            .font(.sheetSans(11.5))
-                            .foregroundStyle(SheetPalette.textMuted)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(width: isArmed ? 84 : 0)
+                    .frame(maxHeight: .infinity)
+                    .clipped()
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .allowsHitTesting(isArmed)
 
-                // Neutral minus button (Step A of AlaskaRouter-53x1, tracked
-                // by AlaskaRouter-4r06). Tap = immediate delete, same path as
-                // swipe — gives the trailing edge a visible affordance and a
-                // tappable alternative to the gesture for accessibility.
-                Button(action: { deleteWaypoint(wp) }) {
-                    Image(systemName: "minus.circle")
-                        .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(SheetPalette.textMuted)
-                        .frame(width: 30, height: 30)
+                HStack(spacing: 10) {
+                    // 6-dot drag handle on the leading edge (AlaskaRouter-zvhr,
+                    // mock-aligned). Two columns × three rows of small filled
+                    // circles, ~32% alpha. Lighter weight than line.3.horizontal
+                    // and indents the stop visibly beneath its block header.
+                    // Mock-faithful tight grid: 2pt circles, 2pt gaps
+                    // (4pt center-to-center) so the cluster reads as one compact
+                    // glyph rather than a sparse halftone pattern.
+                    HStack(spacing: 2) {
+                        ForEach(0 ..< 2, id: \.self) { _ in
+                            VStack(spacing: 2) {
+                                ForEach(0 ..< 3, id: \.self) { _ in
+                                    Circle()
+                                        // 45% textStrong (darker base than the
+                                        // mock's 32% textMuted) — compensates for
+                                        // the translucent-sheet contrast issue
+                                        // tracked in AlaskaRouter-1ag5. Diameter
+                                        // pulled back to 2pt now that the pip
+                                        // shrank (3lr9) so dots/pip stay
+                                        // proportional.
+                                        .fill(SheetPalette.textStrong.opacity(0.45))
+                                        .frame(width: 2, height: 2)
+                                }
+                            }
+                        }
+                    }
+                    .frame(width: dragColWidth)
+
+                    // Extra indent: pushes pip past the block-header chip x.
+                    Color.clear.frame(width: stopIndentExtra)
+
+                    // Timeline rail: top + bottom half-segments (block-colored)
+                    // with the numbered pip riding on it. Top hidden for the first
+                    // stop, bottom hidden for the last (AlaskaRouter-jhw8, mock).
+                    ZStack {
+                        VStack(spacing: 0) {
+                            Rectangle().fill(hasIncoming ? railColor : Color.clear)
+                            Rectangle().fill(isLast ? Color.clear : railColor)
+                        }
+                        .frame(width: 1.5)
+
+                        // Numbered pip — smaller (AlaskaRouter-3lr9, mock-aligned):
+                        // 22pt → 17pt diameter, stroke 1.6 → 1.4, outer ring
+                        // scaled proportionally, digit 10 → 9pt. Lighter weight,
+                        // gives the rail more presence as the block-identity carrier.
+                        ZStack {
+                            Circle().fill(Color.white).frame(width: 17, height: 17)
+                            Circle().stroke(accent, lineWidth: 1.4).frame(width: 17, height: 17)
+                            Circle().stroke(SheetPalette.pipOuterRing, lineWidth: 0.6).frame(width: 18.8, height: 18.8)
+                            Text("\(wp.order + 1)")
+                                .font(.sheetSans(9, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundStyle(accent)
+                        }
+                    }
+                    .frame(width: railWidth)
+
+                    Button(action: {
+                        // While armed, tapping the row body cancels (instead of
+                        // selecting the waypoint) — the rule-of-thumb "tap
+                        // anywhere off the red Delete dismisses." (0rh9)
+                        if isArmed {
+                            armedDeleteID = nil
+                        } else {
+                            onTapWaypoint(wp)
+                        }
+                    }) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(wp.label ?? "Untitled stop")
+                                .font(.sheetSerif(15, weight: .semibold))
+                                .foregroundStyle(SheetPalette.textStrong)
+                                .lineLimit(1)
+                            Text(kindHint(for: wp))
+                                .font(.sheetSans(11.5))
+                                .foregroundStyle(SheetPalette.textMuted)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    // Minus button — tap arms the row for confirmation
+                    // (Step B of AlaskaRouter-53x1, 0rh9). Tapping again
+                    // while armed dismisses. Apple's native swipe-to-delete
+                    // remains an alternative path via List's .onDelete.
+                    Button(action: {
+                        armedDeleteID = isArmed ? nil : wp.id
+                    }) {
+                        Image(systemName: "minus.circle")
+                            .font(.system(size: 17, weight: .regular))
+                            .foregroundStyle(SheetPalette.textMuted)
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(.vertical, 8)
+                .offset(x: isArmed ? -84 : 0)
             }
-            .padding(.vertical, 8)
+            .animation(.snappy(duration: 0.25), value: armedDeleteID)
         }
         .padding(.leading, 14)
         .padding(.trailing, 14)
