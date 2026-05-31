@@ -45,6 +45,36 @@ final class DataInvariantTests: XCTestCase {
         XCTAssertEqual(trip.orderedWaypoints.map(\.order), [0, 1, 2])
     }
 
+    @MainActor
+    func testAppendOnlyAlwaysGoesToTheEndEvenWhenGeometryWouldPreferElsewhere() throws {
+        // AlaskaRouter-65hf. Fast-add (the `+` button) uses appendOnly because
+        // the user is enumerating stops in driving order. SmartInsert would
+        // wedge a candidate between A and B if that minimised detour, but the
+        // user just typed it AFTER B and means it AFTER B.
+        let context = try TestFactories.inMemoryContext()
+        let trip = TestFactories.trip(stops: [
+            (0, 0, "A"),
+            (0, 10, "B"),
+        ])
+        context.insert(trip)
+        try context.save()
+
+        // (0, 5) is geometrically between A and B — SmartInsert.position would
+        // return 1 (the cheapest-edge slot). appendOnly must ignore that and
+        // put it at the end.
+        let appended = SmartInsert.appendOnly(
+            coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 5),
+            label: "C",
+            category: "test",
+            into: trip,
+            using: context
+        )
+
+        XCTAssertEqual(appended.order, 2)
+        XCTAssertEqual(trip.orderedWaypoints.map(\.label), ["A", "B", "C"])
+        XCTAssertEqual(trip.orderedWaypoints.map(\.order), [0, 1, 2])
+    }
+
     func testBlocksIncludeImplicitFirstBlockAndIgnoreDegenerateSeparators() {
         let trip = TestFactories.trip(
             stops: [

@@ -517,7 +517,10 @@ struct RootView: View {
 
     private func handleFastAdd(_ result: SearchResult) {
         guard let trip = activeTrip else { return }
-        let new = SmartInsert.insertSmart(
+        // 65hf: fast-add appends to the end; the user is enumerating stops in
+        // the order they'll drive them. Preview-add (handleAddPreviewed) keeps
+        // SmartInsert because it's a deliberate one-result-at-a-time flow.
+        let new = SmartInsert.appendOnly(
             coordinate: result.coord,
             label: result.name,
             category: result.category,

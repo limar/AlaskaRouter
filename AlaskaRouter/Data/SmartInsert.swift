@@ -75,6 +75,30 @@ enum SmartInsert {
         return new
     }
 
+    /// Appends a Waypoint to the end of the trip, no reordering.
+    ///
+    /// AlaskaRouter-65hf: the rapid-add (`+` button) flow uses this instead of
+    /// `insertSmart` because the user's mental model when typing-and-tapping
+    /// stops in sequence is "I'm listing them in the order I'll drive them",
+    /// not "find the cheapest place to wedge each one in". The preview-add
+    /// flow still uses `insertSmart` — there the user has stopped to consider
+    /// one specific result, and the geometric optimization makes sense.
+    @MainActor
+    static func appendOnly(
+        coordinate: CLLocationCoordinate2D,
+        label: String?,
+        category: String?,
+        into trip: Trip,
+        using context: ModelContext
+    ) -> Waypoint {
+        let pos = trip.orderedWaypoints.count
+        let new = Waypoint(order: pos, coordinate: coordinate, label: label, category: category)
+        new.trip = trip
+        context.insert(new)
+        try? context.save()
+        return new
+    }
+
     // MARK: - Haversine
 
     private static let earthRadiusMeters: Double = 6_371_000
