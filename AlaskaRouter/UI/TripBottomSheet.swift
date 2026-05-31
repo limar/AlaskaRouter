@@ -963,10 +963,12 @@ struct TripBottomSheet: View {
     private func deleteListItems(at offsets: IndexSet) {
         // Offsets index the VISIBLE (collapse-filtered) list (xq6w).
         let entries = visibleEntries()
+        var deletedWaypointIDs = Set<UUID>()
         for idx in offsets {
             guard idx < entries.count else { continue }
             switch entries[idx].item {
             case .stop(let wp):
+                deletedWaypointIDs.insert(wp.id)
                 deleteWaypoint(wp, renumberAfter: false)
             case .blockHeader(let separator, _, _, _):
                 // `deleteDisabled` on the synthetic block-0 header means
@@ -976,8 +978,10 @@ struct TripBottomSheet: View {
             }
         }
         // Renumber remaining stops; prune separators whose anchor vanished.
-        let remainingStops = trip.orderedWaypoints
-        for (i, wp) in remainingStops.enumerated() { wp.order = i }
+        // lqfq: exclude the just-deleted waypoints — SwiftData still surfaces
+        // them in `orderedWaypoints` until save, and renumbering THEM consumes
+        // the slots the survivors should be claiming.
+        trip.renumberWaypoints(excluding: deletedWaypointIDs)
         pruneDegenerateSeparators()
         try? modelContext.save()
     }
@@ -997,8 +1001,8 @@ struct TripBottomSheet: View {
         modelContext.delete(wp)
         onWaypointDeleted(snapshot)
         if renumberAfter {
-            let remaining = trip.orderedWaypoints
-            for (i, w) in remaining.enumerated() { w.order = i }
+            // lqfq: exclude the just-deleted waypoint from the renumber pass.
+            trip.renumberWaypoints(excluding: wp.id)
             pruneDegenerateSeparators()
             try? modelContext.save()
         }

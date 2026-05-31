@@ -46,6 +46,32 @@ final class DataInvariantTests: XCTestCase {
     }
 
     @MainActor
+    func testDeletingMiddleWaypointRenumbersRemainingStopsContiguously() throws {
+        // AlaskaRouter-lqfq. A three-stop trip A → Middle → B; deleting
+        // Middle must leave display numbers 1 and 2 for A and B.
+        // Pre-fix bug: SwiftData still surfaced `Middle` in `orderedWaypoints`
+        // until save, so the naive renumber loop assigned [A:0, Middle:1, B:2]
+        // and B kept displaying as #3.
+        let context = try TestFactories.inMemoryContext()
+        let trip = TestFactories.trip(stops: [
+            (0, 0, "A"),
+            (0, 5, "Middle"),
+            (0, 10, "B"),
+        ])
+        context.insert(trip)
+        try context.save()
+
+        let deleted = trip.orderedWaypoints[1]
+        context.delete(deleted)
+        trip.renumberWaypoints(excluding: deleted.id)
+        try context.save()
+
+        XCTAssertEqual(trip.orderedWaypoints.map(\.label), ["A", "B"])
+        XCTAssertEqual(trip.orderedWaypoints.map(\.order), [0, 1])
+        XCTAssertEqual(trip.orderedWaypoints.map { $0.order + 1 }, [1, 2])
+    }
+
+    @MainActor
     func testAppendOnlyAlwaysGoesToTheEndEvenWhenGeometryWouldPreferElsewhere() throws {
         // AlaskaRouter-65hf. Fast-add (the `+` button) uses appendOnly because
         // the user is enumerating stops in driving order. SmartInsert would

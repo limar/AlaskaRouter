@@ -795,9 +795,10 @@ struct RootView: View {
         let id = wp.id
         modelContext.delete(wp)
         // Renumber remaining stops to keep .order contiguous.
+        // lqfq: pass `id` so the just-deleted waypoint (still visible in the
+        // SwiftData relationship until save) doesn't consume an order slot.
         if let trip = activeTrip {
-            let remaining = trip.orderedWaypoints
-            for (i, w) in remaining.enumerated() { w.order = i }
+            trip.renumberWaypoints(excluding: id)
         }
         try? modelContext.save()
         withAnimation(.smooth(duration: 0.2)) {

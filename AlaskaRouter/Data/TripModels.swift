@@ -55,6 +55,24 @@ final class Trip {
         waypoints.sorted { $0.order < $1.order }
     }
 
+    /// Compact waypoint order values after deleting or moving stops.
+    ///
+    /// AlaskaRouter-lqfq: SwiftData keeps a just-deleted waypoint visible in
+    /// the relationship until the context save completes, so deletion paths
+    /// pass its id here to keep the removed stop out of the numbering pass.
+    /// Without this exclusion, deleting the middle of A → Middle → B would
+    /// renumber [A:0, Middle:1, B:2] and leave B displaying as #3.
+    func renumberWaypoints(excluding excludedID: UUID? = nil) {
+        renumberWaypoints(excluding: excludedID.map { Set([$0]) } ?? [])
+    }
+
+    func renumberWaypoints(excluding excludedIDs: Set<UUID>) {
+        let remaining = orderedWaypoints.filter { !excludedIDs.contains($0.id) }
+        for (index, waypoint) in remaining.enumerated() {
+            waypoint.order = index
+        }
+    }
+
     // MARK: - Snapped-route cache helpers (kp9h)
 
     /// Decoded snapped polyline if the cache is non-empty AND its key matches
