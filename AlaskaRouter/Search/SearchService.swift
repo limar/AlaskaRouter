@@ -211,14 +211,47 @@ final class SearchService {
         } else {
             catBoost = "0.0"
         }
+        // AlaskaRouter-ezt0: exact-name and name-prefix boost.
+        //
+        // BM25 alone misranks a major city below smaller same-prefix places
+        // because cities carry huge multilingual `alt_names` (Fairbanks has
+        // 226 chars of transliterations; Anchorage has 369). FTS5 treats the
+        // combined name+alt_names+… as one document, so longer alt_names
+        // = longer doc = worse BM25 even though the user's query is a 100%
+        // match for the city's NAME.
+        //
+        // We bind the user's full query string (lowercased, name-tokens
+        // joined by space) and add:
+        //   - exact match  (lower(name) == query) → big boost (-50)
+        //   - prefix-word match (lower(name) LIKE 'query %') → smaller (-15)
+        // Magnitudes chosen to dominate the BM25 range (~ -2 to -10) and the
+        // importance term (max 5.0), so an exact name match always wins.
+        //
+        // The bm25() call also gets per-column weights so name dominates
+        // alt_names/category/region (10.0 vs 1.0 each).
+        let joinedQuery: String? = query.nameTokens.isEmpty
+            ? nil
+            : query.nameTokens.map { $0.lowercased() }.joined(separator: " ")
+        let nameBoost: String
+        if joinedQuery != nil {
+            nameBoost = """
+            CASE
+                WHEN LOWER(m.name) = ? THEN 50.0
+                WHEN LOWER(m.name) LIKE ? THEN 15.0
+                ELSE 0.0
+            END
+            """
+        } else {
+            nameBoost = "0.0"
+        }
         let baseFrom: String
         let scoreExpr: String
         if ftsArg != nil {
             baseFrom = "places_word JOIN place_meta AS m ON m.rowid = places_word.rowid"
-            scoreExpr = "bm25(places_word) - m.importance * 5.0 - (\(catBoost))"
+            scoreExpr = "bm25(places_word, 10.0, 1.0, 1.0, 1.0) - m.importance * 5.0 - (\(catBoost)) - (\(nameBoost))"
         } else {
             baseFrom = "place_meta AS m"
-            scoreExpr = "(-m.importance * 5.0) - (\(catBoost))"
+            scoreExpr = "(-m.importance * 5.0) - (\(catBoost)) - (\(nameBoost))"
         }
         let whereSql = whereClauses.isEmpty ? "1=1" : whereClauses.joined(separator: " AND ")
         let sql = """
@@ -230,7 +263,9 @@ final class SearchService {
         LIMIT ?;
         """
         return runRowidSQL(handle: handle, sql: sql,
-                           catParams: catParams, ftsArg: ftsArg, limit: limit,
+                           catParams: catParams, ftsArg: ftsArg,
+                           nameBoostQuery: joinedQuery,
+                           limit: limit,
                            stage: stage.rawValue)
     }
 
@@ -324,6 +359,7 @@ final class SearchService {
         sql: String,
         catParams: [String],
         ftsArg: String?,
+        nameBoostQuery: String?,
         limit: Int,
         stage: Int
     ) -> [SearchResult] {
@@ -332,11 +368,21 @@ final class SearchService {
         defer { sqlite3_finalize(stmt) }
         // Bind order is TEXTUAL order of `?` in SQL:
         //   1. category-hint params in SELECT's CASE expression
-        //   2. FTS MATCH in WHERE
-        //   3. LIMIT
+        //   2. name-boost params: exact-match query, then prefix-LIKE pattern
+        //   3. FTS MATCH in WHERE
+        //   4. LIMIT
         var idx: Int32 = 1
         for c in catParams {
             sqlite3_bind_text(stmt, idx, c, -1, SQLITE_TRANSIENT); idx += 1
+        }
+        if let q = nameBoostQuery {
+            sqlite3_bind_text(stmt, idx, q, -1, SQLITE_TRANSIENT); idx += 1
+            // " %" suffix == "query followed by a space and at least one char".
+            // Combined with the equality branch above this gives a word-boundary
+            // prefix match: "anchorage" matches "Anchorage" (exact) and
+            // "Anchorage Museum" (prefix-word), but not "Anchorages".
+            let likePattern = q + " %"
+            sqlite3_bind_text(stmt, idx, likePattern, -1, SQLITE_TRANSIENT); idx += 1
         }
         if let fts = ftsArg {
             sqlite3_bind_text(stmt, idx, fts, -1, SQLITE_TRANSIENT); idx += 1

@@ -65,6 +65,42 @@ final class SearchTests: XCTestCase {
         }
     }
 
+    func testExactNameMatchOutranksLongerSamePrefixPlaces() async throws {
+        // AlaskaRouter-ezt0. Cities carry huge multilingual alt_names, which
+        // inflate FTS5 document length and make BM25 score them BELOW small
+        // same-prefix places (e.g. "Fairbanks Park" used to beat "Fairbanks").
+        // The exact-name boost + column-weighted bm25 must put the city #1.
+        let service = SearchService(db: PlacesDB(bundleResource: "alaska-places"))
+        let results = try await results(for: "Fairbanks", service: service)
+        XCTAssertFalse(results.isEmpty)
+        XCTAssertEqual(
+            results.first?.name, "Fairbanks",
+            "Expected the city 'Fairbanks' as the first result. Got: \(results.map(\.name))"
+        )
+    }
+
+    func testExactNameMatchOutranksLongerSamePrefixPlacesAnchorage() async throws {
+        // AlaskaRouter-ezt0 — same as above for Anchorage (369 chars of alt_names).
+        let service = SearchService(db: PlacesDB(bundleResource: "alaska-places"))
+        let results = try await results(for: "Anchorage", service: service)
+        XCTAssertFalse(results.isEmpty)
+        XCTAssertEqual(
+            results.first?.name, "Anchorage",
+            "Expected the city 'Anchorage' as the first result. Got: \(results.map(\.name))"
+        )
+    }
+
+    func testMultiWordExactMatchStillWorks() async throws {
+        // Regression guard: the exact-name boost is keyed on the joined query
+        // string, so multi-word names like "Fairbanks Park" must keep working.
+        let service = SearchService(db: PlacesDB(bundleResource: "alaska-places"))
+        let results = try await results(for: "Fairbanks Park", service: service)
+        XCTAssertEqual(
+            results.first?.name, "Fairbanks Park",
+            "Expected 'Fairbanks Park' as the first result for that exact query. Got: \(results.map(\.name))"
+        )
+    }
+
     func testCategoryHintBindOrderStillReturnsNameMatches() async throws {
         let service = SearchService(db: PlacesDB(bundleResource: "alaska-places"))
         let results = try await results(for: "Fairbanks ranger", service: service)
