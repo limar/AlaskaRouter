@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-dwht
 title: 'Try: compress stat strip into a single muted line + drop the ''ACTIVE TRIP'' eyebrow'
-status: todo
+status: scrapped
 type: task
 priority: normal
 created_at: 2026-05-30T09:08:35Z
-updated_at: 2026-05-30T09:08:35Z
+updated_at: 2026-05-31T14:15:38Z
 parent: AlaskaRouter-e0vm
 ---
 

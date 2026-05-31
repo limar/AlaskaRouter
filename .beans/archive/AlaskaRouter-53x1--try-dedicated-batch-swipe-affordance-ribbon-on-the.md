@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-53x1
 title: 'TRY (dedicated batch): swipe-affordance ribbon on the trailing edge of stop rows'
-status: todo
+status: scrapped
 type: task
 priority: normal
 created_at: 2026-05-30T09:18:23Z
-updated_at: 2026-05-30T10:23:44Z
+updated_at: 2026-05-31T14:14:50Z
 parent: AlaskaRouter-e0vm
 ---
 

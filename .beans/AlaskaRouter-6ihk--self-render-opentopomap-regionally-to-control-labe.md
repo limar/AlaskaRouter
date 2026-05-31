@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-6ihk
 title: Self-render OpenTopoMap regionally to control labels at render time
-status: in-progress
+status: todo
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-24T09:38:37Z
+updated_at: 2026-05-31T14:13:44Z
 ---
 
 ## Why

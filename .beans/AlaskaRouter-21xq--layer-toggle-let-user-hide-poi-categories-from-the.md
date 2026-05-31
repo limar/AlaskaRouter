@@ -3,9 +3,9 @@
 title: Layer toggle — let user hide POI categories from the map
 status: todo
 type: feature
-priority: normal
+priority: low
 created_at: 2026-05-25T14:34:44Z
-updated_at: 2026-05-29T14:42:49Z
+updated_at: 2026-05-31T14:09:39Z
 parent: AlaskaRouter-xtua
 ---
 

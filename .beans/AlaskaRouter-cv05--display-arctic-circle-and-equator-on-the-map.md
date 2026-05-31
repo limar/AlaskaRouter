@@ -3,9 +3,9 @@
 title: Display Arctic Circle and Equator on the map
 status: todo
 type: feature
-priority: normal
+priority: low
 created_at: 2026-05-20T20:20:13Z
-updated_at: 2026-05-20T20:21:44Z
+updated_at: 2026-05-31T14:09:44Z
 parent: AlaskaRouter-xtua
 ---
 

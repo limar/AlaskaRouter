@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-fuu4
 title: 'Selected waypoint icon: keep normal size, fly above ground with shadow'
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-19T19:40:44Z
-updated_at: 2026-05-19T19:40:44Z
+updated_at: 2026-05-31T14:06:52Z
 parent: AlaskaRouter-xtua
 ---
 

@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-klxx
 title: 'Try: drop the block-color pip stroke; keep block color on chip + rail only'
-status: todo
+status: scrapped
 type: task
 priority: normal
 created_at: 2026-05-30T09:08:35Z
-updated_at: 2026-05-30T09:08:35Z
+updated_at: 2026-05-31T14:18:45Z
 parent: AlaskaRouter-e0vm
 ---
 

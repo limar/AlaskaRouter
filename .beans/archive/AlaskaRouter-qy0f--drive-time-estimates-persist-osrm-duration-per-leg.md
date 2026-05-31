@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-qy0f
 title: Drive-time estimates (persist OSRM duration; per-leg time)
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-29T18:55:02Z
-updated_at: 2026-05-29T18:55:02Z
+updated_at: 2026-05-31T14:12:29Z
 blocked_by:
     - AlaskaRouter-ssl1
 ---

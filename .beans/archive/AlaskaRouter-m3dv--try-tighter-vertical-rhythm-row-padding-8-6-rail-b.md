@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-m3dv
 title: 'Try: tighter vertical rhythm (row padding 8 → 6, rail band 17 → 15)'
-status: todo
+status: scrapped
 type: task
 priority: normal
 created_at: 2026-05-30T09:08:35Z
-updated_at: 2026-05-30T14:08:51Z
+updated_at: 2026-05-31T14:19:00Z
 parent: AlaskaRouter-e0vm
 ---
 

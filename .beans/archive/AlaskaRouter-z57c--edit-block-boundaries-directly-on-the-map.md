@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-z57c
 title: Edit block boundaries directly on the map
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-19T13:40:37Z
-updated_at: 2026-05-19T13:40:37Z
+updated_at: 2026-05-31T14:09:56Z
 parent: AlaskaRouter-xtua
 ---
 

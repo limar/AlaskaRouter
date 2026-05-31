@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-mhax
 title: Reorder stops visually on the map (proper UX for diagonal routes)
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-20T08:49:20Z
-updated_at: 2026-05-21T15:07:53Z
+updated_at: 2026-05-31T14:06:39Z
 parent: AlaskaRouter-xtua
 ---
 

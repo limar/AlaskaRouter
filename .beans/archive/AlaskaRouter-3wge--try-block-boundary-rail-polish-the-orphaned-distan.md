@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-3wge
 title: 'Try: block-boundary rail polish (the orphaned distance under headers)'
-status: todo
+status: scrapped
 type: task
 priority: normal
 created_at: 2026-05-30T09:08:36Z
-updated_at: 2026-05-30T09:08:36Z
+updated_at: 2026-05-31T14:15:27Z
 parent: AlaskaRouter-e0vm
 ---
 

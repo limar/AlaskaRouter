@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-e0vm
 title: 'Bottom-sheet alignment to mockup (round 2): rail, density, buttons, icon sizes'
-status: in-progress
+status: todo
 type: epic
 priority: high
 created_at: 2026-05-29T19:35:36Z
-updated_at: 2026-05-30T09:08:35Z
+updated_at: 2026-05-31T14:20:04Z
 ---
 
 The bottom sheet has drifted from design/mocks/sheet.jsx and feels crowded/heavy. A second alignment pass (the first, AlaskaRouter-9634, did fonts/blocks/palette). Work through the mock deltas in steps, starting with the timeline rail + per-leg distance.

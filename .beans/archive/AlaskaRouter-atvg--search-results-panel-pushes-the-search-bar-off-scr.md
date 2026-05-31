@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-atvg
 title: Search-results panel pushes the search bar off-screen and is itself not scrollable
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-05-23T14:54:58Z
-updated_at: 2026-05-23T14:54:58Z
+updated_at: 2026-05-31T14:14:11Z
 ---
 
 ## Repro (100 %, iPhone 16)

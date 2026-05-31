@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ucyl
 title: 'TRY (bigger UX, deferred): inline ''split here'' per stop + retire bottom ''Add separator'' row'
-status: todo
+status: scrapped
 type: feature
 priority: low
 created_at: 2026-05-30T09:08:36Z
-updated_at: 2026-05-30T09:08:36Z
+updated_at: 2026-05-31T14:19:16Z
 parent: AlaskaRouter-e0vm
 ---
 

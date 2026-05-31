@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-71rb
 title: Zoom-Out Tuning + label survival across zooms
-status: draft
+status: scrapped
 type: feature
 priority: high
 created_at: 2026-05-19T07:16:34Z
-updated_at: 2026-05-29T14:46:10Z
+updated_at: 2026-05-31T14:07:38Z
 parent: AlaskaRouter-xtua
 ---
 

@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-kp9h
 title: Persist routed polylines with the trip so they survive offline reopen
-status: in-progress
+status: completed
 type: bug
 priority: critical
 created_at: 2026-05-23T15:20:51Z
-updated_at: 2026-05-23T15:26:24Z
+updated_at: 2026-05-31T14:18:30Z
 ---
 
 ## Problem

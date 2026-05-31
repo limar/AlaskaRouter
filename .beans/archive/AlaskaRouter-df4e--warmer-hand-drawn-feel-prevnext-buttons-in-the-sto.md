@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-df4e
 title: Warmer, hand-drawn-feel Prev/Next buttons in the stop callout
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-20T09:05:56Z
-updated_at: 2026-05-20T09:05:56Z
+updated_at: 2026-05-31T14:07:00Z
 parent: AlaskaRouter-xtua
 ---
 

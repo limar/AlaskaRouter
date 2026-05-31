@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-tluk
 title: Human-readable categories + drop lat/long from waypoint info
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-29T18:40:34Z
-updated_at: 2026-05-29T18:44:17Z
+updated_at: 2026-05-31T14:13:59Z
 ---
 
 Two coupled cleanups in the bottom sheet / callouts / search:
