@@ -48,6 +48,10 @@ struct RootView: View {
     @State private var snappedRouteKey: String = ""        // tracks which trip-state the snap is for
     @State private var snapTask: Task<Void, Never>?
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
+    /// Exponential backoff guard (AlaskaRouter-41no). Held across the view's
+    /// lifetime so rapid edits during a throttle don't burn fresh calls into
+    /// a backend that just said "no".
+    @State private var retryPolicy = RoutingRetryPolicy()
 
 
     private var activeTrip: Trip? {
@@ -482,9 +486,20 @@ struct RootView: View {
 
     @MainActor
     private func runSnap(coords: [CLLocationCoordinate2D], key: String) async {
+        // (41no) Backoff guard. If the provider is in a backoff window from
+        // a recent 429 / 5xx, don't burn a guaranteed-fail call — sleep until
+        // the window closes, then re-check the geometry before firing.
+        if !retryPolicy.canFireNow {
+            pendingSnapKey = key
+            let waitNanos = UInt64(retryPolicy.secondsUntilNextAllowed * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: waitNanos)
+            guard !Task.isCancelled, tripGeometryKey == key else { return }
+        }
+
         do {
             let result = try await routingProvider.snap(waypoints: coords)
             guard !Task.isCancelled else { return }
+            retryPolicy.recordSuccess()
             withAnimation(.smooth(duration: 0.35)) {
                 snappedRouteCoords = result.coordinates
                 snappedRouteKey = key
@@ -500,9 +515,21 @@ struct RootView: View {
                 storeSegments(from: result, waypoints: coords)
                 try? modelContext.save()
             }
+        } catch RoutingError.http {
+            // Server reached but rejected us (429 / 5xx). Backoff.
+            retryPolicy.recordFailure(kind: .rateLimited)
+            snappedRouteCoords = nil
+            pendingSnapKey = key
+        } catch RoutingError.server {
+            // OSRM replied with non-Ok code (NoRoute / NoMatch). Not a
+            // throttle — backoff doesn't apply; just drop to the dashed
+            // fallback and wait for the next geometry change.
+            snappedRouteCoords = nil
+            pendingSnapKey = key
         } catch {
-            // Fall back to the dashed pendingSnap line; remember the key so
-            // we can retry on reconnect.
+            // Transport or decoding failure (offline). NetworkMonitor.onReconnect
+            // will trigger fireSnap when the network comes back.
+            retryPolicy.recordFailure(kind: .transport)
             snappedRouteCoords = nil
             pendingSnapKey = key
         }
