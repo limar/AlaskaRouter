@@ -26,6 +26,11 @@ struct SegmentCache {
         )
     }
 
+    /// Look up the cached row for a directed pair, irrespective of its
+    /// `routerVersion`. Used by `store(...)` for the upsert path so we
+    /// can update a stale row in place instead of leaving an orphan.
+    /// Callers that want only fresh (current-engine) geometry should use
+    /// `lookupFresh` instead.
     func lookup(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> RouteSegment? {
         let k = Self.key(from: from, to: to)
         var d = FetchDescriptor<RouteSegment>(predicate: #Predicate { $0.key == k })
@@ -33,15 +38,25 @@ struct SegmentCache {
         return (try? context.fetch(d))?.first
     }
 
+    /// AlaskaRouter-y3g3 — lookup that respects the version stamp. A row
+    /// whose `routerVersion` doesn't match the current engine is treated
+    /// as a cache miss so the snap pipeline silently re-fetches with the
+    /// new engine.
+    func lookupFresh(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> RouteSegment? {
+        guard let seg = lookup(from: from, to: to) else { return nil }
+        return seg.routerVersion == RoutingEngineVersion.current ? seg : nil
+    }
+
     /// Returns the cached polyline + leg-distance + leg-duration for every
-    /// consecutive pair in `waypoints`, or `nil` if any pair is missing.
-    /// On a full hit, the caller can render without a network call.
+    /// consecutive pair in `waypoints`, or `nil` if any pair is missing
+    /// OR is stamped with an older routing-engine version. On a full hit,
+    /// the caller can render without a network call.
     func lookupAllPairs(_ waypoints: [CLLocationCoordinate2D]) -> [RouteSegment]? {
         guard waypoints.count >= 2 else { return nil }
         var out: [RouteSegment] = []
         out.reserveCapacity(waypoints.count - 1)
         for i in 0 ..< waypoints.count - 1 {
-            guard let seg = lookup(from: waypoints[i], to: waypoints[i + 1]) else { return nil }
+            guard let seg = lookupFresh(from: waypoints[i], to: waypoints[i + 1]) else { return nil }
             out.append(seg)
         }
         return out
@@ -63,6 +78,9 @@ struct SegmentCache {
             existing.distanceMeters = distanceMeters
             existing.durationSeconds = durationSeconds
             existing.computedAt = now
+            // (y3g3) Re-stamp on every write so an upsert against a
+            // stale-version row brings it forward to the current engine.
+            existing.routerVersion = RoutingEngineVersion.current
             return existing
         }
         let seg = RouteSegment(
@@ -72,7 +90,8 @@ struct SegmentCache {
             polylineEncoded: encoded,
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,
-            computedAt: now
+            computedAt: now,
+            routerVersion: RoutingEngineVersion.current
         )
         context.insert(seg)
         return seg

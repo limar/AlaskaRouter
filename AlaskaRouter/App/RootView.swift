@@ -37,8 +37,10 @@ struct RootView: View {
 
     @State private var mapCamera: MapViewCamera = RootView.makeInitialCamera()
 
-    // Routing layer state
-    private let routingProvider: any RoutingProvider = OSRMProvider()
+    // Routing layer state — Valhalla via FOSSGIS for ferry support
+    // (AlaskaRouter-y3g3). OSRMProvider stays available as an alternate
+    // backend; swap by replacing the initializer here.
+    private let routingProvider: any RoutingProvider = ValhallaProvider()
     @State private var networkMonitor = NetworkMonitor()
     @State private var locationProvider = LocationProvider()
     /// True between a locate-me tap and the first location fix arriving.
@@ -487,7 +489,10 @@ struct RootView: View {
         var out: [PairGeometry] = []
         out.reserveCapacity(max(0, stops.count - 1))
         for i in 0 ..< stops.count - 1 {
-            if let seg = cache.lookup(from: stops[i], to: stops[i + 1]) {
+            // (y3g3) lookupFresh — a row from a stale routing engine
+            // (e.g. OSRM rows after the Valhalla swap) is treated as a
+            // miss so the planner schedules a re-fetch.
+            if let seg = cache.lookupFresh(from: stops[i], to: stops[i + 1]) {
                 out.append(.snapped(seg.coordinates))
             } else {
                 out.append(.pending)

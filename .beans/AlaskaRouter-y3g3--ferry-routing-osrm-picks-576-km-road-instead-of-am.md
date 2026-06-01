@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-y3g3
 title: Prefer ferries (Valhalla with use_ferry=1.0 → AMHS sailings render correctly)
-status: draft
+status: completed
 type: bug
 priority: high
 created_at: 2026-06-01T16:13:53Z
-updated_at: 2026-06-01T16:42:53Z
+updated_at: 2026-06-01T17:02:38Z
 blocked_by:
     - AlaskaRouter-2l0i
 ---
@@ -50,10 +50,10 @@ This works **offline** (no API), composes with the per-segment cache we just shi
 
 ## TODOs (deferred until direction is agreed)
 
-- [ ] Verify OSRM response for Valdez → Whittier to confirm the cost-function hypothesis.
-- [ ] Acquire AMHS published distance/duration for each sailing (their PDF schedule has it).
-- [ ] Design + decide on the per-leg mode UI affordance.
-- [ ] Implement.
+- [x] Confirmed via live OSRM probe: 487 km road wins. Documented in this bean.
+- [x] Not needed — Valhalla reads OSM `duration=` tags on the AMHS ferry ways directly. Live probe returned 6h 7m, matching real schedule.
+- [x] Skipped — Valhalla's automatic ferry preference eliminates the need for a per-leg toggle for v1. Manual override remains a future option ([AlaskaRouter-2z2f] tracks render-style polish; per-leg mode toggle deferred until users hit a case where they want the road over the ferry).
+- [x] Shipped — see Summary of Changes.
 
 
 ---
@@ -107,3 +107,26 @@ This bean is now **blocked by [AlaskaRouter-2l0i]** because Valhalla's 20-locati
 2. `use_ferry` value — proposed 1.0 (Alaska-skewed). 0.7 would be milder.
 3. Cache-version bump UX — silent re-fetch on first open vs one-time notice. Proposed silent.
 4. Ferry leg render style — to confirm at impl time.
+
+## Summary of Changes
+
+**New files**
+- AlaskaRouter/Routing/ValhallaProvider.swift — RoutingProvider implementation hitting `https://valhalla1.openstreetmap.de/route` with `costing=auto`, `costing_options.auto.use_ferry=1.0`, `format=osrm`, `shape_format=geojson`. Sends `X-Client-Id: dev.alaskarouter.AlaskaRouter` and a polite User-Agent. Decodes the OSRM-shaped response (route.geometry as GeoJSON LineString, per-leg distance/duration in legs[]).
+- AlaskaRouter/Routing/RoutingEngineVersion.swift — central `current: Int = 1` constant. Bumping invalidates cached rows produced by the previous engine. File header documents the version history.
+- Tests/ValhallaProviderTests.swift — 9 tests across request-body shape, ferry preference plumbing, and the routerVersion cache-bump behavior.
+
+**Modified**
+- AlaskaRouter/Data/TripModels.swift — Trip gained `snappedRouteRouterVersion: Int = 0`. cachedSnappedCoords requires version match (silent re-fetch on mismatch). setSnappedCoords stamps with current version. RouteSegment gained `routerVersion: Int = 0`; init defaults to current.
+- AlaskaRouter/Data/SegmentCache.swift — added `lookupFresh(from:to:)` that filters by routerVersion. store() always upserts and re-stamps with current version, so a stale row is brought forward in place (no orphans).
+- AlaskaRouter/App/RootView.swift — provider default switched from OSRMProvider to ValhallaProvider. perPairGeometries now uses lookupFresh so OSRM-era cache rows are treated as misses.
+
+**Effect (verified via live probe documented in Findings)**
+- Valdez → Whittier: 145.5 km / 6h 7m via 'Alaska Marine Highway - Whittier-Valdez Ferry' (was: 576 km / 7h+ over Glenn Hwy).
+- All AMHS sailings with `duration=` tags in OSM now route correctly with no manual marking.
+- Existing trips: cold-launch hydrates whole-trip cache only if its routerVersion matches; otherwise the per-segment cache is rebuilt on next snap. User sees a brief dashed flicker once per migrated trip.
+
+**Open items deferred to follow-ups**
+- [AlaskaRouter-2z2f] — distinct render style for ferry legs (boat marker / wave-blue color). Ferry legs currently render as a normal solid trip-color ribbon; functional but visually indistinguishable from a road.
+- Posting on Valhalla [Discussion #3373] — not required for personal dogfood; will post before any TestFlight / OSS distribution.
+
+**Build / tests**: 79/79 pass (+9 new in ValhallaProviderTests + RoutingEngineVersionCacheBumpTests).

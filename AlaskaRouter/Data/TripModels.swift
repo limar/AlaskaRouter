@@ -37,6 +37,11 @@ final class Trip {
     var snappedRouteEncoded: String? = nil
     var snappedRouteKey: String? = nil
     var snappedRouteComputedAt: Date? = nil
+    /// Routing engine version stamp (AlaskaRouter-y3g3). Bumping
+    /// `RoutingEngineVersion.current` invalidates rows stamped with an
+    /// older value — cachedSnappedCoords returns nil on mismatch and the
+    /// snap pipeline silently re-fetches with the new engine.
+    var snappedRouteRouterVersion: Int = 0
 
     init(name: String, color: TripColor = .amber, createdAt: Date = .now, notes: String = "") {
         self.name = name
@@ -82,7 +87,8 @@ final class Trip {
     func cachedSnappedCoords(for currentGeometryKey: String) -> [CLLocationCoordinate2D]? {
         guard let encoded = snappedRouteEncoded,
               let storedKey = snappedRouteKey,
-              storedKey == currentGeometryKey
+              storedKey == currentGeometryKey,
+              snappedRouteRouterVersion == RoutingEngineVersion.current
         else { return nil }
         return Trip.decodeSnap(encoded)
     }
@@ -93,6 +99,7 @@ final class Trip {
         snappedRouteEncoded = Trip.encodeSnap(coords)
         snappedRouteKey = geometryKey
         snappedRouteComputedAt = now
+        snappedRouteRouterVersion = RoutingEngineVersion.current
     }
 
     /// Wipe the cache — call when waypoint sequence changes if the caller
@@ -135,6 +142,12 @@ final class RouteSegment {
     var distanceMeters: Double = 0
     var durationSeconds: Double = 0
     var computedAt: Date = Date()
+    /// Routing engine version stamp (AlaskaRouter-y3g3). The planner
+    /// treats a row whose `routerVersion` doesn't match
+    /// `RoutingEngineVersion.current` as a cache miss, so an engine swap
+    /// (e.g. OSRM → Valhalla) silently invalidates the prior cache
+    /// without a destructive wipe.
+    var routerVersion: Int = 0
 
     init(key: String,
          fromLat: Double, fromLon: Double,
@@ -142,7 +155,8 @@ final class RouteSegment {
          polylineEncoded: String,
          distanceMeters: Double,
          durationSeconds: Double,
-         computedAt: Date = .now)
+         computedAt: Date = .now,
+         routerVersion: Int = RoutingEngineVersion.current)
     {
         self.key = key
         self.fromLat = fromLat
@@ -153,6 +167,7 @@ final class RouteSegment {
         self.distanceMeters = distanceMeters
         self.durationSeconds = durationSeconds
         self.computedAt = computedAt
+        self.routerVersion = routerVersion
     }
 
     var coordinates: [CLLocationCoordinate2D] {
