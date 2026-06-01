@@ -50,6 +50,7 @@ enum TestFactories {
             for: Trip.self,
             Waypoint.self,
             BlockSeparator.self,
+            RouteSegment.self,
             configurations: configuration
         )
         return ModelContext(container)

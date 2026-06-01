@@ -84,27 +84,12 @@ extension Trip {
         let useSnap = (snappedCoords?.count ?? 0) >= 2
         let baseCoords = snappedCoords ?? stops.map(\.coordinate)
 
-        // Monotonic waypoint → polyline-index mapping. OSRM's polyline visits
-        // the trip's waypoints in trip order (retracing for return legs), so a
-        // forward-only cursor that snaps each waypoint to the closest point
-        // at-or-after the previous one handles retraces correctly. For the
-        // offline fallback (no snap), a trivial 1:1 mapping.
-        let waypointIndexes: [Int] = {
-            if !useSnap { return Array(stops.indices) }
-            var cursor = 0
-            var result: [Int] = []
-            for wp in stops {
-                var bestIdx = cursor
-                var bestDist = Double.infinity
-                for i in cursor ..< baseCoords.count {
-                    let d = SmartInsert.haversine(baseCoords[i], wp.coordinate)
-                    if d < bestDist { bestDist = d; bestIdx = i }
-                }
-                result.append(bestIdx)
-                cursor = bestIdx
-            }
-            return result
-        }()
+        // Monotonic waypoint → polyline-index mapping (shared helper, see
+        // Trip.monotonicWaypointIndexes). For the offline fallback (no snap),
+        // a trivial 1:1 mapping.
+        let waypointIndexes: [Int] = useSnap
+            ? Trip.monotonicWaypointIndexes(polyline: baseCoords, waypoints: stops.map(\.coordinate))
+            : Array(stops.indices)
 
         // Block color lookup: the road LEAVING block N's last stop takes block
         // N+1's color (segment "enters" the new block as it arrives at the

@@ -402,17 +402,20 @@ struct RootView: View {
             return
         }
 
-        // (kp9h) Try the persisted cache first. If the trip has a stored snap
-        // computed for the *same* geometry key, hydrate immediately — even if
-        // we're offline. This is the whole point of the persistence: a trip
-        // routed yesterday over LTE still renders along real roads at 5 AM
-        // out of Coldfoot when the bars are gone.
+        // (kp9h) Whole-trip cache — fastest cold-launch path. If the trip has
+        // a stored snap for the *same* geometry key, hydrate immediately even
+        // if we're offline. One read + decode beats N segment stitches.
         if let cached = trip.cachedSnappedCoords(for: effectiveKey) {
             snappedRouteCoords = cached
             snappedRouteKey = effectiveKey
             pendingSnapKey = nil
-            return                          // no refetch needed
+            return
         }
+
+        // (un6b) Per-segment cache — if every consecutive pair is already
+        // cached (cross-trip reuse, or revert-to-known-state after an undo),
+        // stitch and render without a network call.
+        if tryServeFromSegmentCache(trip: trip, key: effectiveKey) { return }
 
         let coords = trip.orderedWaypoints.map(\.coordinate)
         snapTask = Task { @MainActor in
@@ -428,6 +431,55 @@ struct RootView: View {
         Task { @MainActor in await runSnap(coords: coords, key: key) }
     }
 
+    /// (un6b) Walk every consecutive pair in the active trip's waypoints. If
+    /// each pair is already in the per-segment cache, stitch the polylines
+    /// into the trip's snap and persist — no network call. Returns true on
+    /// hit, false if any pair was missing.
+    private func tryServeFromSegmentCache(trip: Trip, key: String) -> Bool {
+        let coords = trip.orderedWaypoints.map(\.coordinate)
+        let cache = SegmentCache(modelContext)
+        guard let segments = cache.lookupAllPairs(coords) else { return false }
+        let stitched = SegmentStitcher.stitch(segments)
+        guard stitched.count >= 2 else { return false }
+        withAnimation(.smooth(duration: 0.35)) {
+            snappedRouteCoords = stitched
+            snappedRouteKey = key
+            pendingSnapKey = nil
+        }
+        trip.setSnappedCoords(stitched, geometryKey: key)
+        try? modelContext.save()
+        return true
+    }
+
+    /// (un6b) Decompose a successful whole-trip snap into per-segment cache
+    /// rows. Free side effect of every OSRM call — populates the cache so
+    /// the next edit can hit the all-cached shortcut without re-fetching.
+    private func storeSegments(from result: RoutingResult, waypoints: [CLLocationCoordinate2D]) {
+        guard waypoints.count >= 2, result.coordinates.count >= 2 else { return }
+        let indexes = Trip.monotonicWaypointIndexes(
+            polyline: result.coordinates,
+            waypoints: waypoints
+        )
+        guard indexes.count == waypoints.count else { return }
+        let cache = SegmentCache(modelContext)
+        let hasLegs = result.legs.count == waypoints.count - 1
+        for i in 0 ..< waypoints.count - 1 {
+            let lo = indexes[i]
+            let hi = indexes[i + 1]
+            guard hi > lo else { continue }     // skip degenerate zero-length legs
+            let slice = Array(result.coordinates[lo ... hi])
+            let dist = hasLegs ? result.legs[i].distanceMeters : 0
+            let dur  = hasLegs ? result.legs[i].durationSeconds : 0
+            cache.store(
+                from: waypoints[i],
+                to: waypoints[i + 1],
+                polyline: slice,
+                distanceMeters: dist,
+                durationSeconds: dur
+            )
+        }
+    }
+
     @MainActor
     private func runSnap(coords: [CLLocationCoordinate2D], key: String) async {
         do {
@@ -438,12 +490,14 @@ struct RootView: View {
                 snappedRouteKey = key
                 pendingSnapKey = nil
             }
-            // (kp9h) Persist for offline reopen. If the trip's geometry has
-            // changed during the in-flight network call (a fast user edit),
-            // the key won't match by now — skip the save so we don't write a
-            // stale snap.
+            // (kp9h) Persist whole-trip cache for cold-launch reopen.
+            // (un6b) Decompose into per-segment rows for the edit fast path.
+            // If the trip's geometry has changed during the in-flight call
+            // (a fast user edit), the key won't match — skip the writes so
+            // we don't persist a stale snap.
             if let trip = activeTrip, tripGeometryKey == key {
                 trip.setSnappedCoords(result.coordinates, geometryKey: key)
+                storeSegments(from: result, waypoints: coords)
                 try? modelContext.save()
             }
         } catch {

@@ -105,25 +105,58 @@ final class Trip {
         snappedRouteComputedAt = nil
     }
 
-    /// Encode an array of CLLocationCoordinate2D as a JSON string of
-    /// [[lat,lon],…] pairs. Chosen for debuggability over compactness —
-    /// a 2000-point Alaska polyline encodes to ~50 KB JSON vs ~10 KB
-    /// Google-encoded; size is well within SwiftData's comfort zone and
-    /// the JSON survives schema migrations / inspection painlessly.
+    /// Delegate to PolylineCodec so RouteSegment can reuse the same format.
     private static func encodeSnap(_ coords: [CLLocationCoordinate2D]) -> String? {
-        let pairs: [[Double]] = coords.map { [$0.latitude, $0.longitude] }
-        guard let data = try? JSONSerialization.data(withJSONObject: pairs) else { return nil }
-        return String(data: data, encoding: .utf8)
+        PolylineCodec.encode(coords)
     }
 
     private static func decodeSnap(_ encoded: String) -> [CLLocationCoordinate2D]? {
-        guard let data = encoded.data(using: .utf8),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [[Double]]
-        else { return nil }
-        return arr.compactMap { p in
-            guard p.count >= 2 else { return nil }
-            return CLLocationCoordinate2D(latitude: p[0], longitude: p[1])
-        }
+        PolylineCodec.decode(encoded)
+    }
+}
+
+/// Per-pair routing cache row (AlaskaRouter-un6b). A directed pair
+/// `(from → to)` maps to a snapped polyline plus its OSRM-reported
+/// distance and duration. One-way roads matter, so `(A→B)` and `(B→A)`
+/// are stored as distinct rows.
+///
+/// Coordinates in the lookup key are rounded to 5 decimals (~1.1 m) so
+/// a re-geocoded stop at the same place still hits. The `key` field
+/// holds the canonical "lat,lon→lat,lon" string for fast equality
+/// lookups via a SwiftData predicate.
+@Model
+final class RouteSegment {
+    @Attribute(.unique) var key: String = ""
+    var fromLat: Double = 0
+    var fromLon: Double = 0
+    var toLat: Double = 0
+    var toLon: Double = 0
+    var polylineEncoded: String = ""
+    var distanceMeters: Double = 0
+    var durationSeconds: Double = 0
+    var computedAt: Date = Date()
+
+    init(key: String,
+         fromLat: Double, fromLon: Double,
+         toLat: Double, toLon: Double,
+         polylineEncoded: String,
+         distanceMeters: Double,
+         durationSeconds: Double,
+         computedAt: Date = .now)
+    {
+        self.key = key
+        self.fromLat = fromLat
+        self.fromLon = fromLon
+        self.toLat = toLat
+        self.toLon = toLon
+        self.polylineEncoded = polylineEncoded
+        self.distanceMeters = distanceMeters
+        self.durationSeconds = durationSeconds
+        self.computedAt = computedAt
+    }
+
+    var coordinates: [CLLocationCoordinate2D] {
+        PolylineCodec.decode(polylineEncoded) ?? []
     }
 }
 

@@ -28,6 +28,17 @@ struct RoutingResult: Sendable {
     let distanceMeters: Double
     /// Total drive duration in seconds.
     let durationSeconds: Double
+    /// Per-pair breakdown — one entry per consecutive waypoint pair
+    /// (`count == waypoints.count - 1`). Used by the per-segment cache
+    /// (AlaskaRouter-un6b) to record each leg's road distance and duration
+    /// without re-summing the polyline. Empty when the provider can't
+    /// supply per-leg data; callers should fall back to per-leg haversine.
+    let legs: [Leg]
+
+    struct Leg: Sendable {
+        let distanceMeters: Double
+        let durationSeconds: Double
+    }
 }
 
 enum RoutingError: Error {
@@ -91,10 +102,14 @@ struct OSRMProvider: RoutingProvider {
             guard pair.count >= 2 else { return nil }
             return .init(latitude: pair[1], longitude: pair[0])
         }
+        let legs: [RoutingResult.Leg] = route.legs.map {
+            .init(distanceMeters: $0.distance, durationSeconds: $0.duration)
+        }
         return RoutingResult(
             coordinates: coords,
             distanceMeters: route.distance,
-            durationSeconds: route.duration
+            durationSeconds: route.duration,
+            legs: legs
         )
     }
 
@@ -105,6 +120,11 @@ struct OSRMProvider: RoutingProvider {
         let routes: [Route]
         struct Route: Decodable {
             let geometry: Geometry
+            let distance: Double
+            let duration: Double
+            let legs: [Leg]
+        }
+        struct Leg: Decodable {
             let distance: Double
             let duration: Double
         }

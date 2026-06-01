@@ -11,6 +11,36 @@ import CoreLocation
 
 extension Trip {
 
+    /// Monotonic waypoint → polyline-index mapping. OSRM's merged polyline
+    /// visits the trip's waypoints in order (retracing for return legs), so a
+    /// forward-only cursor that snaps each waypoint to the closest point
+    /// at-or-after the previous one handles retraces correctly.
+    ///
+    /// Shared by `legDistancesMeters`, `routeRibbons` and the per-segment
+    /// cache decomposition in the snap pipeline. Pure function — no `Trip`
+    /// state — `static` so the snap pipeline can call it on the raw OSRM
+    /// response before any SwiftData state has been written.
+    static func monotonicWaypointIndexes(
+        polyline: [CLLocationCoordinate2D],
+        waypoints: [CLLocationCoordinate2D]
+    ) -> [Int] {
+        guard !polyline.isEmpty else { return [] }
+        var cursor = 0
+        var result: [Int] = []
+        result.reserveCapacity(waypoints.count)
+        for wp in waypoints {
+            var bestIdx = cursor
+            var bestDist = Double.infinity
+            for i in cursor ..< polyline.count {
+                let d = SmartInsert.haversine(polyline[i], wp)
+                if d < bestDist { bestDist = d; bestIdx = i }
+            }
+            result.append(bestIdx)
+            cursor = bestIdx
+        }
+        return result
+    }
+
     /// Per-leg length in metres — one entry per consecutive ordered-stop pair
     /// (count = stops − 1). Leg `i` is the stretch from stop `i` to stop `i+1`.
     /// Uses the snapped polyline (mirroring routeRibbons' monotonic
@@ -26,21 +56,10 @@ extension Trip {
             }
         }
 
-        // Monotonic waypoint → polyline-index mapping (same approach as
-        // routeRibbons): each waypoint snaps to the closest point at-or-after
-        // the previous cursor, so return legs retrace correctly.
-        var cursor = 0
-        var idx: [Int] = []
-        for wp in stops {
-            var bestIdx = cursor
-            var bestDist = Double.infinity
-            for i in cursor ..< snap.count {
-                let d = SmartInsert.haversine(snap[i], wp.coordinate)
-                if d < bestDist { bestDist = d; bestIdx = i }
-            }
-            idx.append(bestIdx)
-            cursor = bestIdx
-        }
+        let idx = Trip.monotonicWaypointIndexes(
+            polyline: snap,
+            waypoints: stops.map(\.coordinate)
+        )
 
         return (0 ..< stops.count - 1).map { i in
             let lo = min(idx[i], idx[i + 1])
