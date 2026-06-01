@@ -78,6 +78,25 @@ extension Trip {
     /// 4. Smooth short coverage runs, then walk each pass emitting a ribbon
     ///    whenever the block color or the offset lane changes.
     func routeRibbons(snappedCoords: [CLLocationCoordinate2D]?) -> [RouteRibbon] {
+        routeRibbons(snappedCoords: snappedCoords, pendingPairIndices: nil)
+    }
+
+    /// AlaskaRouter-2l0i — per-leg pendingSnap variant.
+    ///
+    /// `pendingPairIndices` (when non-nil) marks specific consecutive-pair
+    /// indices as "this leg has no snapped geometry yet" (cache miss + the
+    /// fetch hasn't completed or failed). Those legs are rendered as a
+    /// straight-line dashed ribbon while the rest of the trip keeps its
+    /// real road geometry. The all-or-nothing render preserved by passing
+    /// `pendingPairIndices: nil` (existing behavior).
+    ///
+    /// When `snappedCoords` is nil OR has <2 points, every leg falls back
+    /// regardless of `pendingPairIndices` — there's no polyline to slice
+    /// from. The renderer ends up with the same all-dashed view as today.
+    func routeRibbons(
+        snappedCoords: [CLLocationCoordinate2D]?,
+        pendingPairIndices: Set<Int>?
+    ) -> [RouteRibbon] {
         let stops = orderedWaypoints
         guard stops.count >= 2 else { return [] }
 
@@ -103,29 +122,55 @@ extension Trip {
         }()
 
         // 1. Build legs: directed slice of the base polyline + overall
-        //    direction vector + block color. Degenerate (zero-length) legs are
-        //    dropped.
+        //    direction vector + block color + per-leg fallback flag.
+        //    A leg is "fallback" (dashed straight-line) when EITHER the
+        //    whole trip has no snap, OR this specific pair index is in
+        //    `pendingPairIndices`. Fallback legs get their geometry from
+        //    the straight stops[i] → stops[i+1] segment, not the polyline.
+        //    Degenerate (zero-length) snapped legs are dropped, but
+        //    fallback legs are always kept — they're the user's signal
+        //    that this stretch needs routing.
         struct Leg {
+            let pairIndex: Int
             let dir: (Double, Double)
             let coords: [CLLocationCoordinate2D]
             let color: TripColor
+            let isFallback: Bool
         }
         var legs: [Leg] = []
         for i in 0 ..< stops.count - 1 {
             let s = stops[i].coordinate
             let e = stops[i + 1].coordinate
-            let si = waypointIndexes[i]
-            let ei = waypointIndexes[i + 1]
-            let lo = min(si, ei)
-            let hi = max(si, ei)
-            guard hi > lo else { continue }
-            var coords = Array(baseCoords[lo...hi])
-            if si > ei { coords.reverse() }
-            legs.append(Leg(
-                dir: (e.latitude - s.latitude, e.longitude - s.longitude),
-                coords: coords,
-                color: blocksByWaypointID[stops[i + 1].id] ?? self.color
-            ))
+            let pairIsPending = pendingPairIndices?.contains(i) ?? false
+            let isFallback = !useSnap || pairIsPending
+            let color = blocksByWaypointID[stops[i + 1].id] ?? self.color
+            let dir = (e.latitude - s.latitude, e.longitude - s.longitude)
+
+            if isFallback {
+                // Straight-line geometry. Two-vertex coords ⇒ one edge.
+                legs.append(Leg(
+                    pairIndex: i,
+                    dir: dir,
+                    coords: [s, e],
+                    color: color,
+                    isFallback: true
+                ))
+            } else {
+                let si = waypointIndexes[i]
+                let ei = waypointIndexes[i + 1]
+                let lo = min(si, ei)
+                let hi = max(si, ei)
+                guard hi > lo else { continue }
+                var coords = Array(baseCoords[lo...hi])
+                if si > ei { coords.reverse() }
+                legs.append(Leg(
+                    pairIndex: i,
+                    dir: dir,
+                    coords: coords,
+                    color: color,
+                    isFallback: false
+                ))
+            }
         }
         guard !legs.isEmpty else { return [] }
 
@@ -253,15 +298,18 @@ extension Trip {
             return result
         }
 
-        // Emit ribbons. Walk each pass in order; flush whenever the block
-        // color or the offset lane changes. Consecutive pieces sharing both
-        // merge into one continuous ribbon.
+        // Emit ribbons. Walk each pass in order; flush whenever the
+        // block color, offset lane, OR per-leg fallback flag changes
+        // (AlaskaRouter-2l0i — fallback flag is now per-ribbon, not
+        // per-render). Consecutive pieces sharing all three merge into
+        // one continuous ribbon.
         var out: [RouteRibbon] = []
         var ribbonIdx = 0
         for pass in passes {
             var curCoords: [CLLocationCoordinate2D] = []
             var curColor: TripColor? = nil
             var curMult = 0.0
+            var curFallback = false
             func flush() {
                 guard !curCoords.isEmpty, let color = curColor else { return }
                 out.append(RouteRibbon(
@@ -269,7 +317,7 @@ extension Trip {
                     coords: curCoords,
                     offsetMultiplier: curMult,
                     color: color,
-                    isStraightLineFallback: !useSnap
+                    isStraightLineFallback: curFallback
                 ))
                 ribbonIdx += 1
                 curCoords = []
@@ -277,18 +325,21 @@ extension Trip {
             }
             for li in pass {
                 let color = legs[li].color
+                let fallback = legs[li].isFallback
                 for sub in subRibbons(forLeg: li) {
                     if curColor == nil {
                         curColor = color
                         curMult = sub.mult
                         curCoords = sub.coords
-                    } else if curColor == color && curMult == sub.mult {
+                        curFallback = fallback
+                    } else if curColor == color && curMult == sub.mult && curFallback == fallback {
                         curCoords.append(contentsOf: sub.coords.dropFirst())
                     } else {
                         flush()
                         curColor = color
                         curMult = sub.mult
                         curCoords = sub.coords
+                        curFallback = fallback
                     }
                 }
             }

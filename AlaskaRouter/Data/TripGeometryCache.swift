@@ -53,10 +53,21 @@ final class TripGeometryCache {
         return total
     }
 
-    func routeRibbons(for trip: Trip, snappedCoords: [CLLocationCoordinate2D]?) -> [RouteRibbon] {
-        let key = Self.ribbonsFingerprint(trip: trip, snapped: snappedCoords)
+    func routeRibbons(
+        for trip: Trip,
+        snappedCoords: [CLLocationCoordinate2D]?,
+        pendingPairIndices: Set<Int>? = nil
+    ) -> [RouteRibbon] {
+        let key = Self.ribbonsFingerprint(
+            trip: trip,
+            snapped: snappedCoords,
+            pending: pendingPairIndices
+        )
         if key == ribbonsKey { return ribbonsValue }
-        ribbonsValue = trip.routeRibbons(snappedCoords: snappedCoords)
+        ribbonsValue = trip.routeRibbons(
+            snappedCoords: snappedCoords,
+            pendingPairIndices: pendingPairIndices
+        )
         ribbonsKey = key
         return ribbonsValue
     }
@@ -70,12 +81,19 @@ final class TripGeometryCache {
         return s
     }
 
-    private static func ribbonsFingerprint(trip: Trip, snapped: [CLLocationCoordinate2D]?) -> String {
+    private static func ribbonsFingerprint(
+        trip: Trip,
+        snapped: [CLLocationCoordinate2D]?,
+        pending: Set<Int>?
+    ) -> String {
         var s = legsFingerprint(trip: trip, snapped: snapped)
         s += "@blocks="
         let anchors = trip.separators.compactMap(\.afterWaypointID).map(\.uuidString).sorted()
         for a in anchors { s += a + "," }
         s += "@color=" + trip.colorRaw
+        if let pending, !pending.isEmpty {
+            s += "@pending=" + pending.sorted().map(String.init).joined(separator: ",")
+        }
         return s
     }
 

@@ -68,6 +68,9 @@ struct OSRMProvider: RoutingProvider {
         guard waypoints.count >= 2 else {
             throw RoutingError.insufficientWaypoints
         }
+        // AlaskaRouter-2l0i: tripwire — partial-fetch planner is the only
+        // intended caller; oversize requests = regression. Debug-only.
+        RoutingRequestLimits.assertChunked(waypoints.count)
         let coordsString = waypoints
             .map { "\($0.longitude),\($0.latitude)" }
             .joined(separator: ";")

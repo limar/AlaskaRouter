@@ -48,6 +48,12 @@ struct RootView: View {
     @State private var snappedRouteKey: String = ""        // tracks which trip-state the snap is for
     @State private var snapTask: Task<Void, Never>?
     @State private var pendingSnapKey: String?             // set when fetch failed; retried on reconnect
+    /// AlaskaRouter-2l0i — per-leg pendingSnap visualization. Pair
+    /// indices in this set render as dashed straight lines while the
+    /// rest of the trip keeps cached real-road geometry. Empty = the
+    /// whole trip is rendered from `snappedRouteCoords` (today's
+    /// behavior, modulo the all-or-nothing fallback when nil).
+    @State private var pendingPairIndices: Set<Int> = []
     /// Exponential backoff guard (AlaskaRouter-41no). Held across the view's
     /// lifetime so rapid edits during a throttle don't burn fresh calls into
     /// a backend that just said "no".
@@ -118,6 +124,7 @@ struct RootView: View {
                 previewCoord: previewedResult?.coord,
                 previewName: previewedResult?.name,
                 snappedRouteCoords: snappedRouteCoords,
+                pendingPairIndices: pendingPairIndices.isEmpty ? nil : pendingPairIndices,
                 userLocation: locationProvider.lastLocation?.coordinate,
                 tweaksFingerprint: tweaksFingerprint,
                 onWaypointTap: handleMapWaypointTap,
@@ -394,101 +401,149 @@ struct RootView: View {
             .joined(separator: "|")
     }
 
-    // MARK: - Routing: debounced snap-to-road fetch
+    // MARK: - Routing: partial-fetch snap-to-road (AlaskaRouter-2l0i)
+    //
+    // High-level flow:
+    //   1. Check the whole-trip cache (kp9h) — cold-launch shortcut.
+    //   2. Compute per-pair geometries from the segment cache (un6b).
+    //   3. Render IMMEDIATELY: cached pairs as real roads, missing
+    //      pairs as dashed straight lines.
+    //   4. If anything is missing, plan contiguous runs of missing
+    //      pairs and chunk each run to ≤ maxLocations-per-request
+    //      (see RoutingRequestLimits). Fire all chunks in parallel
+    //      via withTaskGroup.
+    //   5. As chunks land, write per-pair geometry into the segment
+    //      cache; failed chunks leave their pairs in pendingPairIndices
+    //      so the dashed visual stays until the next attempt.
+    //
+    // This is the "edit while offline" UX: one edit only invalidates
+    // the touched pair(s), and the rest of the route stays drawn for
+    // real even if the touched pair's fetch fails.
 
     private func scheduleSnapForCurrentTrip(key: String? = nil) {
         let effectiveKey = key ?? tripGeometryKey
         // Invalidate any prior result that doesn't match the current trip state.
         snapTask?.cancel()
-        if snappedRouteKey != effectiveKey { snappedRouteCoords = nil }
+        if snappedRouteKey != effectiveKey {
+            snappedRouteCoords = nil
+            pendingPairIndices = []
+        }
         guard let trip = activeTrip, trip.orderedWaypoints.count >= 2 else {
             pendingSnapKey = nil
             return
         }
 
-        // (kp9h) Whole-trip cache — fastest cold-launch path. If the trip has
-        // a stored snap for the *same* geometry key, hydrate immediately even
-        // if we're offline. One read + decode beats N segment stitches.
+        // (kp9h) Whole-trip cache — fastest cold-launch path. One read + decode
+        // beats N segment stitches and works fully offline.
         if let cached = trip.cachedSnappedCoords(for: effectiveKey) {
             snappedRouteCoords = cached
             snappedRouteKey = effectiveKey
+            pendingPairIndices = []
             pendingSnapKey = nil
             return
         }
 
-        // (un6b) Per-segment cache — if every consecutive pair is already
-        // cached (cross-trip reuse, or revert-to-known-state after an undo),
-        // stitch and render without a network call.
-        if tryServeFromSegmentCache(trip: trip, key: effectiveKey) { return }
+        // (un6b/2l0i) Per-pair planning: resolve each consecutive pair
+        // against the segment cache. Render what we have right now and
+        // schedule a fetch for what we don't.
+        let stops = trip.orderedWaypoints.map(\.coordinate)
+        let geometries = perPairGeometries(stops: stops)
+        renderState(geometries: geometries, stops: stops, key: effectiveKey, persistWholeTrip: false)
 
-        let coords = trip.orderedWaypoints.map(\.coordinate)
+        let missing = SegmentPlanner.missingRuns(in: geometries, stops: stops)
+        if missing.isEmpty {
+            // Full cache hit → also persist the whole-trip blob as a
+            // hydration shortcut for the next cold launch, and clear
+            // pendingSnapKey since nothing is pending.
+            if let stitched = snappedRouteCoords {
+                trip.setSnappedCoords(stitched, geometryKey: effectiveKey)
+                try? modelContext.save()
+            }
+            pendingSnapKey = nil
+            return
+        }
+
+        // Debounce → fetch missing runs (chunked + parallel).
         snapTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 500_000_000)   // 500 ms debounce
             guard !Task.isCancelled else { return }
-            await runSnap(coords: coords, key: effectiveKey)
+            await runPartialSnap(stops: stops, missing: missing, key: effectiveKey)
         }
     }
 
     private func fireSnap(forKey key: String) {
         guard let trip = activeTrip, trip.orderedWaypoints.count >= 2 else { return }
-        let coords = trip.orderedWaypoints.map(\.coordinate)
-        Task { @MainActor in await runSnap(coords: coords, key: key) }
+        let stops = trip.orderedWaypoints.map(\.coordinate)
+        let geometries = perPairGeometries(stops: stops)
+        let missing = SegmentPlanner.missingRuns(in: geometries, stops: stops)
+        guard !missing.isEmpty else { return }
+        Task { @MainActor in await runPartialSnap(stops: stops, missing: missing, key: key) }
     }
 
-    /// (un6b) Walk every consecutive pair in the active trip's waypoints. If
-    /// each pair is already in the per-segment cache, stitch the polylines
-    /// into the trip's snap and persist — no network call. Returns true on
-    /// hit, false if any pair was missing.
-    private func tryServeFromSegmentCache(trip: Trip, key: String) -> Bool {
-        let coords = trip.orderedWaypoints.map(\.coordinate)
+    /// Build per-pair geometries from the current segment cache.
+    /// Cached pair → `.snapped(coords)`; missing pair → `.pending`.
+    private func perPairGeometries(stops: [CLLocationCoordinate2D]) -> [PairGeometry] {
         let cache = SegmentCache(modelContext)
-        guard let segments = cache.lookupAllPairs(coords) else { return false }
-        let stitched = SegmentStitcher.stitch(segments)
-        guard stitched.count >= 2 else { return false }
-        withAnimation(.smooth(duration: 0.35)) {
-            snappedRouteCoords = stitched
-            snappedRouteKey = key
-            pendingSnapKey = nil
+        var out: [PairGeometry] = []
+        out.reserveCapacity(max(0, stops.count - 1))
+        for i in 0 ..< stops.count - 1 {
+            if let seg = cache.lookup(from: stops[i], to: stops[i + 1]) {
+                out.append(.snapped(seg.coordinates))
+            } else {
+                out.append(.pending)
+            }
         }
-        trip.setSnappedCoords(stitched, geometryKey: key)
-        try? modelContext.save()
-        return true
+        return out
     }
 
-    /// (un6b) Decompose a successful whole-trip snap into per-segment cache
-    /// rows. Free side effect of every OSRM call — populates the cache so
-    /// the next edit can hit the all-cached shortcut without re-fetching.
-    private func storeSegments(from result: RoutingResult, waypoints: [CLLocationCoordinate2D]) {
-        guard waypoints.count >= 2, result.coordinates.count >= 2 else { return }
-        let indexes = Trip.monotonicWaypointIndexes(
-            polyline: result.coordinates,
-            waypoints: waypoints
-        )
-        guard indexes.count == waypoints.count else { return }
-        let cache = SegmentCache(modelContext)
-        let hasLegs = result.legs.count == waypoints.count - 1
-        for i in 0 ..< waypoints.count - 1 {
-            let lo = indexes[i]
-            let hi = indexes[i + 1]
-            guard hi > lo else { continue }     // skip degenerate zero-length legs
-            let slice = Array(result.coordinates[lo ... hi])
-            let dist = hasLegs ? result.legs[i].distanceMeters : 0
-            let dur  = hasLegs ? result.legs[i].durationSeconds : 0
-            cache.store(
-                from: waypoints[i],
-                to: waypoints[i + 1],
-                polyline: slice,
-                distanceMeters: dist,
-                durationSeconds: dur
-            )
+    /// Push per-pair geometries onto the screen state: stitched polyline
+    /// for `snappedRouteCoords`, missing pair indices for the renderer's
+    /// per-leg dash flag. Optionally persist the stitched polyline as the
+    /// whole-trip cache (only when no pairs are pending).
+    private func renderState(
+        geometries: [PairGeometry],
+        stops: [CLLocationCoordinate2D],
+        key: String,
+        persistWholeTrip: Bool
+    ) {
+        let stitched = SegmentPlanner.stitchedPolyline(geometries: geometries, stops: stops)
+        var pending: Set<Int> = []
+        for (i, g) in geometries.enumerated() {
+            if case .pending = g { pending.insert(i) }
+        }
+        snappedRouteCoords = stitched.isEmpty ? nil : stitched
+        snappedRouteKey = key
+        pendingPairIndices = pending
+        if persistWholeTrip, pending.isEmpty, !stitched.isEmpty, let trip = activeTrip {
+            trip.setSnappedCoords(stitched, geometryKey: key)
+        }
+    }
+
+    /// Outcome of one chunk inside a `withTaskGroup`. Sendable so it
+    /// crosses the actor hop from the off-actor task back to MainActor.
+    private enum ChunkOutcome: Sendable {
+        case success(chunk: MissingRun, result: RoutingResult)
+        case rateLimited(chunk: MissingRun)
+        case noRoute(chunk: MissingRun)
+        case transport(chunk: MissingRun)
+
+        var pendingPairRange: Range<Int> {
+            switch self {
+            case let .success(c, _), let .rateLimited(c), let .noRoute(c), let .transport(c):
+                return c.firstPairIndex ..< c.firstPairIndex + c.pairCount
+            }
         }
     }
 
     @MainActor
-    private func runSnap(coords: [CLLocationCoordinate2D], key: String) async {
-        // (41no) Backoff guard. If the provider is in a backoff window from
-        // a recent 429 / 5xx, don't burn a guaranteed-fail call — sleep until
-        // the window closes, then re-check the geometry before firing.
+    private func runPartialSnap(
+        stops: [CLLocationCoordinate2D],
+        missing: [MissingRun],
+        key: String
+    ) async {
+        // (41no) Backoff guard. Same logic as the legacy whole-trip path:
+        // if a recent 429 has us in a backoff window, sleep until it
+        // closes and re-check geometry before firing.
         if !retryPolicy.canFireNow {
             pendingSnapKey = key
             let waitNanos = UInt64(retryPolicy.secondsUntilNextAllowed * 1_000_000_000)
@@ -496,42 +551,113 @@ struct RootView: View {
             guard !Task.isCancelled, tripGeometryKey == key else { return }
         }
 
-        do {
-            let result = try await routingProvider.snap(waypoints: coords)
-            guard !Task.isCancelled else { return }
-            retryPolicy.recordSuccess()
-            withAnimation(.smooth(duration: 0.35)) {
-                snappedRouteCoords = result.coordinates
-                snappedRouteKey = key
-                pendingSnapKey = nil
+        // Chunk every run so each outbound request stays at or below
+        // RoutingRequestLimits.maxLocationsPerRoutingRequest. See that
+        // constant's file header for the rationale.
+        let chunks: [MissingRun] = missing.flatMap { SegmentPlanner.chunk($0) }
+
+        // Fire chunks concurrently. Each task is fully async; the consumer
+        // loop runs back on MainActor and applies SwiftData writes safely.
+        let provider = routingProvider
+        let outcomes: [ChunkOutcome] = await withTaskGroup(of: ChunkOutcome.self) { group in
+            for chunk in chunks {
+                group.addTask {
+                    do {
+                        let result = try await provider.snap(waypoints: chunk.waypoints)
+                        return .success(chunk: chunk, result: result)
+                    } catch RoutingError.http {
+                        return .rateLimited(chunk: chunk)
+                    } catch RoutingError.server {
+                        return .noRoute(chunk: chunk)
+                    } catch {
+                        return .transport(chunk: chunk)
+                    }
+                }
             }
-            // (kp9h) Persist whole-trip cache for cold-launch reopen.
-            // (un6b) Decompose into per-segment rows for the edit fast path.
-            // If the trip's geometry has changed during the in-flight call
-            // (a fast user edit), the key won't match — skip the writes so
-            // we don't persist a stale snap.
-            if let trip = activeTrip, tripGeometryKey == key {
-                trip.setSnappedCoords(result.coordinates, geometryKey: key)
-                storeSegments(from: result, waypoints: coords)
-                try? modelContext.save()
+            var collected: [ChunkOutcome] = []
+            for await o in group { collected.append(o) }
+            return collected
+        }
+
+        guard !Task.isCancelled, tripGeometryKey == key else { return }
+
+        // Apply chunk results to the segment cache + update the retry
+        // policy. Successes reset the policy; rate-limit/transport
+        // failures advance it (only if we got NO success that round —
+        // a single success means the backend is reachable, so don't
+        // penalize on a partial failure).
+        var anySuccess = false
+        var anyRateLimited = false
+        var anyTransport = false
+        let cache = SegmentCache(modelContext)
+        for outcome in outcomes {
+            switch outcome {
+            case let .success(chunk, result):
+                anySuccess = true
+                writeChunkToCache(result: result, chunk: chunk, cache: cache)
+            case .rateLimited:
+                anyRateLimited = true
+            case .noRoute:
+                // Server explicitly said "no route between these points"
+                // (NoRoute / NoMatch). Not a throttle; not a transport
+                // error. Leave the pair as pending — geometry change
+                // (user edits the stop) is the only thing that fixes it.
+                break
+            case .transport:
+                anyTransport = true
             }
-        } catch RoutingError.http {
-            // Server reached but rejected us (429 / 5xx). Backoff.
-            retryPolicy.recordFailure(kind: .rateLimited)
-            snappedRouteCoords = nil
-            pendingSnapKey = key
-        } catch RoutingError.server {
-            // OSRM replied with non-Ok code (NoRoute / NoMatch). Not a
-            // throttle — backoff doesn't apply; just drop to the dashed
-            // fallback and wait for the next geometry change.
-            snappedRouteCoords = nil
-            pendingSnapKey = key
-        } catch {
-            // Transport or decoding failure (offline). NetworkMonitor.onReconnect
-            // will trigger fireSnap when the network comes back.
-            retryPolicy.recordFailure(kind: .transport)
-            snappedRouteCoords = nil
-            pendingSnapKey = key
+        }
+        if anySuccess { retryPolicy.recordSuccess() }
+        else if anyRateLimited { retryPolicy.recordFailure(kind: .rateLimited) }
+        else if anyTransport { retryPolicy.recordFailure(kind: .transport) }
+
+        // Rebuild the per-pair view from cache state and re-render.
+        // Persist the whole-trip cache only when EVERY pair has snapped
+        // geometry — otherwise we'd be persisting a partial stitch as
+        // "the snap" and hiding the pending-pair signal on cold launch.
+        let geometries = perPairGeometries(stops: stops)
+        var pendingNow: Set<Int> = []
+        for (i, g) in geometries.enumerated() {
+            if case .pending = g { pendingNow.insert(i) }
+        }
+        withAnimation(.smooth(duration: 0.35)) {
+            renderState(
+                geometries: geometries,
+                stops: stops,
+                key: key,
+                persistWholeTrip: true
+            )
+            pendingSnapKey = pendingNow.isEmpty ? nil : key
+        }
+        try? modelContext.save()
+    }
+
+    /// Decompose a chunk's routing response into per-pair cache rows.
+    /// Mirrors the structure of the legacy `storeSegments` but is scoped
+    /// to the chunk's `waypoints` rather than the whole trip — same code,
+    /// narrower input.
+    private func writeChunkToCache(result: RoutingResult, chunk: MissingRun, cache: SegmentCache) {
+        guard chunk.waypoints.count >= 2, result.coordinates.count >= 2 else { return }
+        let indexes = Trip.monotonicWaypointIndexes(
+            polyline: result.coordinates,
+            waypoints: chunk.waypoints
+        )
+        guard indexes.count == chunk.waypoints.count else { return }
+        let hasLegs = result.legs.count == chunk.waypoints.count - 1
+        for j in 0 ..< chunk.waypoints.count - 1 {
+            let lo = indexes[j]
+            let hi = indexes[j + 1]
+            guard hi > lo else { continue }     // skip degenerate zero-length legs
+            let slice = Array(result.coordinates[lo ... hi])
+            let dist = hasLegs ? result.legs[j].distanceMeters : 0
+            let dur  = hasLegs ? result.legs[j].durationSeconds : 0
+            cache.store(
+                from: chunk.waypoints[j],
+                to: chunk.waypoints[j + 1],
+                polyline: slice,
+                distanceMeters: dist,
+                durationSeconds: dur
+            )
         }
     }
 

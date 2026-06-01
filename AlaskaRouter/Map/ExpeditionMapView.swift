@@ -81,6 +81,12 @@ struct ExpeditionMapView: View {
     /// Snap-to-road geometry from the Routing layer. When present, replaces
     /// the straight-line fallback with the real road shape (solid, not dashed).
     let snappedRouteCoords: [CLLocationCoordinate2D]?
+    /// AlaskaRouter-2l0i — per-leg pendingSnap. Each contained pair index
+    /// is rendered as a dashed straight-line ribbon over its leg, while
+    /// the rest of the trip keeps its real road geometry. nil ⇒ no
+    /// per-leg pending state (fall back to the whole-trip flag implied
+    /// by `snappedRouteCoords == nil`).
+    let pendingPairIndices: Set<Int>?
     /// User's current GPS location (AlaskaRouter-j03u). When present, a blue
     /// puck is drawn at this coord. Pixel-sized so it stays constant across
     /// zooms (uses the WaypointIcons.userLocation UIImage).
@@ -171,14 +177,19 @@ struct ExpeditionMapView: View {
     fileprivate static func syncTripRouteLayer(
         style: MLNStyle,
         trip: Trip?,
-        snappedRouteCoords: [CLLocationCoordinate2D]?
+        snappedRouteCoords: [CLLocationCoordinate2D]?,
+        pendingPairIndices: Set<Int>?
     ) {
         // Memoized through TripGeometryCache (AlaskaRouter-bhs4) — building
         // ribbons is O(W × P) and was previously running on every map body
         // re-evaluation, freezing the app at ~40 stops + a multi-thousand-point
         // OSRM polyline.
         let ribbons: [RouteRibbon] = trip.map {
-            TripGeometryCache.shared.routeRibbons(for: $0, snappedCoords: snappedRouteCoords)
+            TripGeometryCache.shared.routeRibbons(
+                for: $0,
+                snappedCoords: snappedRouteCoords,
+                pendingPairIndices: pendingPairIndices
+            )
         } ?? []
 
         struct DesiredLayer {
@@ -652,7 +663,8 @@ struct ExpeditionMapView: View {
                 ExpeditionMapView.syncTripRouteLayer(
                     style: style,
                     trip: trip,
-                    snappedRouteCoords: snappedRouteCoords
+                    snappedRouteCoords: snappedRouteCoords,
+                    pendingPairIndices: pendingPairIndices
                 )
                 // All marker layers via raw MLN API so we can apply
                 // iconScale on layer creation (AlaskaRouter-h82l) without
