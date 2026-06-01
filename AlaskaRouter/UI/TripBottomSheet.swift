@@ -328,7 +328,7 @@ struct TripBottomSheet: View {
         // Computed once per render: per-leg road lengths (indexed by position
         // in orderedWaypoints) + a waypoint→position map, so the rail can label
         // each leg by POSITION rather than the `.order` field (jhw8).
-        let legs = trip.legDistancesMeters(snappedCoords: snappedRouteCoords)
+        let legs = TripGeometryCache.shared.legDistances(for: trip, snappedCoords: snappedRouteCoords)
         let posByID = Dictionary(
             uniqueKeysWithValues: trip.orderedWaypoints.enumerated().map { ($1.id, $0) }
         )
@@ -767,7 +767,7 @@ struct TripBottomSheet: View {
         let stopsText = count == 1 ? "1 stop" : "\(count) stops"
         let blocks = trip.blocks
         guard blockIndex >= 0, blockIndex < blocks.count else { return stopsText }
-        let m = trip.blockDistanceMeters(blocks[blockIndex], snappedCoords: snappedRouteCoords)
+        let m = TripGeometryCache.shared.blockDistance(blocks[blockIndex], for: trip, snappedCoords: snappedRouteCoords)
         guard m > 0 else { return stopsText }
         return "\(stopsText) · \(DistanceFormat.string(meters: m, useMiles: useMiles))"
     }
@@ -1055,7 +1055,7 @@ struct TripBottomSheet: View {
     /// straight-line — formatted in the chosen unit (AlaskaRouter-ssl1).
     private var distanceText: String {
         DistanceFormat.string(
-            meters: trip.totalDistanceMeters(snappedCoords: snappedRouteCoords),
+            meters: TripGeometryCache.shared.totalDistance(for: trip, snappedCoords: snappedRouteCoords),
             useMiles: useMiles
         )
     }

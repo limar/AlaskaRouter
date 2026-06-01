@@ -833,7 +833,7 @@ struct RootView: View {
     /// haversine otherwise.
     private func legMeters(legIndex: Int, in ordered: [Waypoint]) -> Double {
         if let trip = activeTrip {
-            let legs = trip.legDistancesMeters(snappedCoords: snappedRouteCoords)
+            let legs = TripGeometryCache.shared.legDistances(for: trip, snappedCoords: snappedRouteCoords)
             if legIndex >= 0, legIndex < legs.count, legs[legIndex] > 0 {
                 return legs[legIndex]
             }

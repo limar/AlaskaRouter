@@ -167,12 +167,19 @@ struct ExpeditionMapView: View {
     ///
     /// Idempotent via per-ribbon content-fingerprint layer IDs; any
     /// change (coords / offset / color / snap-state) forces remove+re-add.
+    @MainActor
     fileprivate static func syncTripRouteLayer(
         style: MLNStyle,
         trip: Trip?,
         snappedRouteCoords: [CLLocationCoordinate2D]?
     ) {
-        let ribbons: [RouteRibbon] = trip?.routeRibbons(snappedCoords: snappedRouteCoords) ?? []
+        // Memoized through TripGeometryCache (AlaskaRouter-bhs4) — building
+        // ribbons is O(W × P) and was previously running on every map body
+        // re-evaluation, freezing the app at ~40 stops + a multi-thousand-point
+        // OSRM polyline.
+        let ribbons: [RouteRibbon] = trip.map {
+            TripGeometryCache.shared.routeRibbons(for: $0, snappedCoords: snappedRouteCoords)
+        } ?? []
 
         struct DesiredLayer {
             let id: String
