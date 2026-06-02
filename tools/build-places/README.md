@@ -37,6 +37,22 @@ cp tools/build-places/.env.example tools/build-places/.env
 `.env` is gitignored and auto-sourced by the fetchers; never commit it. The
 key can also come straight from the environment (`export RIDB_API_KEY=…`).
 
+## Prerequisites
+
+```bash
+brew install osmium-tool sqlite3     # CLI tools the pipeline shells out to
+python3 --version                    # 3.10+ ; standard library only — no pip install
+```
+
+The Python scripts depend only on the stdlib (`urllib`, `json`, `sqlite3`, `re`,
+`unicodedata`) — there is no `requirements.txt`. RIDB needs a free API key in
+`.env` (see above); all other sources are keyless. The raw OSM extract is a
+manual one-time download (see "Sources"). A new clone only needs this if it's
+*regenerating* the DB — the built `alaska-places.sqlite` is committed.
+
+See [`../../docs/DATA-PIPELINE.md`](../../docs/DATA-PIPELINE.md) for the
+end-to-end orientation (both the search DB and the tile pack).
+
 ## Quick reference
 
 ```bash
