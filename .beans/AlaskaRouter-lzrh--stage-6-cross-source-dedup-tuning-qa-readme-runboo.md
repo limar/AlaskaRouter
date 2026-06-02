@@ -5,7 +5,7 @@ status: completed
 type: task
 priority: normal
 created_at: 2026-06-02T10:00:44Z
-updated_at: 2026-06-02T12:39:53Z
+updated_at: 2026-06-02T13:04:43Z
 parent: AlaskaRouter-ief3
 blocked_by:
     - AlaskaRouter-ix1e
@@ -32,3 +32,19 @@ Finalized the merge quality, documented the whole effort, and shipped the DB.
 - Swapped alaska-places.sqlite into the bundle.
 
 Final DB: 34,068 rows across 8 sources. Camping 388->493, cabins 0->293, huts ->136. booking_method on 374 rows (online_portal 256).
+
+## Reopened — fuzzy cross-source dedup (AlaskaRouter-lzrh)
+
+The exact-name dedup left ~150 cross-source near-duplicate pairs within 250 m
+(e.g. 'Beaver Flats Campsite'[osm] vs 'Beaver Flats'[blm]; 'Swan Lake Cabin
+Seward'[ridb] vs 'Swan Lake Cabin'[osm]). Measured: of 460 external overnight
+rows, 97 overlap an OSM campground/cabin/hut. Adding a normalized-name spatial
+merge pass.
+
+- [x] Pass 2c added: union-find merge of MERGE_CATS (camping/cabin/hut) rows within 250 m whose normalized names are compatible (equal / token-prefix / Levenshtein<=2; generic tokens campsite/campground/cabin/(ak)/etc. stripped). reduce_cluster picks the authoritative survivor and backfills booking + alt_names.
+- [x] Rebuild: 34,068 -> 33,977 (91 fuzzy-merged). Cross-source near-dup pairs within 250 m: 150 -> 32 (-79%). Remaining 32 are correctly distinct (e.g. 'Gut Island 1 Cabin' vs 'Gut Island 2 Cabin' stay separate) or too-generic-to-merge safely. Survivors gained OSM names as aliases + walk_in/booking.
+- [x] DB re-swapped (33,977 rows, integrity ok). qa_report: camping 433 / cabin 286 / hut 112; camping source_url 96%, cabin 97%; booking online_portal 251.
+
+## Update — fuzzy dedup landed
+
+Closed the cross-source near-duplicate gap that the earlier exact-name dedup left. Pass 2c (build_fts5.py) does a tight spatial + normalized-name union merge for recreation overnight POIs, routed through reduce_cluster so the authoritative source wins and booking/alt_names carry over. 91 duplicates collapsed; near-dup pairs cut 150->32 with no observed over-merging. Final DB: 33,977 rows.

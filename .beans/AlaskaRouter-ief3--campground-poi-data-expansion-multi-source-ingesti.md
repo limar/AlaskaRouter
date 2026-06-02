@@ -5,7 +5,7 @@ status: completed
 type: feature
 priority: high
 created_at: 2026-06-02T09:59:13Z
-updated_at: 2026-06-02T12:39:53Z
+updated_at: 2026-06-02T13:04:43Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -67,3 +67,10 @@ Delivered across 6 stages (all child beans completed). The unified offline gazet
 - AlaskaRouter-ytes: surface booking/phone/website in the app UI (data already ships).
 - Broader private directories (Alaska Family Motorhomes, ACVB, Alaska.org) and paid AllStays/Campendium — out of scope (ACOA-only by decision; no paid subscriptions). The scrape_acoa.py pattern generalizes if wanted.
 - In-app visual verification of campground search.
+
+## Update — final numbers after fuzzy dedup (AlaskaRouter-lzrh)
+
+After adding the normalized-name near-duplicate merge, the analysis the user prompted:
+- Final DB: **33,977 rows** (was 34,068 before fuzzy merge; 33,470 at start). Camping 433, cabins 286, huts 112.
+- Of the 460 external overnight rows, ~363 (79%) were genuinely NEW (not in OSM); the ~97 that overlapped OSM are now largely merged INTO the OSM row (enriching it with booking) rather than duplicated. Cross-source near-dup pairs within 250 m: 150 -> 32.
+- Honest unique-added: net +507 rows over the original OSM/GNIS/Wikidata DB, dominated by RIDB public-use cabins and authoritative campground inventories OSM lacks. The headline non-OSM value is booking/reservation data (online_portal 251, recreation.gov deep-links) which OSM does not carry at all.

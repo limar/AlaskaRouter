@@ -25,6 +25,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -682,6 +683,63 @@ def _merge_alt_names(winner: Candidate, members: list[Candidate]) -> str:
     return " | ".join(parts)
 
 
+# Categories where cross-source near-duplicate merging runs (Pass 2c). These
+# are the recreation POIs the new sources contribute and that overlap OSM under
+# slightly different names. Kept narrow to avoid mis-merging distinct natural
+# features (peaks/lakes) in the GNIS long tail. AlaskaRouter-lzrh.
+MERGE_CATS = {"camping", "cabin", "hut"}
+MERGE_RADIUS_M = 250.0
+
+# Generic tokens dropped when normalizing a name for near-dup matching, so
+# "Beaver Flats Campsite" == "Beaver Flats" and "Fox Creek Cabin (ak)" ==
+# "Fox Creek Cabin". Discriminating words (Upper/Lower/Creek/Lake/…) are kept.
+_GENERIC_TOKENS = {
+    "campground", "campgrounds", "campsite", "campsites", "camp",
+    "cabin", "cabins", "hut", "huts", "rv", "park", "resort",
+    "site", "sites", "cg", "public", "use", "the", "a",
+}
+
+
+def _norm_for_merge(name: str) -> str:
+    s = unicodedata.normalize("NFKD", name)
+    s = "".join(c for c in s if not unicodedata.combining(c)).lower()
+    s = re.sub(r"\(.*?\)", " ", s)          # drop parentheticals "(ak)"
+    s = s.replace("&", " and ")
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    toks = [t for t in s.split() if t not in _GENERIC_TOKENS]
+    return " ".join(toks)
+
+
+def _levenshtein(a: str, b: str, cap: int = 3) -> int:
+    if a == b:
+        return 0
+    if abs(len(a) - len(b)) > cap:
+        return cap + 1
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _name_compatible(a: str, b: str) -> bool:
+    """True if two normalized names denote the same place: equal, one a
+    token-prefix of the other (suffix variants like '… Seward'), or within
+    edit distance 2 (spelling variants like 'coure dalene' / 'coeur dalene').
+    Empty normals never match (avoids collapsing on stripped-to-nothing names)."""
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    ta, tb = a.split(), b.split()
+    short, long_ = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    if long_[:len(short)] == short:
+        return True
+    return _levenshtein(a, b) <= 2
+
+
 def reduce_cluster(members: list[Candidate]) -> Candidate:
     """Collapse duplicate candidates into one. Winner = highest importance, then
     highest source priority (lowest SOURCE_RANK). The winner's EMPTY contact
@@ -885,10 +943,72 @@ def build_db():
             final.append(reduce_cluster(cluster))
 
     deduped = final
-    collapsed = len(candidates) - len(deduped)
-    print(f"[db] deduped: {len(candidates):,} -> after-2a {after_a:,} -> after-2b {len(deduped):,}  (collapsed {collapsed:,} total)")
+    after_b = len(deduped)
 
-    # Pass 2c: admin_area inheritance (AlaskaRouter-b7g0).
+    # Pass 2c: cross-source near-duplicate merge for recreation POIs
+    # (AlaskaRouter-lzrh). Passes 2a/2b only merge EXACT names; the new sources
+    # name the same place slightly differently from OSM ("Beaver Flats Campsite"
+    # vs "Beaver Flats", "Swan Lake Cabin Seward" vs "Swan Lake Cabin"). Here we
+    # union rows in MERGE_CATS that are within MERGE_RADIUS_M AND have compatible
+    # normalized names, then reduce_cluster each union (so the authoritative
+    # source wins and its booking backfills onto the survivor). Scoped tight
+    # (categories + radius + name check) so distinct features never collapse.
+    from math import radians as _rad, sin as _sin, cos as _cos, asin as _asin, sqrt as _sqrt
+    def _hav_m(a, b, c, d):
+        dla, dlo = _rad(c - a), _rad(d - b)
+        return 2 * 6371000 * _asin(_sqrt(
+            _sin(dla / 2) ** 2 + _cos(_rad(a)) * _cos(_rad(c)) * _sin(dlo / 2) ** 2))
+
+    targets = [i for i, r in enumerate(deduped) if r.category in MERGE_CATS]
+    norm = {i: _norm_for_merge(deduped[i].name) for i in targets}
+    cell_grid: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for i in targets:
+        cell_grid[(round(deduped[i].lat, 2), round(deduped[i].lon, 2))].append(i)
+
+    parent = list(range(len(deduped)))
+    def _find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]; x = parent[x]
+        return x
+    def _union(a, b):
+        ra, rb = _find(a), _find(b)
+        if ra != rb: parent[max(ra, rb)] = min(ra, rb)
+
+    for i in targets:
+        if not norm[i]:
+            continue
+        la, lo = deduped[i].lat, deduped[i].lon
+        ci, cj = round(la, 2), round(lo, 2)
+        for dla in (-0.01, 0.0, 0.01):
+            for dlo in (-0.01, 0.0, 0.01):
+                for j in cell_grid.get((round(ci + dla, 2), round(cj + dlo, 2)), ()):
+                    if j <= i or not norm[j]:
+                        continue
+                    if (_hav_m(la, lo, deduped[j].lat, deduped[j].lon) <= MERGE_RADIUS_M
+                            and _name_compatible(norm[i], norm[j])):
+                        _union(i, j)
+
+    union_members: dict[int, list[int]] = defaultdict(list)
+    for i in targets:
+        union_members[_find(i)].append(i)
+    merged: list[Candidate] = []
+    emitted: set[int] = set()
+    fuzzy_merges = 0
+    for i, r in enumerate(deduped):
+        root = _find(i) if r.category in MERGE_CATS else None
+        if root is None or len(union_members[root]) == 1:
+            merged.append(r)
+        elif root not in emitted:
+            emitted.add(root)
+            merged.append(reduce_cluster([deduped[m] for m in union_members[root]]))
+            fuzzy_merges += len(union_members[root]) - 1
+        # else: a non-representative member of an already-emitted union — drop
+    deduped = merged
+    collapsed = len(candidates) - len(deduped)
+    print(f"[db] deduped: {len(candidates):,} -> after-2a {after_a:,} -> after-2b {after_b:,} "
+          f"-> after-2c {len(deduped):,}  (2c fuzzy-merged {fuzzy_merges:,}; collapsed {collapsed:,} total)")
+
+    # Pass 2d: admin_area inheritance (AlaskaRouter-b7g0).
     # GNIS rows already carry a stripped county/borough name. Non-GNIS rows
     # (OSM, Wikidata) have admin_area="". For each, find the nearest GNIS
     # row with non-empty admin_area within ADMIN_INHERIT_KM and adopt its
