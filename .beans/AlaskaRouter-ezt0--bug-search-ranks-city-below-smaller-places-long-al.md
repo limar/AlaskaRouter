@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ezt0
 title: 'Bug: search ranks city below smaller places — long alt_names skews BM25 (Fairbanks/Anchorage)'
-status: in-progress
+status: completed
 type: bug
 priority: critical
 created_at: 2026-05-31T14:42:25Z
-updated_at: 2026-05-31T15:11:43Z
+updated_at: 2026-06-02T15:39:47Z
 parent: AlaskaRouter-xtua
 ---
 
