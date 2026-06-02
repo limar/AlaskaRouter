@@ -171,7 +171,7 @@ final class TweaksStore {
         static let useLooseMatcher: Bool          = true   // milestone 2 on by default; flip OFF to A/B
         static let distanceUnitIsMiles: Bool      = false  // km by default
         static let placeMarkerStyle: Int          = 3      // vyfe iteration 6 winner: translucent + halo
-        static let labelSizeMultiplier: Double    = 1.0    // unchanged from style defaults
+        static let labelSizeMultiplier: Double    = 1.25    // unchanged from style defaults
         // y7l0 spike — initial recommendations:
         //   style: 1 (filled chip) — preserves visual weight when swapping out AK
         //   color: 0 (slate blue)  — cool counterpart to warm AK/+ palette
