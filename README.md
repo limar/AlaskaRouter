@@ -74,7 +74,7 @@ Status: app builds and runs on iOS 26.5 simulator and device. Map, search, trip 
 - **[OpenTopoMap](https://opentopomap.org)** raster basemap (CC-BY-SA) — the visual identity. World skeleton at z=0–5 + Alaska statewide at z=6–10, bundled offline.
 - **[OSRM](http://project-osrm.org)** public router — snap-to-road geometry at trip-plan time, cached per segment
 - **SwiftData** — local-only persistence (Trip, Waypoint, BlockSeparator)
-- **SQLite FTS5** — 12 k Alaska places, two-stage retrieval with prefix match + Levenshtein rerank, sub-millisecond queries
+- **SQLite FTS5** — ~34 k Alaska places merged from 8 sources (OSM, GNIS, Wikidata, RIDB/Recreation.gov, BLM, Alaska DNR, Kenai Borough, ACOA), with campground/cabin booking + contact data; two-stage retrieval with prefix match + Levenshtein rerank, sub-millisecond queries. See [`docs/DATA-PIPELINE.md`](docs/DATA-PIPELINE.md).
 - **CoreLocation** — GPS for locate-me; no tracking, no telemetry
 - **xcodegen** — `project.yml` is the source of truth; the `.xcodeproj` is generated and gitignored
 - **iOS 26.5 / Swift 6 / Xcode 26.5** — latest-only, no backwards compat
@@ -99,6 +99,8 @@ open AlaskaRouter.xcodeproj
 
 Then ⌘R in Xcode. The first launch creates an empty trip and shows a one-time welcome card.
 
+> The offline **search database** (`AlaskaRouter/Resources/alaska-places.sqlite`, ~9 MB) is **committed**, so search works out of the box — no API key, Python, or extra setup needed just to build and run. Only the tile pack needs fetching.
+
 To simulate being somewhere in Alaska (for locate-me testing):
 
 ```bash
@@ -106,7 +108,17 @@ xcrun simctl privacy booted grant location dev.alaskarouter.AlaskaRouter
 xcrun simctl location  booted set 63.86,-148.97   # Healy, AK
 ```
 
-If you'd rather regenerate the tile pack from scratch (≈2 hours of polite scraping from OpenTopoMap), see [`tools/build-pack/README.md`](tools/build-pack/README.md).
+### Regenerating bundled data
+
+Both offline datasets are regenerable. You only need this to *refresh* the data —
+the committed search DB and the fetched tile pack are enough to build and run.
+
+- **Search DB** (8-source campground/POI gazetteer): prerequisites, the free RIDB
+  API key + `.env`, the OSM extract download, and `run.sh` are documented in
+  **[`docs/DATA-PIPELINE.md`](docs/DATA-PIPELINE.md)** (deep reference: [`tools/build-places/README.md`](tools/build-places/README.md)).
+- **Tile pack** (≈2 h of polite OpenTopoMap scraping): see [`tools/build-pack/README.md`](tools/build-pack/README.md).
+
+[`docs/DATA-PIPELINE.md`](docs/DATA-PIPELINE.md) is the single orientation map for both.
 
 ## Roadmap
 
