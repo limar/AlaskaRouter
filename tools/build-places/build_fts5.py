@@ -637,6 +637,70 @@ def file_md5(path: Path) -> str:
     return h.hexdigest()
 
 
+# Source priority for dedup winner selection (lower = higher priority).
+# Federal authoritative data and state/local GIS outrank crowd-sourced OSM for
+# the SAME logical place (they carry booking + canonical naming); OSM still
+# outranks the name-only GNIS / Wikidata long tail; private scraped data is
+# lowest (geocoded / approximate). AlaskaRouter-lzrh.
+SOURCE_RANK = {
+    "ridb": 0,
+    "ak_dnr_parks": 1, "blm_ak": 1, "kpb": 1,
+    "osm": 2,
+    "gnis": 3,
+    "wikidata": 4,
+    "acoa": 5,
+}
+
+# Contact/booking fields backfilled into a cluster winner from its duplicates.
+_BACKFILL = ("phone", "website", "booking_method", "open_season", "source_url")
+
+
+def _src_rank(c: Candidate) -> int:
+    return SOURCE_RANK.get(source_of(c.src_type), 9)
+
+
+def _merge_alt_names(winner: Candidate, members: list[Candidate]) -> str:
+    """Union alt_names across a cluster and fold in any member NAME that differs
+    from the winner's, so a query for a losing source's name still hits the
+    merged row. Order-preserving, case-insensitive dedup."""
+    seen: set[str] = {winner.name.casefold()}
+    parts: list[str] = []
+
+    def add(s: str) -> None:
+        for tok in (s or "").split(" | "):
+            tok = tok.strip()
+            if tok and tok.casefold() not in seen:
+                seen.add(tok.casefold())
+                parts.append(tok)
+
+    add(winner.alt_names)
+    for m in members:
+        if m is winner:
+            continue
+        add(m.name)
+        add(m.alt_names)
+    return " | ".join(parts)
+
+
+def reduce_cluster(members: list[Candidate]) -> Candidate:
+    """Collapse duplicate candidates into one. Winner = highest importance, then
+    highest source priority (lowest SOURCE_RANK). The winner's EMPTY contact
+    fields are backfilled from the other members in source-priority order, and
+    alt_names is unioned across the cluster so recall on every source's name and
+    aliases survives even when a different source wins the canonical row.
+    AlaskaRouter-lzrh."""
+    if len(members) == 1:
+        return members[0]
+    winner = max(members, key=lambda c: (c.importance, -_src_rank(c)))
+    ordered = sorted(members, key=_src_rank)   # fill empties by source priority
+    vals = {f: getattr(winner, f) for f in _BACKFILL}
+    for c in ordered:
+        for f in _BACKFILL:
+            if not vals[f] and getattr(c, f):
+                vals[f] = getattr(c, f)
+    return winner._replace(alt_names=_merge_alt_names(winner, members), **vals)
+
+
 def build_db():
     if DB.exists():
         DB.unlink()
@@ -765,19 +829,18 @@ def build_db():
     external_rows = external_candidates(DATA)
     candidates.extend(external_rows)
 
-    # Pass 2a: cheap dict-key dedupe on (name_lower, lat_rounded, lon_rounded).
-    # Catches the easy case — same name at the same ~150 m rounded coord.
-    # Keep highest importance; on ties, the first-inserted survives (Python
-    # dict semantics), which means OSM wins over GNIS over Wikidata.
-    dedup: dict[tuple[str, float, float], Candidate] = {}
+    # Pass 2a: group on (name_lower, lat_rounded, lon_rounded) — same name at the
+    # same ~150 m rounded coord — and collapse each group with reduce_cluster
+    # (source-priority winner + contact backfill + alt_names union).
+    # AlaskaRouter-lzrh.
+    from collections import defaultdict
+    groups_a: dict[tuple[str, float, float], list[Candidate]] = defaultdict(list)
     for row in candidates:
         key = (row.name.casefold(),
                round(row.lat, ROUND_COORD_DIGITS),
                round(row.lon, ROUND_COORD_DIGITS))
-        prev = dedup.get(key)
-        if prev is None or row.importance > prev.importance:   # strictly greater
-            dedup[key] = row
-    stage_a = list(dedup.values())
+        groups_a[key].append(row)
+    stage_a = [reduce_cluster(m) for m in groups_a.values()]
     after_a = len(stage_a)
 
     # Pass 2b: name-cluster dedupe (AlaskaRouter-d1d6). Group survivors by
@@ -786,10 +849,8 @@ def build_db():
     # even if the cheap rounded-coord key missed it (cross-source centroid
     # drift, unlucky rounding boundaries, etc).
     #
-    # Per-cluster winner: max(importance). On ties, Python's max returns the
-    # FIRST occurrence — and we walk stage_a in its original order (OSM
-    # first, then GNIS, then Wikidata), so the source-priority tiebreak from
-    # 2a is preserved.
+    # Per-cluster winner + backfill via reduce_cluster (source-priority winner,
+    # contact backfill, alt_names union). AlaskaRouter-lzrh.
     from math import radians, sin, cos, asin, sqrt
     def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         dlat = radians(lat2 - lat1)
@@ -797,33 +858,31 @@ def build_db():
         a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
         return 2.0 * 6371.0 * asin(sqrt(a))
 
-    by_name: dict[str, list[tuple]] = {}
+    by_name: dict[str, list[Candidate]] = {}
     for row in stage_a:
-        by_name.setdefault(row[6].casefold(), []).append(row)
+        by_name.setdefault(row.name.casefold(), []).append(row)
 
-    final: list[tuple] = []
+    final: list[Candidate] = []
     for _, rows in by_name.items():
         if len(rows) == 1:
             final.append(rows[0])
             continue
         # Greedy clustering: each row joins the first existing cluster whose
         # representative (the first row added to it) is within NAME_CLUSTER_KM.
-        clusters: list[list[tuple]] = []
+        clusters: list[list[Candidate]] = []
         for row in rows:
-            lat, lon = row[2], row[3]
+            lat, lon = row.lat, row.lon
             placed = False
             for cluster in clusters:
                 rep = cluster[0]
-                if haversine_km(lat, lon, rep[2], rep[3]) <= NAME_CLUSTER_KM:
+                if haversine_km(lat, lon, rep.lat, rep.lon) <= NAME_CLUSTER_KM:
                     cluster.append(row)
                     placed = True
                     break
             if not placed:
                 clusters.append([row])
-        # Winner per cluster: highest importance; ties → first encountered
-        # (OSM-first preference preserved by stage_a ordering).
         for cluster in clusters:
-            final.append(max(cluster, key=lambda r: r[5]))
+            final.append(reduce_cluster(cluster))
 
     deduped = final
     collapsed = len(candidates) - len(deduped)

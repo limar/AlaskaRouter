@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ief3
 title: Campground & POI data expansion — multi-source ingestion
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-06-02T09:59:13Z
-updated_at: 2026-06-02T09:59:45Z
+updated_at: 2026-06-02T12:39:53Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -45,3 +45,25 @@ New sources from the investigation, ranked for *our* constraints (keyless/OSS-le
 - Stage 4 — State & local GIS: generic ArcGIS fetcher + layer registry
 - Stage 5 — Private directories: polite scraper + geocoder (ToS-gated)
 - Stage 6 — Cross-source dedup tuning, QA report, README runbook, ship
+
+## Summary of Changes
+
+Delivered across 6 stages (all child beans completed). The unified offline gazetteer grew from 3 sources to 8, with a repeatable per-source tooling layer under tools/build-places/sources/.
+
+### Result
+- DB: 33,470 -> 34,068 rows. Campgrounds 388 -> 493; public-use cabins 0 -> 293; huts -> 136. booking_method on 374 rows (online_portal 256), with phone/website/source_url and recreation.gov deep-links.
+- New sources: RIDB/Recreation.gov (federal), BLM AK Recreation, Alaska DNR State Parks, Kenai Peninsula Borough (keyless ArcGIS), ACOA private campgrounds (robots-checked scrape + geocode). OSM contact tags now harvested too.
+- schema v5: place_meta + phone/website/booking_method/open_season/source_url (additive, app-compatible).
+
+### Repeatability
+- sources/common.py SourceRecord contract; every fetcher idempotent (--force), fails loud, writes data/source-*.jsonl; build_fts5 globs them. run.sh is one-shot; qa_report.py validates. README documents endpoints, the RIDB key (.env), robots/ToS posture, and expected yields. Adding a source = write one fetcher (or one LayerSpec for ArcGIS).
+
+### Notable
+- Fixed a pre-existing bug: OSM ids were never captured (all osm_type='unknown').
+- RIDB offset paging is unstable without sort=Name.
+- Cross-source dedup uses source-priority + contact backfill + alt_names union; shared-URL/ID matching evaluated and skipped (no cross-provider shared ids).
+
+### Deferred (follow-ups)
+- AlaskaRouter-ytes: surface booking/phone/website in the app UI (data already ships).
+- Broader private directories (Alaska Family Motorhomes, ACVB, Alaska.org) and paid AllStays/Campendium — out of scope (ACOA-only by decision; no paid subscriptions). The scrape_acoa.py pattern generalizes if wanted.
+- In-app visual verification of campground search.
