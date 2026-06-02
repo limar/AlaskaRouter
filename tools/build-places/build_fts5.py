@@ -37,6 +37,14 @@ WIKIDATA_JSONL = DATA / "wikidata-ak.jsonl"  # Wikidata; fetched by fetch_wikida
 DB = DATA / "pois.sqlite"
 PLACES_GEOJSON = DATA / "places.geojson"   # AlaskaRouter-vyfe — for map rendering
 
+# Shared source-fetcher contract (sources/common.py). build_fts5 runs as a
+# script so ROOT (its own dir) is on sys.path; the `sources` package resolves
+# against it. AlaskaRouter-l48r.
+sys.path.insert(0, str(ROOT))
+from sources.common import (   # noqa: E402  (after sys.path tweak, by design)
+    Candidate, read_jsonl, source_of, stable_id,
+)
+
 REGION = "Alaska"
 # Schema v3 (AlaskaRouter-22h7 milestone 1):
 # - Adds `source` column to place_meta ('osm' or 'gnis').
@@ -46,7 +54,13 @@ REGION = "Alaska"
 # - Merges USGS GNIS Alaska entries (~30 k natural-feature names). OSM wins
 #   on coord-collision dedup; GNIS fills the long tail of named peaks,
 #   lakes, capes, bays, glaciers, etc.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
+# v5 (AlaskaRouter-l48r): add campground/POI enrichment columns to place_meta —
+# phone, website, booking_method, open_season, source_url (all TEXT DEFAULT '').
+# Populated by the per-source fetchers under sources/ (RIDB, ArcGIS layers,
+# scraped directories) and by OSM contact-tag harvesting (Stage 2). The iOS app
+# reads place_meta by NAMED columns, so these are backward-compatible: existing
+# builds keep working and the columns sit unused until the app surfaces them.
 # v4 (AlaskaRouter-b7g0): add `admin_area` column to place_meta. For GNIS
 # rows it's the source `county_name` with the borough/census-area suffix
 # stripped ("Denali Borough" → "Denali"). For OSM/Wikidata rows it's
@@ -79,6 +93,7 @@ def categorize(tags: dict) -> str | None:
     if tags.get("amenity") == "fuel": return "fuel"
     if tags.get("amenity") == "drinking_water": return "water"
     if tags.get("amenity") == "ranger_station": return "ranger_station"
+    if tags.get("amenity") == "sanitary_dump_station": return "dump_station"  # AlaskaRouter-ix1e
     if tags.get("amenity") == "charging_station": return "ev_charging"
     if tags.get("amenity") in {"bicycle_rental", "motorcycle_rental",
                                 "car_rental", "boat_rental"}: return "vehicle_service"
@@ -303,8 +318,46 @@ def wikidata_candidates(path: Path) -> list[tuple]:
             # names if we extended the SPARQL — out of scope for v1.
             # admin_area starts empty; the inheritance pass after dedup fills
             # it in from the nearest GNIS row within ADMIN_INHERIT_KM (b7g0).
-            out.append(("wikidata", qnum, lat, lon, category, importance, name, "", ""))
+            out.append(Candidate("wikidata", qnum, lat, lon, category, importance, name, "", ""))
     print(f"[wikidata] kept={len(out):,}  unmapped_type={skipped_no_cat:,}")
+    return out
+
+
+def external_candidates(data_dir: Path) -> list[Candidate]:
+    """Read every `data/source-*.jsonl` produced by the fetchers under
+    sources/ and turn each normalized SourceRecord into a Candidate. Importance
+    is assigned here from the shared IMPORTANCE table (keyed on category) so the
+    fetchers never need to know our ranking, and the new v5 fields (phone,
+    website, booking_method, open_season, source_url) ride straight through.
+
+    Appended to the candidate list AFTER OSM/GNIS/Wikidata for now — external
+    rows currently LOSE dedup ties to those three. Stage 6 (AlaskaRouter-lzrh)
+    reorders by real source priority (federal > state/local > OSM > GNIS >
+    Wikidata > private). AlaskaRouter-l48r."""
+    out: list[Candidate] = []
+    paths = sorted(data_dir.glob("source-*.jsonl"))
+    if not paths:
+        print("[source] no data/source-*.jsonl yet — skipping external sources")
+        return out
+    per_source: dict[str, int] = {}
+    for p in paths:
+        n = 0
+        for rec in read_jsonl(p):
+            out.append(Candidate(
+                src_type=rec.source,
+                src_id=stable_id(rec.source_key),
+                lat=float(rec.lat), lon=float(rec.lon),
+                category=rec.category,
+                importance=IMPORTANCE.get(rec.category, 0.2),
+                name=rec.name, alt_names=rec.alt_names, admin_area=rec.admin_area,
+                phone=rec.phone, website=rec.website,
+                booking_method=rec.booking_method, open_season=rec.open_season,
+                source_url=rec.source_url,
+            ))
+            per_source[rec.source] = per_source.get(rec.source, 0) + 1
+            n += 1
+        print(f"[source] {p.name}: {n:,} records")
+    print(f"[source] external totals: {per_source}")
     return out
 
 
@@ -413,7 +466,7 @@ def gnis_candidates(path: Path) -> list[tuple]:
                 admin = strip_borough_suffix(row[i_county])
             importance = IMPORTANCE.get(category, 0.2)
             # GNIS doesn't carry alt names in this file; keep alt_names empty.
-            out.append(("gnis", fid, lat, lon, category, importance, name, "", admin))
+            out.append(Candidate("gnis", fid, lat, lon, category, importance, name, "", admin))
     top_skipped = sorted(skipped_class.items(), key=lambda kv: -kv[1])[:6]
     print(f"[gnis] kept={len(out):,}  bad_coords={skipped_coord:,}  "
           f"top_skipped_classes={top_skipped}")
@@ -429,6 +482,8 @@ IMPORTANCE = {
     "fuel": 0.6,
     "settlement": 0.55,
     "lodging": 0.5, "camping": 0.5, "ranger_station": 0.5, "river_crossing": 0.5,
+    "cabin": 0.5, "trailhead": 0.45, "boat_launch": 0.4, "dump_station": 0.3,  # AlaskaRouter-l48r
+
     "hut": 0.45, "waterfall": 0.45, "hot_spring": 0.45,
     "spring": 0.4, "viewpoint": 0.4, "attraction": 0.4, "lighthouse": 0.4, "island": 0.4,
     "lake": 0.4,                                # GNIS named lakes (3k+ in Alaska)
@@ -485,6 +540,58 @@ def alt_names(tags: dict, primary: str | None) -> str:
         seen.add(v.casefold())
         parts.append(v)
     return " | ".join(parts)
+
+
+# Categories for which OSM contact/booking tags are worth harvesting into the
+# v5 columns (Stage 2, AlaskaRouter-ix1e). Scoped to overnight/trip-planning
+# POIs — harvesting phone/website for every restaurant/bank would bloat the DB
+# for little routing value.
+CONTACT_CATEGORIES = {"camping", "lodging", "hut", "picnic",
+                      "ranger_station", "visitor_center"}
+
+
+def extract_contact(tags: dict, osm_type: str, osm_id: int) -> tuple[str, str, str, str, str]:
+    """Harvest (phone, website, booking_method, open_season, source_url) from
+    an OSM feature's tags. Returns empties when nothing is tagged.
+
+    booking_method is asserted ONLY from explicit booking semantics — we do NOT
+    infer `online_portal` from the mere presence of a homepage, because a
+    campground website is usually marketing, not a booking portal (house rule:
+    don't fabricate data we can't stand behind). Confidence ladder:
+      reservation=no                         -> no_reservations
+      reservation in {required,yes,...}      -> online_portal (if website) /
+                                                phone_email (if phone) / unknown
+      fee=no (free site, AK norm: walk-up)   -> walk_in   (best-effort)
+      otherwise                              -> "" (unsaid)
+    phone/website are still stored regardless, so the app can show "call to
+    book" even when booking_method stays "".
+    """
+    def first(*keys: str) -> str:
+        for k in keys:
+            v = tags.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return ""
+
+    phone = first("phone", "contact:phone", "contact:mobile")
+    website = first("website", "contact:website", "url", "contact:url")
+    open_season = first("opening_hours", "opening_hours:camping", "seasonal")
+
+    res = first("reservation").lower()
+    fee = first("fee").lower()
+    if res == "no":
+        booking = "no_reservations"
+    elif res in {"required", "yes", "recommended", "members_only", "online"}:
+        booking = "online_portal" if website else ("phone_email" if phone else "unknown")
+    elif fee == "no":
+        booking = "walk_in"
+    else:
+        booking = ""
+
+    source_url = ""
+    if osm_type in {"node", "way", "relation"} and osm_id:
+        source_url = f"https://www.openstreetmap.org/{osm_type}/{osm_id}"
+    return phone, website, booking, open_season, source_url
 
 
 def export_geojson():
@@ -554,7 +661,13 @@ def build_db():
       name TEXT NOT NULL,
       alt_names TEXT NOT NULL,
       source   TEXT NOT NULL DEFAULT 'osm',
-      admin_area TEXT NOT NULL DEFAULT ''
+      admin_area TEXT NOT NULL DEFAULT '',
+      -- v5 (AlaskaRouter-l48r) campground/POI enrichment; '' when unknown.
+      phone          TEXT NOT NULL DEFAULT '',
+      website        TEXT NOT NULL DEFAULT '',
+      booking_method TEXT NOT NULL DEFAULT '',
+      open_season    TEXT NOT NULL DEFAULT '',
+      source_url     TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX idx_place_meta_cat ON place_meta(category);
     CREATE INDEX idx_place_meta_source ON place_meta(source);
@@ -574,7 +687,7 @@ def build_db():
     print(f"[db] {len(features):,} raw features")
 
     # Pass 1: collect candidates.
-    candidates: list[tuple[str, int, float, float, str, float, str, str]] = []
+    candidates: list[Candidate] = []
     skipped_no_name = 0
     skipped_no_cat = 0
     skipped_no_geom = 0
@@ -598,7 +711,12 @@ def build_db():
             skipped_no_geom += 1; continue
         lat, lon = centroid
 
-        oid = props.get("@id") or ""
+        # osmium `export --add-unique-id=type_id` writes the id at the Feature
+        # top level ("n420361886"), NOT into properties["@id"]. Read it from
+        # there; fall back to properties for older exports. (Pre-existing bug:
+        # every OSM row was stored osm_type="unknown"/osm_id=0 — fixed here so
+        # source_url can be built. AlaskaRouter-ix1e.)
+        oid = feat.get("id") or props.get("@id") or ""
         if isinstance(oid, str) and oid and oid[0] in "nwr":
             osm_type = {"n": "node", "w": "way", "r": "relation"}[oid[0]]
             try: osm_id = int(oid[1:])
@@ -608,11 +726,21 @@ def build_db():
 
         alts = alt_names(props, name)
         importance = IMPORTANCE.get(category, 0.2)
+        # Harvest contact/booking tags for overnight/trip POIs (Stage 2). Other
+        # categories leave the v5 columns empty.
+        if category in CONTACT_CATEGORIES:
+            phone, website, booking, open_season, source_url = \
+                extract_contact(props, osm_type, osm_id)
+        else:
+            phone = website = booking = open_season = source_url = ""
         # admin_area starts empty; inheritance pass after dedup fills it from
         # the nearest GNIS row within ADMIN_INHERIT_KM (b7g0). OSM features
         # CAN carry admin via the addr:* tags or via admin relations, but we
         # don't extract those today — nearest-GNIS heuristic is enough for v1.
-        candidates.append((osm_type, osm_id, lat, lon, category, importance, name, alts, ""))
+        candidates.append(Candidate(
+            osm_type, osm_id, lat, lon, category, importance, name, alts, "",
+            phone=phone, website=website, booking_method=booking,
+            open_season=open_season, source_url=source_url))
 
     print(f"[db] osm passed-filter={len(candidates):,} no_name={skipped_no_name:,} no_cat={skipped_no_cat:,} no_geom={skipped_no_geom:,}")
     osm_count = len(candidates)
@@ -631,16 +759,23 @@ def build_db():
     wikidata_rows = wikidata_candidates(WIKIDATA_JSONL)
     candidates.extend(wikidata_rows)
 
+    # External sources — every data/source-*.jsonl emitted by the fetchers under
+    # sources/ (RIDB, ArcGIS layers, scraped directories). Empty until those
+    # stages land, so this is a no-op for the current OSM+GNIS+Wikidata build.
+    external_rows = external_candidates(DATA)
+    candidates.extend(external_rows)
+
     # Pass 2a: cheap dict-key dedupe on (name_lower, lat_rounded, lon_rounded).
     # Catches the easy case — same name at the same ~150 m rounded coord.
     # Keep highest importance; on ties, the first-inserted survives (Python
     # dict semantics), which means OSM wins over GNIS over Wikidata.
-    dedup: dict[tuple[str, float, float], tuple] = {}
+    dedup: dict[tuple[str, float, float], Candidate] = {}
     for row in candidates:
-        _, _, lat, lon, _, importance, name, _, _ = row
-        key = (name.casefold(), round(lat, ROUND_COORD_DIGITS), round(lon, ROUND_COORD_DIGITS))
+        key = (row.name.casefold(),
+               round(row.lat, ROUND_COORD_DIGITS),
+               round(row.lon, ROUND_COORD_DIGITS))
         prev = dedup.get(key)
-        if prev is None or row[5] > prev[5]:   # row[5] is importance (strictly greater)
+        if prev is None or row.importance > prev.importance:   # strictly greater
             dedup[key] = row
     stage_a = list(dedup.values())
     after_a = len(stage_a)
@@ -700,7 +835,8 @@ def build_db():
     # row with non-empty admin_area within ADMIN_INHERIT_KM and adopt its
     # admin_area. Bbox-prefilter via an integer-degree-lat hash so we don't
     # haversine every donor.
-    donors = [(r[2], r[3], r[8]) for r in deduped if r[0] == "gnis" and r[8]]
+    donors = [(r.lat, r.lon, r.admin_area)
+              for r in deduped if r.src_type == "gnis" and r.admin_area]
     donor_by_band: dict[int, list[tuple[float, float, str]]] = {}
     for lat, lon, admin in donors:
         donor_by_band.setdefault(int(lat // 1), []).append((lat, lon, admin))
@@ -714,9 +850,9 @@ def build_db():
     inherited = 0
     enriched: list[tuple] = []
     for row in deduped:
-        if row[8]:
+        if row.admin_area:
             enriched.append(row); continue
-        lat, lon = row[2], row[3]
+        lat, lon = row.lat, row.lon
         band = int(lat // 1)
         best_d = ADMIN_INHERIT_KM + 1.0
         best_admin = ""
@@ -728,40 +864,43 @@ def build_db():
                 if dist < best_d:
                     best_d = dist; best_admin = d_admin
         if best_admin and best_d <= ADMIN_INHERIT_KM:
-            enriched.append((*row[:8], best_admin))
+            enriched.append(row._replace(admin_area=best_admin))
             inherited += 1
         else:
             enriched.append(row)
     deduped = enriched
-    n_with_admin = sum(1 for r in deduped if r[8])
+    n_with_admin = sum(1 for r in deduped if r.admin_area)
     print(f"[db] admin_area: {n_with_admin:,}/{len(deduped):,} rows have admin "
           f"({inherited:,} inherited from nearest GNIS within {ADMIN_INHERIT_KM:.0f} km)")
 
     # Pass 3: insert.
     cur.execute("BEGIN")
-    for osm_type, osm_id, lat, lon, category, importance, name, alts, admin in deduped:
-        # source is derived from the legacy osm_type slot: GNIS rows
-        # carry "gnis", Wikidata rows carry "wikidata", OSM rows carry
-        # {node,way,relation,unknown}.
-        source = (
-            "gnis" if osm_type == "gnis"
-            else "wikidata" if osm_type == "wikidata"
-            else "osm"
-        )
+    for c in deduped:
+        # source is derived from src_type via source_of(): OSM geometry types
+        # collapse to "osm"; gnis/wikidata/<external source> pass through.
+        source = source_of(c.src_type)
         cur.execute(
-            "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names, source, admin_area) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (osm_type, osm_id, lat, lon, category, importance, name, alts, source, admin),
+            "INSERT INTO place_meta (osm_type, osm_id, lat, lon, category, importance, name, alt_names, source, admin_area, phone, website, booking_method, open_season, source_url) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (c.src_type, c.src_id, c.lat, c.lon, c.category, c.importance, c.name,
+             c.alt_names, source, c.admin_area, c.phone, c.website,
+             c.booking_method, c.open_season, c.source_url),
         )
         rid = cur.lastrowid
         cur.execute(
             "INSERT INTO places_word (rowid, name, alt_names, category, region) VALUES (?,?,?,?,?)",
-            (rid, name, alts, category, REGION),
+            (rid, c.name, c.alt_names, c.category, REGION),
         )
 
-    # Per-source row counts (after dedup) for diagnostics.
-    n_osm      = sum(1 for r in deduped if r[0] not in ("gnis", "wikidata"))
-    n_gnis     = sum(1 for r in deduped if r[0] == "gnis")
-    n_wikidata = sum(1 for r in deduped if r[0] == "wikidata")
+    # Per-source row counts (after dedup) for diagnostics. source_of() folds
+    # OSM geometry types into "osm"; everything else is its own source label.
+    from collections import Counter
+    src_counts = Counter(source_of(r.src_type) for r in deduped)
+    n_osm      = src_counts.get("osm", 0)
+    n_gnis     = src_counts.get("gnis", 0)
+    n_wikidata = src_counts.get("wikidata", 0)
+    n_external = sum(v for k, v in src_counts.items()
+                     if k not in ("osm", "gnis", "wikidata"))
 
     # Metadata.
     metadata = {
@@ -779,9 +918,12 @@ def build_db():
         "osm_count": str(n_osm),
         "gnis_count": str(n_gnis),
         "wikidata_count": str(n_wikidata),
+        "external_count": str(n_external),
+        "source_counts": json.dumps(dict(src_counts)),
         "osm_pre_dedup": str(osm_count),
         "gnis_pre_dedup": str(len(gnis_rows)),
         "wikidata_pre_dedup": str(len(wikidata_rows)),
+        "external_pre_dedup": str(len(external_rows)),
     }
     for k, v in metadata.items():
         cur.execute("INSERT INTO metadata (key, value) VALUES (?, ?)", (k, v))
@@ -804,21 +946,16 @@ def build_db():
     # launch + map render, ~5 MB compact vs ~8 MB pretty.
     print(f"[places-geojson] writing {PLACES_GEOJSON.name}")
     features = []
-    for osm_type, osm_id, lat, lon, category, importance, name, alts, admin in deduped:
-        source = (
-            "gnis" if osm_type == "gnis"
-            else "wikidata" if osm_type == "wikidata"
-            else "osm"
-        )
+    for c in deduped:
         features.append({
             "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "geometry": {"type": "Point", "coordinates": [c.lon, c.lat]},
             "properties": {
-                "name": name,
-                "category": category,
-                "importance": importance,
-                "source": source,
-                "admin_area": admin,
+                "name": c.name,
+                "category": c.category,
+                "importance": c.importance,
+                "source": source_of(c.src_type),
+                "admin_area": c.admin_area,
             },
         })
     fc = {"type": "FeatureCollection", "features": features}

@@ -22,6 +22,15 @@ AlaskaRouter.xcodeproj/
 Package.resolved
 .swiftpm/
 
+# Secrets — API keys for data-source fetchers (RIDB, etc.). Each fetcher reads
+# its key from the environment; tools/build-places/.env is auto-sourced for
+# convenience and MUST NEVER be committed. See tools/build-places/.env.example.
+.env
+tools/build-places/.env
+# Belt-and-suspenders: never commit a stray RIDB key file dropped anywhere.
+ridbapi.txt
+**/ridbapi.txt
+
 # Pipeline scratch data — regenerable from build scripts, too large for git.
 # The OSM PBF (~140 MB), filtered PBF, GeoJSON export, and GNIS .txt all live
 # here; tools/build-places/run.sh writes pois.sqlite into it and the user
@@ -41,6 +50,10 @@ tools/build-places/data/
 # Claude Code per-user (not shared); settings.json is shared and committed
 .claude/settings.local.json
 .claude/worktrees/
+
+# Python bytecode from the build-places tooling
+__pycache__/
+*.pyc
 
 # Editor noise
 *.swp
