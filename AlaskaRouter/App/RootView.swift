@@ -683,12 +683,17 @@ struct RootView: View {
 
     // MARK: - Actions: preview (research-first)
 
+    private func getCurrentZoom() -> Double {
+        mapCamera.state.debugDescription.split(separator: ",").last.flatMap(Double.init) ?? 15
+    }
+    
     private func handlePreviewSelected(_ result: SearchResult) {
         // Dismiss the keyboard so the user can see the callout + map.
         isSearchFieldFocused = false
+        let zoom = mapCamera.state.currentZoom ?? zoomForCategory(result.category)
         withAnimation(.smooth(duration: 0.45)) {
             previewedResult = result
-            mapCamera = .center(result.coord, zoom: zoomForCategory(result.category))
+            mapCamera = .center(result.coord, zoom: zoom)
             selectedWaypointID = nil
         }
     }
