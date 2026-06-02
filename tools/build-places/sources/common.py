@@ -19,9 +19,41 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple
+
+# tools/build-places/ (parent of this sources/ package) and its conventional
+# locations. Fetchers import these so every source writes to the same data dir
+# and reads keys from the same gitignored .env.
+BUILD_PLACES_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BUILD_PLACES_DIR / "data"
+ENV_FILE = BUILD_PLACES_DIR / ".env"
+
+
+def load_env() -> None:
+    """Load tools/build-places/.env into os.environ (without overriding values
+    already exported). Tiny KEY=VALUE parser — no python-dotenv dependency.
+    `.env` is gitignored; see .env.example."""
+    if not ENV_FILE.exists():
+        return
+    for raw in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
+
+def require_env(name: str, hint: str) -> str:
+    """Fetch a required secret from the environment (or .env). Fail LOUD with
+    an actionable hint when missing — house rule: no silent fallbacks."""
+    load_env()
+    v = os.environ.get(name, "").strip()
+    if not v:
+        raise SystemExit(f"[fatal] env var {name} is not set.\n  {hint}")
+    return v
 
 
 # --------------------------------------------------------------------------- #
