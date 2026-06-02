@@ -175,3 +175,56 @@ def read_jsonl(path: Path) -> Iterator[SourceRecord]:
             if not line:
                 continue
             yield SourceRecord(**json.loads(line))
+
+
+# --------------------------------------------------------------------------- #
+# Shared helpers for fetchers.
+# --------------------------------------------------------------------------- #
+# Acronyms / connectives for title-casing ALL-CAPS source names (RIDB, KPB).
+_KEEP_UPPER = {"RV", "NF", "NM", "NP", "BLM", "USFS", "USFWS", "ATV", "OHV",
+               "US", "USA", "II", "III", "IV", "ADA", "CG", "KPB", "ASP"}
+_KEEP_LOWER = {"of", "the", "and", "at", "on", "in", "to", "by", "for", "de"}
+
+
+def smart_title(name: str) -> str:
+    """Title-case an ALL-CAPS name ("BERNICE LAKE CAMPGROUND") while preserving
+    known acronyms and lowercasing connectives. Mixed-case names (already
+    human-formatted) are returned unchanged."""
+    name = (name or "").strip()
+    if not name or any(c.islower() for c in name):
+        return name
+    out: list[str] = []
+    for i, w in enumerate(name.split()):
+        u = w.strip(".,").upper()
+        if u in _KEEP_UPPER:
+            out.append(u)
+        elif i > 0 and w.lower() in _KEEP_LOWER:
+            out.append(w.lower())
+        else:
+            out.append(w[:1].upper() + w[1:].lower())
+    return " ".join(out)
+
+
+def geojson_centroid(geom: dict | None) -> tuple[float, float] | None:
+    """(lat, lon) centroid of a GeoJSON geometry. Mean of coords for poly/line,
+    direct for points. Returns None for empty/unsupported geometry."""
+    if not geom:
+        return None
+    t = geom.get("type")
+    c = geom.get("coordinates")
+    if not c and t != "GeometryCollection":
+        return None
+    if t == "Point":
+        return (c[1], c[0])
+    if t in ("MultiPoint", "LineString"):
+        pts = c
+    elif t == "MultiLineString" or t == "Polygon":
+        pts = [p for part in c for p in part]
+    elif t == "MultiPolygon":
+        pts = [p for poly in c for ring in poly for p in ring]
+    else:
+        return None
+    if not pts:
+        return None
+    return (sum(p[1] for p in pts) / len(pts),
+            sum(p[0] for p in pts) / len(pts))

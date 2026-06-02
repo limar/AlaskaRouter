@@ -34,7 +34,7 @@ import urllib.request
 # package parent on the path so `from common import …` resolves.
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 from common import (  # noqa: E402
-    DATA_DIR, SourceRecord, require_env, write_jsonl,
+    DATA_DIR, SourceRecord, require_env, smart_title, write_jsonl,
 )
 
 API = "https://ridb.recreation.gov/api/v1/facilities"
@@ -50,31 +50,6 @@ SOURCE = "ridb"
 KEY_HINT = ("Get a free key at https://ridb.recreation.gov/ (sign in -> Profile "
             "-> API Key), then put RIDB_API_KEY=<key> in tools/build-places/.env "
             "or export it.")
-
-# Acronyms / small words to preserve when title-casing ALL-CAPS RIDB names.
-_KEEP_UPPER = {"RV", "NF", "NM", "NP", "BLM", "USFS", "USFWS", "ATV", "OHV",
-               "US", "USA", "II", "III", "IV", "ADA", "CG"}
-_KEEP_LOWER = {"of", "the", "and", "at", "on", "in", "to", "by", "for", "de"}
-
-
-def smart_title(name: str) -> str:
-    """RIDB returns many names ALL-CAPS ("SARKAR LAKE CABIN"). Title-case those
-    while preserving known acronyms and lowercasing connectives. Mixed-case
-    names (already human-formatted) are left untouched."""
-    name = name.strip()
-    if not name or any(c.islower() for c in name):
-        return name
-    out: list[str] = []
-    for i, w in enumerate(name.split()):
-        u = w.strip(".,").upper()
-        if u in _KEEP_UPPER:
-            out.append(u)
-        elif i > 0 and w.lower() in _KEEP_LOWER:
-            out.append(w.lower())
-        else:
-            out.append(w[:1].upper() + w[1:].lower())
-    return " ".join(out)
-
 
 def classify(name: str, ftype: str) -> str | None:
     """Map an RIDB facility to one of build_fts5's categories. Non-spatial
