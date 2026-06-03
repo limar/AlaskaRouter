@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-03T07:32:08Z
+updated_at: 2026-06-03T07:42:33Z
 ---
 
 ## Why
@@ -559,3 +559,15 @@ The bounded production contour PBF import completed on sol-icomp-03.lab.gdc.il.i
 The first full tirex-batch enqueue after import failed because the Mapnik backend had not reloaded the opentopomap style, producing "map style opentopomap is not known" for 1225 metatile requests. Running tools/opentopomap-render/scripts/otm-docker.sh deps restarted tirex-backend-manager and tirex-master, after which a direct z11 test request rendered successfully with HTTP 200 and success=1 in /var/log/tirex/jobs.log.
 
 Re-enqueued alaska_z11 with: tirex-batch -p 8 -d map=opentopomap bbox=-180.0,51.0,-130.0,72.0 z=11. Early status after the fixed enqueue: count_error=0, count_rendered[opentopomap][11]=280, queue size=941, four active renderers, and 281 z11 PNG files under /mnt/tiles/opentopomap/11. Next step is to let Tirex drain the queue, then export with export-region-tiles.py alaska_z11 and pack with pack-mbtiles.py.
+
+## Alaska z11 Export and MBTiles Pack (2026-06-03)
+
+The fixed Tirex render drained successfully on the server: 1225 alaska_z11 metatiles rendered, queue size reached 0, and no new render errors appeared after the 2026-06-03T07:30:58 renderer restart.
+
+Export completed on sol-icomp-03.lab.gdc.il.infinidat.com under /home/mlifshitz/tiles/AlaskaRouter with tools/opentopomap-render/scripts/export-region-tiles.py alaska_z11 --force --jobs 16. Result: written=74955, skipped=0, failed=0.
+
+Packing completed on the server with tools/opentopomap-render/scripts/pack-mbtiles.py. The generated artifact is tools/opentopomap-render/data/mbtiles/alaska_z11.mbtiles, 409 MiB, with 74955 rows in the tiles table and metadata minzoom=11/maxzoom=11/format=png.
+
+During packing, the server Python 3.6 runtime exposed compatibility issues in export-region-tiles.py and pack-mbtiles.py. Updated those scripts locally and synced them to the server: removed postponed-annotation syntax from the exporter and made pack-mbtiles pass sqlite3.connect a string path. Added test_pack_mbtiles.py to cover MBTiles packing and the sqlite path compatibility.
+
+Next step: transfer alaska_z11.mbtiles back from the server, convert it with local pmtiles convert, then merge the z11 PMTiles with the existing z0..10 Alaska pack. The first transfer attempt from the local machine failed with DNS resolution for sol-icomp-03.lab.gdc.il.infinidat.com returning -65563; retry when local DNS/connection recovers.

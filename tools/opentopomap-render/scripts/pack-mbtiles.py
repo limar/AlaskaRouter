@@ -5,11 +5,10 @@ Input layout:
   <tiles-dir>/<z>/<x>/<y>.png
 """
 
-from __future__ import annotations
-
 import argparse
 import pathlib
 import sqlite3
+from typing import Optional
 
 
 def iter_tiles(root: pathlib.Path):
@@ -32,7 +31,7 @@ def main() -> int:
     out = pathlib.Path(args.mbtiles)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    db = sqlite3.connect(out)
+    db = sqlite3.connect(str(out))
     db.executescript(
         """
         CREATE TABLE IF NOT EXISTS metadata (name TEXT PRIMARY KEY, value TEXT);
@@ -49,8 +48,8 @@ def main() -> int:
     )
 
     count = 0
-    minzoom: int | None = None
-    maxzoom: int | None = None
+    minzoom = None  # type: Optional[int]
+    maxzoom = None  # type: Optional[int]
     for z, x, y, path in iter_tiles(tiles_dir):
         n = 2**z
         tms_y = (n - 1) - y

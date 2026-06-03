@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Export rendered XYZ PNG tiles from a local OpenTopoMap HTTP server."""
 
-from __future__ import annotations
-
 import argparse
 import concurrent.futures
 import json
@@ -11,6 +9,7 @@ import pathlib
 import sys
 import tempfile
 import time
+from typing import List, Optional, Tuple
 import urllib.error
 import urllib.request
 
@@ -21,7 +20,7 @@ DEFAULT_OUTPUT = ROOT / "data" / "tiles"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
-def lonlat_to_tile(lon: float, lat: float, z: int) -> tuple[int, int]:
+def lonlat_to_tile(lon: float, lat: float, z: int) -> Tuple[int, int]:
     n = 2**z
     x = int((lon + 180.0) / 360.0 * n)
     lat_rad = math.radians(lat)
@@ -29,7 +28,7 @@ def lonlat_to_tile(lon: float, lat: float, z: int) -> tuple[int, int]:
     return max(0, min(n - 1, x)), max(0, min(n - 1, y))
 
 
-def iter_region_tiles(bbox: list[float], zooms: list[int]):
+def iter_region_tiles(bbox: List[float], zooms: List[int]):
     lon_min, lat_min, lon_max, lat_max = bbox
     for z in zooms:
         x_min, y_max = lonlat_to_tile(lon_min, lat_min, z)
@@ -64,14 +63,14 @@ def write_tile(path: pathlib.Path, data: bytes) -> None:
     tmp_path.replace(path)
 
 
-def export_one(args) -> tuple[str, int, int, int, str | None]:
+def export_one(args) -> Tuple[str, int, int, int, Optional[str]]:
     z, x, y, base_url, out_root, force, retries, timeout = args
     path = out_root / str(z) / str(x) / f"{y}.png"
     if path.exists() and not force:
         return "skipped", z, x, y, None
 
     url = tile_url(base_url, z, x, y)
-    last_error: Exception | None = None
+    last_error = None  # type: Optional[Exception]
     for attempt in range(retries + 1):
         try:
             write_tile(path, fetch_tile(url, timeout))
@@ -84,7 +83,7 @@ def export_one(args) -> tuple[str, int, int, int, str | None]:
     return "failed", z, x, y, str(last_error)
 
 
-def parse_args(argv: list[str]) -> argparse.Namespace:
+def parse_args(argv: List[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("region_id")
     ap.add_argument("--base-url", default="http://127.0.0.1:8080/otm")
@@ -97,7 +96,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     regions = json.loads(CONFIG.read_text())["regions"]
     if args.region_id not in regions:
@@ -117,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         for z, x, y in tiles
     ]
     written = skipped = 0
-    failures: list[tuple[int, int, int, str | None]] = []
+    failures = []  # type: List[Tuple[int, int, int, Optional[str]]]
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         for status, z, x, y, error in pool.map(export_one, tasks):
             if status == "written":
