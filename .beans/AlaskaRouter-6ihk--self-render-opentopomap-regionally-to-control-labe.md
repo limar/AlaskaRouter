@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-05-30T14:37:24Z
+updated_at: 2026-06-03T07:32:08Z
 ---
 
 ## Why
@@ -551,3 +551,11 @@ Validation:
 ## Alaska Batched Import Handoff Correction (2026-05-30)
 
 The first batched restart exposed a Python 3.6 compatibility bug: subprocess.run(text=True) is not available inside jhassler/otm-docker. Patch import-contours-in-chunks.py to use universal_newlines=True instead. Also remove the ambiguous handoff marker for contour-warp-60_05_09_lon-158.42_-155.72lat67.41_67.43_local-source.osm.pbf because the log did not show a full Osm2pgsql completion for that file after the old parent process was stopped; reimport it from the last unambiguous marker rather than risk silently omitting contours.
+
+## Alaska z11 Render Started (2026-06-03)
+
+The bounded production contour PBF import completed on sol-icomp-03.lab.gdc.il.infinidat.com under /home/mlifshitz/tiles/AlaskaRouter. The marker file reached 3167/3167 entries and the final import log granted Tirex SELECT access to the contours database. Cheap readiness checks confirmed both contours.planet_osm_line and gis.planet_osm_line return rows.
+
+The first full tirex-batch enqueue after import failed because the Mapnik backend had not reloaded the opentopomap style, producing "map style opentopomap is not known" for 1225 metatile requests. Running tools/opentopomap-render/scripts/otm-docker.sh deps restarted tirex-backend-manager and tirex-master, after which a direct z11 test request rendered successfully with HTTP 200 and success=1 in /var/log/tirex/jobs.log.
+
+Re-enqueued alaska_z11 with: tirex-batch -p 8 -d map=opentopomap bbox=-180.0,51.0,-130.0,72.0 z=11. Early status after the fixed enqueue: count_error=0, count_rendered[opentopomap][11]=280, queue size=941, four active renderers, and 281 z11 PNG files under /mnt/tiles/opentopomap/11. Next step is to let Tirex drain the queue, then export with export-region-tiles.py alaska_z11 and pack with pack-mbtiles.py.
