@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-03T09:54:21Z
+updated_at: 2026-06-03T10:00:32Z
 ---
 
 ## Why
@@ -593,3 +593,13 @@ HD zoom cost estimate from the Alaska bbox [-180,51,-130,72] and measured z11 ou
 Decision: fix hillshade before expanding bundled zoom. Statewide z12 may be technically possible but is probably too large for the v1 bundled package. For higher road-detail zooms, prefer region packages over zoom-level packages so the user downloads recognizable places such as Dalton/Fairbanks/Denali/Kenai detail rather than an abstract z13 layer. The v1 bundle target remains z0..z11 plus correct hillshade; an HD experiment can render one Dalton/Galbraith package at z12..z13 to measure size and value.
 
 Current hillshade suspicion from server inspection: the OpenTopoMap XML includes hillshade layers, using /mnt/data/srtm/hillshade-30-jpeg.tif for z9..17 with grain-merge opacity 0.9. The high-resolution source exists, but the rendered result appears visually weak. Next work is to compare exact Dalton/Galbraith tiles against public OpenTopoMap, inspect/crop the hillshade raster for those tile bounds, and only then adjust the hillshade generation or style.
+
+## Alaska Hillshade Root Cause (2026-06-03)
+
+The z11 Alaska render used Alaska contour and OSM data but stale style-facing hillshade/relief rasters from the earlier Israel/Palestine proof run. gdalinfo on /mnt/data/srtm/warp-30.tif and warp-60.tif shows the Alaska bbox, but gdalinfo on /mnt/data/srtm/hillshade-30-jpeg.tif showed 33E..36E and 29N..34N. That explains the flat Dalton/Galbraith render: Mapnik had no hillshade coverage for Alaska.
+
+A Galbraith Lake Campground diagnostic used approximate z11 tile 173/482, bbox lon -149.58984375..-149.4140625 and lat 68.46379955520322..68.52823492039876. The installed app tile is 12 KiB and visually flat; the matching public OpenTopoMap tile is 20 KiB and has visible gray terrain relief. A crop from Alaska warp-30.tif rendered with gdaldem hillshade -z 2 shows healthy soft terrain, while z5/z7 are stronger but harsher. Therefore the immediate fix is to regenerate Alaska hillshade outputs from the existing Alaska warps, not to redownload DEM data or change the z factor first.
+
+Updated prepare-copernicus-dem.sh to support DEM_DERIVATIVES_ONLY=1 so existing warp-5000/1000/500/30 rasters can regenerate relief and hillshade without repeating the expensive Alaska warps. The script now writes derivative GeoTIFFs to temporary names and publishes them with mv, preventing a half-written style-facing hillshade file during long jobs. The high-zoom hillshade now writes hillshade-30-jpeg.tif directly as a tiled JPEG GeoTIFF to avoid the large hillshade-30.tif intermediate.
+
+Started the server regeneration on sol-icomp-03.lab.gdc.il.infinidat.com under /home/mlifshitz/tiles/AlaskaRouter with DEM_DERIVATIVES_ONLY=1, logging to logs/prepare-alaska-shading.log. It completed the low-resolution derivatives and is currently running gdaldem hillshade -z 2 against /mnt/data/srtm/warp-30.tif, writing /mnt/data/srtm/hillshade-30-jpeg.tmp.tif. When that finishes, verify gdalinfo shows Alaska coverage, render the Galbraith z11 sample, then rerender/export/repack Alaska z11.
