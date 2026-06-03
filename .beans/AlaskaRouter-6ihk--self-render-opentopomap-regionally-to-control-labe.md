@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-03T07:46:11Z
+updated_at: 2026-06-03T09:54:21Z
 ---
 
 ## Why
@@ -581,3 +581,15 @@ Merged the existing AlaskaRouter/Resources/alaska-pack.pmtiles z0..10 archive wi
 Updated the merged archive metadata maxzoom from 10 to 11 with pmtiles edit, then installed it as AlaskaRouter/Resources/alaska-pack.pmtiles. Updated AlaskaRouter/Resources/alaska-pack.manifest.json to version 2026-06-03, byte_size 868788161, Alaska coverage z6..11, Alaska tile_count 100266, and total_tile_count 101631.
 
 Validation: pmtiles verify passed on the installed app pack, pmtiles show reports max zoom 11 and metadata maxzoom 11, pmtiles tile 11/160/672 returned a valid PNG, and a Fairbanks-area sample tile 11/183/535 returned a 20 KiB 8-bit PNG.
+
+## Simulator Comparison, HD Zoom Cost, and Hillshade Plan (2026-06-03)
+
+User validation in the iPhone Simulator against opentopomap.org confirmed that the z11 pack is a real improvement: the app gained roughly one to two additional plus-button zoom steps, the rendered cartography is close to public OpenTopoMap, and the app experience is stronger than the raw map because of POIs and search.
+
+The remaining visual gap is terrain shading. Public OpenTopoMap has much stronger hillshade in mountainous areas; the app currently shows contours and water correctly but the relief is too flat. The first diagnostic target is the mountain area just west of Galbraith Lake Campground on the Dalton Highway, with additional checks around the Dalton corridor so the rendering pipeline is understood rather than tuned for one screenshot.
+
+HD zoom cost estimate from the Alaska bbox [-180,51,-130,72] and measured z11 output: z11 rendered 74,955 PNG tiles and added about 381 MiB as PMTiles. Full-state z12 is 299,294 tiles, about 1.49 GiB additional; z13 is 1,194,900 tiles, about 5.93 GiB additional; z14 is 4,777,324 tiles, about 23.71 GiB additional. Cumulative z11..z12 is about 1.86 GiB, and z11..z13 is about 7.79 GiB. These are output-package estimates only; render/export temporary storage and network transfer need extra headroom.
+
+Decision: fix hillshade before expanding bundled zoom. Statewide z12 may be technically possible but is probably too large for the v1 bundled package. For higher road-detail zooms, prefer region packages over zoom-level packages so the user downloads recognizable places such as Dalton/Fairbanks/Denali/Kenai detail rather than an abstract z13 layer. The v1 bundle target remains z0..z11 plus correct hillshade; an HD experiment can render one Dalton/Galbraith package at z12..z13 to measure size and value.
+
+Current hillshade suspicion from server inspection: the OpenTopoMap XML includes hillshade layers, using /mnt/data/srtm/hillshade-30-jpeg.tif for z9..17 with grain-merge opacity 0.9. The high-resolution source exists, but the rendered result appears visually weak. Next work is to compare exact Dalton/Galbraith tiles against public OpenTopoMap, inspect/crop the hillshade raster for those tile bounds, and only then adjust the hillshade generation or style.
