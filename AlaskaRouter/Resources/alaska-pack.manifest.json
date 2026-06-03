@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "pack_id": "alaska-pack",
-  "version": "2026-05-19",
+  "version": "2026-06-03",
   "title": "Alaska + World Skeleton",
-  "description": "OpenTopoMap raster tiles. World skeleton z=0-5 (every tile globally) + Alaska statewide z=6-10 (lon -180..-130, lat 51..72). Includes the Aleutian chain.",
+  "description": "OpenTopoMap raster tiles. World skeleton z=0-5 (every tile globally) + Alaska statewide z=6-11 (lon -180..-130, lat 51..72). Includes the Aleutian chain.",
   "source": {
     "name": "OpenTopoMap",
     "url": "https://opentopomap.org",
@@ -13,7 +13,7 @@
   "format": "pmtiles",
   "tile_format": "png",
   "file": "alaska-pack.pmtiles",
-  "byte_size": 468997849,
+  "byte_size": 868788161,
   "coverage": [
     {
       "name": "world_skeleton",
@@ -25,12 +25,12 @@
     {
       "name": "alaska",
       "minzoom": 6,
-      "maxzoom": 10,
+      "maxzoom": 11,
       "bbox": [-180.0, 51.0, -130.0, 72.0],
-      "tile_count": 25311
+      "tile_count": 100266
     }
   ],
-  "total_tile_count": 26676,
-  "built_at": "2026-05-19T00:08:27Z",
+  "total_tile_count": 101631,
+  "built_at": "2026-06-03T07:44:56Z",
   "notes": "v1: pack is bundled inside the app. v2+ will host regional packs in iCloud Drive and ship only the world skeleton in the binary."
 }

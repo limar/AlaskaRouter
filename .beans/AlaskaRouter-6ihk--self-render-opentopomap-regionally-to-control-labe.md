@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-03T07:42:33Z
+updated_at: 2026-06-03T07:46:11Z
 ---
 
 ## Why
@@ -571,3 +571,13 @@ Packing completed on the server with tools/opentopomap-render/scripts/pack-mbtil
 During packing, the server Python 3.6 runtime exposed compatibility issues in export-region-tiles.py and pack-mbtiles.py. Updated those scripts locally and synced them to the server: removed postponed-annotation syntax from the exporter and made pack-mbtiles pass sqlite3.connect a string path. Added test_pack_mbtiles.py to cover MBTiles packing and the sqlite path compatibility.
 
 Next step: transfer alaska_z11.mbtiles back from the server, convert it with local pmtiles convert, then merge the z11 PMTiles with the existing z0..10 Alaska pack. The first transfer attempt from the local machine failed with DNS resolution for sol-icomp-03.lab.gdc.il.infinidat.com returning -65563; retry when local DNS/connection recovers.
+
+## Alaska z11 PMTiles Merge and App Install (2026-06-03)
+
+The local transfer succeeded by forcing rsync to use ssh explicitly: rsync -az --partial --progress -e ssh. Converted the 409 MiB server MBTiles to tools/opentopomap-render/data/pmtiles/alaska_z11.pmtiles with pmtiles convert and verified it.
+
+Merged the existing AlaskaRouter/Resources/alaska-pack.pmtiles z0..10 archive with the new z11-only PMTiles into tools/opentopomap-render/data/pmtiles/alaska-pack-z11-merged.pmtiles. pmtiles verify passed. The merged archive has header min zoom 0, max zoom 11, addressed tile count 101631, tile entries 60349, and tile contents 54095.
+
+Updated the merged archive metadata maxzoom from 10 to 11 with pmtiles edit, then installed it as AlaskaRouter/Resources/alaska-pack.pmtiles. Updated AlaskaRouter/Resources/alaska-pack.manifest.json to version 2026-06-03, byte_size 868788161, Alaska coverage z6..11, Alaska tile_count 100266, and total_tile_count 101631.
+
+Validation: pmtiles verify passed on the installed app pack, pmtiles show reports max zoom 11 and metadata maxzoom 11, pmtiles tile 11/160/672 returned a valid PNG, and a Fairbanks-area sample tile 11/183/535 returned a 20 KiB 8-bit PNG.
