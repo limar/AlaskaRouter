@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-03T10:36:41Z
+updated_at: 2026-06-03T11:34:48Z
 ---
 
 ## Why
@@ -611,3 +611,13 @@ DEM derivative regeneration finished successfully. /mnt/data/srtm/hillshade-30-j
 Restarted Tirex/Mapnik so the renderer reopened the corrected raster. A targeted live render of Galbraith metatile z11 x=168 y=480 completed, increasing Tirex rendered count from 1225 to 1226. The sample tile 11/173/482 changed from the old flat 12 KiB PNG, sha256 186de497ac250bbdcce3185c4bd964f27d4981d8a3ed3622adb3225547dbd03a, to a corrected 20 KiB PNG, sha256 ada28d4e9b56b29f4a109e2d07dda5135b947e10c690b986165654f813a69444. This matches the public OpenTopoMap tile size class and confirms hillshade is now participating in the render.
 
 Next step started from this checkpoint: rerender all Alaska z11 metatiles with the corrected hillshade, then export, pack MBTiles, convert/merge PMTiles, and reinstall the app package.
+
+## Corrected Alaska z11 Pack Installed (2026-06-03)
+
+The corrected Alaska z11 rerender completed cleanly. Tirex jobs.log showed 2451 successful z11 metatile renders and 0 failed renders, with the final render around 2026-06-03T10:45:06Z. Forced export completed with written=74955, skipped=0, failed=0.
+
+Packed the corrected export into tools/opentopomap-render/data/mbtiles/alaska_z11.mbtiles on the server. The hillshaded MBTiles is 686 MiB, up from the previous 409 MiB unshaded/flat z11 pack. Transferred it locally, converted it to tools/opentopomap-render/data/pmtiles/alaska_z11.pmtiles, and verified the archive. Corrected z11 PMTiles is 655 MiB.
+
+Extracted the existing installed app pack to z0..10 to avoid stale z11 collisions, then merged that z0..10 archive with the corrected z11 PMTiles. The merged archive verified successfully and is installed as AlaskaRouter/Resources/alaska-pack.pmtiles. The installed pack is 1155303077 bytes, has maxzoom 11, addressed tile count 101631, tile entries 63847, and tile contents 58812.
+
+Validation: pmtiles verify passed on the installed app pack; pmtiles show reports header and metadata maxzoom 11; pmtiles tile AlaskaRouter/Resources/alaska-pack.pmtiles 11 173 482 returns a 20 KiB PNG with sha256 ada28d4e9b56b29f4a109e2d07dda5135b947e10c690b986165654f813a69444, matching the corrected Galbraith render.

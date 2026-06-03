@@ -13,7 +13,7 @@
   "format": "pmtiles",
   "tile_format": "png",
   "file": "alaska-pack.pmtiles",
-  "byte_size": 868788161,
+  "byte_size": 1155303077,
   "coverage": [
     {
       "name": "world_skeleton",
@@ -31,6 +31,6 @@
     }
   ],
   "total_tile_count": 101631,
-  "built_at": "2026-06-03T07:44:56Z",
+  "built_at": "2026-06-03T11:34:12Z",
   "notes": "v1: pack is bundled inside the app. v2+ will host regional packs in iCloud Drive and ship only the world skeleton in the binary."
 }
