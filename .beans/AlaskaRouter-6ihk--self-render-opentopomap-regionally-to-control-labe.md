@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-03T10:00:32Z
+updated_at: 2026-06-03T10:36:41Z
 ---
 
 ## Why
@@ -603,3 +603,11 @@ A Galbraith Lake Campground diagnostic used approximate z11 tile 173/482, bbox l
 Updated prepare-copernicus-dem.sh to support DEM_DERIVATIVES_ONLY=1 so existing warp-5000/1000/500/30 rasters can regenerate relief and hillshade without repeating the expensive Alaska warps. The script now writes derivative GeoTIFFs to temporary names and publishes them with mv, preventing a half-written style-facing hillshade file during long jobs. The high-zoom hillshade now writes hillshade-30-jpeg.tif directly as a tiled JPEG GeoTIFF to avoid the large hillshade-30.tif intermediate.
 
 Started the server regeneration on sol-icomp-03.lab.gdc.il.infinidat.com under /home/mlifshitz/tiles/AlaskaRouter with DEM_DERIVATIVES_ONLY=1, logging to logs/prepare-alaska-shading.log. It completed the low-resolution derivatives and is currently running gdaldem hillshade -z 2 against /mnt/data/srtm/warp-30.tif, writing /mnt/data/srtm/hillshade-30-jpeg.tmp.tif. When that finishes, verify gdalinfo shows Alaska coverage, render the Galbraith z11 sample, then rerender/export/repack Alaska z11.
+
+## Alaska Hillshade Regeneration Completed (2026-06-03)
+
+DEM derivative regeneration finished successfully. /mnt/data/srtm/hillshade-30-jpeg.tif is now a 1015 MiB tiled JPEG GeoTIFF with gdalinfo coverage over Alaska: upper-left 180W/72N, lower-right about 130W/51N, center about 155W/63.35N. The stale Israel/Palestine hillshade is no longer the style-facing high-zoom raster.
+
+Restarted Tirex/Mapnik so the renderer reopened the corrected raster. A targeted live render of Galbraith metatile z11 x=168 y=480 completed, increasing Tirex rendered count from 1225 to 1226. The sample tile 11/173/482 changed from the old flat 12 KiB PNG, sha256 186de497ac250bbdcce3185c4bd964f27d4981d8a3ed3622adb3225547dbd03a, to a corrected 20 KiB PNG, sha256 ada28d4e9b56b29f4a109e2d07dda5135b947e10c690b986165654f813a69444. This matches the public OpenTopoMap tile size class and confirms hillshade is now participating in the render.
+
+Next step started from this checkpoint: rerender all Alaska z11 metatiles with the corrected hillshade, then export, pack MBTiles, convert/merge PMTiles, and reinstall the app package.
