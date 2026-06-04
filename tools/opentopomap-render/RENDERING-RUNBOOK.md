@@ -51,9 +51,28 @@ Mapnik renderer). Compose file: `config/docker-compose.otm.yml`.
 | repo `scripts/` (ro) | `/alaskarouter-scripts` | our Alaska-specific DEM/contour scripts |
 
 **Services inside the container:** PostgreSQL 10 + PostGIS, Apache + `mod_tile`,
-Tirex (master + backend-manager) driving Mapnik. Tiles served at
-`http://127.0.0.1:8080/otm/{z}/{x}/{y}.png`; cache lives at `/mnt/tiles`
-(`/var/lib/tirex/tiles` → `/mnt/tiles`).
+Tirex (master + backend-manager) driving Mapnik. Tiles served on the host at
+`http://127.0.0.1:8088/otm/{z}/{x}/{y}.png` (compose publishes
+`127.0.0.1:${OTM_HTTP_PORT:-8088}:80`, localhost-only — host port 8080 is
+reserved for other services). Inside the container the service is on port 80.
+Tile cache lives at `/mnt/tiles` (`/var/lib/tirex/tiles` → `/mnt/tiles`), which
+is **not** a bind mount — it is wiped on container recreate.
+
+> ⚠️ **Container recreate is fragile — `docker compose down/up` breaks PostgreSQL
+> until repaired (data is safe, config is not).** The DB data is on host ZFS bind
+> mounts (`data/docker/db` → `/var/lib/postgresql`, `data/docker/tablespace` →
+> `/mnt/db`) and survives recreate. But the image ships **only** `postgresql.conf`
+> in `/etc/postgresql/10/main`; `pg_hba.conf`, `pg_ident.conf`, and `conf.d/` are
+> created at first run in the container's **ephemeral** layer, so a recreate loses
+> them and PG refuses to boot (`could not open configuration directory conf.d` →
+> then `could not load pg_hba.conf`). Recovery (verified 2026-06-04): start the
+> container, then inside it recreate `/etc/postgresql/10/main/{conf.d,
+> pg_hba.conf,pg_ident.conf,start.conf}` (PG port isn't published, so localhost/
+> socket `trust` is fine), `chown -R postgres:postgres`, and let the init's retry
+> bring PG up. Also lost on recreate and restored by `otm-docker.sh deps`:
+> `python-gdal` helpers, `/mnt/tiles` dirs, the DEM helper patch, tirex.
+> **TODO (hardening):** persist a complete `/etc/postgresql` via bind mount, or
+> have the startup self-heal these files, so recreate is safe unattended.
 
 **The image's numbered first-run scripts (run once, in order):**
 
