@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ciyi
 title: 'SmartInsert: prefer append on rapid-add; brainstorm fix for star-trip detours'
-status: in-progress
+status: completed
 type: bug
 priority: critical
 created_at: 2026-05-31T14:43:01Z
-updated_at: 2026-05-31T15:12:47Z
+updated_at: 2026-06-04T17:02:17Z
 parent: AlaskaRouter-xtua
 ---
 
@@ -53,7 +53,7 @@ Rationale: the rapid-add workflow is the one where users build a trip in the ord
 - [x] Switched `handleFastAdd` in [RootView.swift](AlaskaRouter/App/RootView.swift) to call `SmartInsert.appendOnly`
 - [x] Left `handleAddPreviewed` on `SmartInsert.insertSmart` — preview-add still does cheapest-edge
 - [x] Added `testAppendOnlyAlwaysGoesToTheEndEvenWhenGeometryWouldPreferElsewhere` in [Tests/DataInvariantTests.swift](Tests/DataInvariantTests.swift) — passes
-- [ ] On-device verify the rapid-add flow: A → B → C anywhere → trip = [A, B, C]
+- [x] On-device verify: confirmed resolved (user, 2026-06-04). Implementation + test shipped in 41413ea. Rapid-add flow: A → B → C anywhere → trip = [A, B, C]
 
 ## Summary of Changes
 

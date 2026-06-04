@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-06-04T14:57:06Z
-updated_at: 2026-06-04T15:36:20Z
+updated_at: 2026-06-04T17:02:17Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -66,3 +66,9 @@ Generate contours from a GEOGRAPHIC (EPSG:4326) DEM, as upstream OpenTopoMap doe
 - [x] Make the contour source geographic: warp-60.tif now built as EPSG:4326 in prepare-copernicus-dem.sh (contours.sh unchanged; phyghtmap auto-detects CRS)
 - [ ] Regenerate + reimport contours; render Galbraith sample; verify no ribbon/gaps
 - [ ] Full z11 rerender + export + repack + reinstall (combine with lg59 fix)
+
+## POC VERIFIED (2026-06-04)
+
+warp-60.tif rebuilt as EPSG:4326 geographic; contours regenerated via phyghtmap produced 12 contiguous latitude sub-bands (67.80->68.80, no gaps). Reimported into a recreated contours DB (33,457 rows for the bounded area). Rendered z11 Galbraith tiles: the orange horizontal contour ribbon south of the lake is GONE; contours distribute normally. Before/after grid confirms. Remaining: full statewide contour regen + re-render.
+
+## Status 2026-06-04: fix committed (1aeb0cc) + Galbraith POC verified. Statewide re-render running. Closes when the corrected statewide pack is installed.
