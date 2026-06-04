@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-06-04T14:57:06Z
-updated_at: 2026-06-04T15:09:58Z
+updated_at: 2026-06-04T15:36:20Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -63,6 +63,6 @@ Generate contours from a GEOGRAPHIC (EPSG:4326) DEM, as upstream OpenTopoMap doe
 
 - [x] Confirm symptom is in contour data (empty stripes across 6deg longitude)
 - [ ] Confirm sub-mechanism (distortion vs dropped tiles) while implementing
-- [ ] Rework prepare-copernicus-contours.sh to use a geographic DEM source
+- [x] Make the contour source geographic: warp-60.tif now built as EPSG:4326 in prepare-copernicus-dem.sh (contours.sh unchanged; phyghtmap auto-detects CRS)
 - [ ] Regenerate + reimport contours; render Galbraith sample; verify no ribbon/gaps
 - [ ] Full z11 rerender + export + repack + reinstall (combine with lg59 fix)

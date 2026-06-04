@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-06-04T14:57:06Z
-updated_at: 2026-06-04T15:01:38Z
+updated_at: 2026-06-04T15:36:20Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -55,6 +55,6 @@ Change all gdalwarp -t_srs to true Web Mercator. Safest: -t_srs EPSG:3857, or ma
 
 - [x] gdalinfo the three rasters; quantify the offset
 - [x] Determine offset cause: wrong Mercator sphere (R=6370997 vs 6378137)
-- [ ] Fix prepare-copernicus-dem.sh srs, commit
+- [x] Fix prepare-copernicus-dem.sh srs, commit (warps now -t_srs EPSG:3857)
 - [ ] Re-warp + regen derivatives; render Galbraith sample; verify alignment
 - [ ] Full z11 rerender + export + repack + reinstall (combine with Bug B fix)

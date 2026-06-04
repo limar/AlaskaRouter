@@ -30,11 +30,22 @@ if [[ "${DERIVATIVES_ONLY}" != "1" ]]; then
   # materialized as one source raster. Feed the source COGs directly to gdalwarp
   # so each input raster stays well below that limit. raw.tif remains a VRT
   # compatibility alias for OTM peak/saddle helpers that open that fixed path.
-  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs "+proj=merc +ellps=sphere +R=6378137 +a=6378137 +units=m" "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 1000 1000 "${DEM_DIR}"/*.tif warp-1000.tif
-  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs "+proj=merc +ellps=sphere +R=6378137 +a=6378137 +units=m" "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 5000 5000 "${DEM_DIR}"/*.tif warp-5000.tif
-  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs "+proj=merc +ellps=sphere +R=6378137 +a=6378137 +units=m" "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 500 500 "${DEM_DIR}"/*.tif warp-500.tif
-  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs "+proj=merc +ellps=sphere +R=6378137 +a=6378137 +units=m" "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 60 60 "${DEM_DIR}"/*.tif warp-60.tif
-  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs "+proj=merc +ellps=sphere +R=6378137 +a=6378137 +units=m" "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 30 30 "${DEM_DIR}"/*.tif warp-30.tif
+  #
+  # Hillshade/relief warps target true Web Mercator (EPSG:3857, sphere a=6378137)
+  # to match the OpenTopoMap Mapnik style, which places rasters in that projection
+  # WITHOUT reprojection. Do NOT write "+proj=merc +ellps=sphere +R=6378137": PROJ
+  # honors +ellps=sphere (radius 6370997) and silently drops +R=6378137, shifting
+  # the rendered hillshade ~18 km E / ~12 km S at 68N (AlaskaRouter-lg59).
+  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs EPSG:3857 "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 1000 1000 "${DEM_DIR}"/*.tif warp-1000.tif
+  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs EPSG:3857 "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 5000 5000 "${DEM_DIR}"/*.tif warp-5000.tif
+  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs EPSG:3857 "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 500 500 "${DEM_DIR}"/*.tif warp-500.tif
+  # warp-60 is the CONTOUR source and must stay GEOGRAPHIC (EPSG:4326, Copernicus
+  # native). phyghtmap is built for geographic DEMs; contouring a projected
+  # Mercator raster distorts the non-linear latitude axis into dense/empty
+  # contour bands (AlaskaRouter-6fop). ~0.0005 deg ~= 55 m keeps the prior
+  # contour-density envelope the bounded chunked import was tuned for.
+  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs EPSG:4326 "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 0.0005 0.0005 "${DEM_DIR}"/*.tif warp-60.tif
+  gdalwarp -co BIGTIFF=YES -co TILED=YES -co COMPRESS=LZW -co PREDICTOR=2 -t_srs EPSG:3857 "${WARP_EXTENT_ARGS[@]}" -r bilinear -tr 30 30 "${DEM_DIR}"/*.tif warp-30.tif
 fi
 
 for warp in warp-5000.tif warp-1000.tif warp-500.tif warp-30.tif; do

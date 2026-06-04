@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # Generate contour files from a large Copernicus-derived warp-60.tif in chunks.
+#
+# warp-60.tif MUST be a GEOGRAPHIC (EPSG:4326) DEM, as produced by
+# prepare-copernicus-dem.sh. phyghtmap is built for geographic input and reads
+# the raster's CRS automatically; feeding it a projected Mercator raster distorts
+# latitudes into dense/empty contour bands (AlaskaRouter-6fop). Do not "optimize"
+# this to consume a Mercator warp.
 
 set -euo pipefail
 
