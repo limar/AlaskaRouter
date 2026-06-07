@@ -438,7 +438,7 @@ struct TripBottomSheet: View {
         // SwiftUI's gesture system route tap-vs-swipe correctly — .onTapGesture
         // was swallowing List's horizontal swipe, so the separator's
         // swipe-to-delete affordance went missing (AlaskaRouter-00iw).
-        return Button(action: onToggle) {
+        return
             HStack(spacing: 10) {
                 // Leading drag column — 6-dot grip when the separator is
                 // movable, invisible spacer otherwise (synthetic block 0 or
@@ -498,9 +498,14 @@ struct TripBottomSheet: View {
                 // reordering is intentionally dropped — moving whole road
                 // stretches around isn't a real use case; stop rows remain
                 // draggable.
-                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                Button(action: onToggle) {
+                    Image(
+                        systemName: isCollapsed
+                            ? "chevron.right" : "chevron.down"
+                    )
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(SheetPalette.textMuted.opacity(0.7))
+                }.buttonStyle(.plain)
             }
             .padding(.leading, 14)
             .padding(.trailing, 14)
@@ -520,8 +525,6 @@ struct TripBottomSheet: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-    }
 
     /// Stop row — small white-fill numbered pip with colored stroke, serif
     /// name, sans kind hint. Always indented under its block header — every
