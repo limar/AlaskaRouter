@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-07T08:46:30Z
+updated_at: 2026-06-07T15:21:08Z
 ---
 
 ## Why
@@ -624,3 +624,17 @@ Validation: pmtiles verify passed on the installed app pack; pmtiles show report
 
 ## Status 2026-06-07: production z11 delivered
 The self-render pipeline is fully working and has shipped statewide Alaska z=11 (corrected EPSG:3857 hillshade + geographic contours) into the app pack. The ORIGINAL goal of this bean — applying political-label overrides (Israel low-zoom, Falklands/Malvinas) at render time — was never implemented; only the pipeline + Alaska detail production. Consider splitting the label-override work into its own v2 bean and closing this one as 'pipeline delivered'.
+
+## Label/name architecture findings (2026-06-07) — for the label-override + localization goal
+
+WHERE names live (two stages we fully control):
+1. DATA (gis PostGIS DB, loaded from the OSM PBF by osm2pgsql): the name VALUES. Verified our planet_osm_point has ONLY a 'name' text column (+ addr:housename) — the local/default name. NO name:en/name:es columns, no hstore 'tags' column. Localized names exist in the source OSM PBF but are not imported.
+2. RENDER (Mapnik styles): WHICH features get labels = Layer SQL in opentopomap.xml (e.g. 'text-cities' = planet_osm_point WHERE place IN city/town/village/suburb/hamlet/isolated_dwelling/locality). WHAT TEXT = TextSymbolizer expression = [name] in ALL 200 label symbolizers (no language variants). Admin boundaries are drawn as LINES (borders layer); COUNTRY/STATE NAMES are NOT labelled by this style at all.
+
+DIFFICULTY per use case:
+- Relabel a specific rendered feature (a town): EASY. osmium tags-modify on the PBF (pre-import) or SQL UPDATE on planet_osm_point (post-import) + re-render. Per-feature; the original 6ihk overrides.yml plan.
+- Show/control a COUNTRY/REGION name (Islas Malvinas etc.): MEDIUM. Our style does not label countries, so add a country-label layer (query place=country / admin_level) fed by our chosen name + per-feature overrides. Naming becomes ours at render.
+- 100% localized map (e.g. Spanish everywhere): HARDER. (a) re-import gis with name:lang columns or hstore tags (data exists in PBF, not imported now) -> the days-long gis import (faster with perf vector 0bq8); (b) change all TextSymbolizers [name] -> COALESCE([name:es],[name]); (c) raster => one rendered pack PER locale.
+- Recognize Somaliland as a country: HARDEST. OSM models it as disputed/within Somalia; needs custom data injection (boundary+label feature), not just a name change.
+
+ARCHITECTURAL FLAG: raster pre-rendering means each localization/political variant = a separate render+pack. Runtime per-user locale or per-user Malvinas/Falklands switching is only possible with VECTOR tiles (client renders labels from name:lang). If localization becomes a real product direction, vector tiles are the architecture shift to consider.
