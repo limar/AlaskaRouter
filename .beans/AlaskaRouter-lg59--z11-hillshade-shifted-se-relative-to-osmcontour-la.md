@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-lg59
 title: z11 hillshade shifted SE relative to OSM/contour layers
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-06-04T14:57:06Z
-updated_at: 2026-06-04T17:02:17Z
+updated_at: 2026-06-07T08:45:47Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -64,3 +64,6 @@ Change all gdalwarp -t_srs to true Web Mercator. Safest: -t_srs EPSG:3857, or ma
 Bounded Galbraith re-render (DEM_TARGET_EXTENT=-150.2 67.8 -148.8 68.8) through the corrected pipeline on the server. gdalinfo confirms hillshade-30-jpeg.tif is now true Web Mercator (SPHEROID WGS 84 6378137, +a=6378137 +b=6378137 +nadgrids=@null). Rendered z11 tiles around Galbraith: hillshade relief now covers terrain continuously and aligns with the lake/valleys (vs sparse/misplaced in the shipped pack). Before/after 3x4 tile grid confirms the SE shift is gone. Remaining: full statewide re-render.
 
 ## Status 2026-06-04: fix committed (1aeb0cc) + Galbraith POC verified. Statewide re-render running (logs/sw-pipeline.sh on sol-icomp-03). This bean closes when the corrected statewide pack is installed in AlaskaRouter/Resources/alaska-pack.pmtiles.
+
+## Summary of Changes
+Root cause: DEM derivatives were warped to PROJ '+ellps=sphere' (R=6370997) instead of true Web Mercator (R=6378137); OpenTopoMap's Mapnik style places rasters in EPSG:3857 without reprojection, so the hillshade rendered ~18 km E / ~12 km S at 68N. Fixed by warping the four derivative rasters to -t_srs EPSG:3857 (commit 1aeb0cc). Verified via Galbraith POC, then full statewide z11 re-render (commit 37c63608) installed 2026-06-07 into AlaskaRouter/Resources/alaska-pack.pmtiles (1.04 GB, maxzoom 11). Before/after across Galbraith, Denali, Dalton/Coldfoot confirms aligned relief.

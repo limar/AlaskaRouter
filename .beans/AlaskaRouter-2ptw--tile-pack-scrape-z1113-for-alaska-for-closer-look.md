@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-2ptw
 title: 'Tile pack: scrape z=11..13 for Alaska for closer-look detail'
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-25T14:34:45Z
-updated_at: 2026-05-28T10:37:11Z
+updated_at: 2026-06-07T08:45:47Z
 parent: AlaskaRouter-xtua
 blocked_by:
     - AlaskaRouter-6ihk
@@ -60,3 +60,6 @@ To reduce bandwidth, build only the z=11 delta first, then merge it with the exi
 Started the z=11-only download into `tools/build-pack/data/alaska-z11-only.mbtiles` with 2 workers and 0.45s per-worker delay. Initial measured rate was ~1.5 tiles/sec, so this may take overnight; the MBTiles writer is resumable.
 
 Paused the public-tile-server download after 2,345 rows were written (~15 MiB scratch) because this is a bulk offline archive request. The partial MBTiles remains in `tools/build-pack/data/` and can resume, but the next step should be explicit: either confirm permission/acceptable-use for the OpenTopoMap tile source, or switch to self-rendering / another source intended for offline bulk packages.
+
+## Summary of Changes
+Statewide Alaska z=11 detail shipped. Built by self-rendering (AlaskaRouter-6ihk) rather than scraping public tiles. Final corrected pack (with EPSG:3857 hillshade + geographic contours) installed 2026-06-07: 101,631 tiles total, maxzoom 11, 1.04 GB, bundled in the app. Higher zooms (z12-13) deferred to corridor region packs — see AlaskaRouter-r1cf.

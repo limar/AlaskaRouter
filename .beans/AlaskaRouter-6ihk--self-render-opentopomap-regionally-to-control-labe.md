@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-03T11:34:48Z
+updated_at: 2026-06-07T08:46:30Z
 ---
 
 ## Why
@@ -621,3 +621,6 @@ Packed the corrected export into tools/opentopomap-render/data/mbtiles/alaska_z1
 Extracted the existing installed app pack to z0..10 to avoid stale z11 collisions, then merged that z0..10 archive with the corrected z11 PMTiles. The merged archive verified successfully and is installed as AlaskaRouter/Resources/alaska-pack.pmtiles. The installed pack is 1155303077 bytes, has maxzoom 11, addressed tile count 101631, tile entries 63847, and tile contents 58812.
 
 Validation: pmtiles verify passed on the installed app pack; pmtiles show reports header and metadata maxzoom 11; pmtiles tile AlaskaRouter/Resources/alaska-pack.pmtiles 11 173 482 returns a 20 KiB PNG with sha256 ada28d4e9b56b29f4a109e2d07dda5135b947e10c690b986165654f813a69444, matching the corrected Galbraith render.
+
+## Status 2026-06-07: production z11 delivered
+The self-render pipeline is fully working and has shipped statewide Alaska z=11 (corrected EPSG:3857 hillshade + geographic contours) into the app pack. The ORIGINAL goal of this bean — applying political-label overrides (Israel low-zoom, Falklands/Malvinas) at render time — was never implemented; only the pipeline + Alaska detail production. Consider splitting the label-override work into its own v2 bean and closing this one as 'pipeline delivered'.
