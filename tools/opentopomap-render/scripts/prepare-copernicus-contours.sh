@@ -13,7 +13,16 @@ SRTM_DIR="${1:-/mnt/data/srtm}"
 TILE_SIZE="${CONTOUR_TILE_SIZE:-5000}"
 JOBS="${CONTOUR_JOBS:-1}"
 ID_START="${CONTOUR_ID_START:-10000000}"
-ID_STRIDE="${CONTOUR_ID_STRIDE:-5000000}"
+# Each source tile gets a disjoint node/way ID range [ID_START + i*ID_STRIDE, ...).
+# ID_STRIDE MUST exceed the node count of the densest source tile, or its IDs spill
+# into the next tile's range and osm2pgsql --append overwrites those nodes, wiring
+# ways to wrong positions (spidernet/displaced contours — AlaskaRouter-6fop). The
+# bounded Galbraith POC hid this because it had a single tile. Measured statewide
+# max was 47.2M nodes/tile (5000px @ 0.0005deg, -s 10), so 100M gives ~2x headroom.
+# Larger CONTOUR_TILE_SIZE => more nodes/tile => raise this too. Max node id ends up
+# ~= ID_START + n_tiles*ID_STRIDE, which sizes the osm2pgsql --flat-nodes file
+# (8 bytes/id): 180 tiles * 100M -> ~143 GB flat-nodes, fine on this server.
+ID_STRIDE="${CONTOUR_ID_STRIDE:-100000000}"
 MAX_NODES_PER_TILE="${CONTOUR_MAX_NODES_PER_TILE:-1000000}"
 MAX_NODES_PER_WAY="${CONTOUR_MAX_NODES_PER_WAY:-2000}"
 TILE_DIR="${CONTOUR_TILE_DIR:-contour-tiles-${TILE_SIZE}}"
