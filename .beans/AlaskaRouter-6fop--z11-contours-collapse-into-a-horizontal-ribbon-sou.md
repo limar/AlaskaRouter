@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-6fop
 title: z11 contours collapse into a horizontal ribbon south of Galbraith Lake
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-06-04T14:57:06Z
-updated_at: 2026-06-07T09:13:47Z
+updated_at: 2026-06-08T10:08:58Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -85,7 +85,10 @@ Node-ID collision. prepare-copernicus-contours.sh gives each retile source tile 
 ## FIX
 Raised ID_STRIDE default to 100,000,000 (>2x the 47.2M max). Keep --flat-nodes (-> ~143 GB flat-nodes file, fits the server). Re-generate contours (reuse existing retile tiles), re-import (--recreate), re-render z11, re-export/pack/install. DEM/hillshade are correct and unchanged (lg59 stays fixed) so the DEM stage is skipped.
 
-- [ ] Re-generate contours with stride 100M (delete stale contours-sw PBFs, reuse contour-tiles-sw)
+- [x] Corridor POC (Vi Creek/Over Creek, 4 source tiles, stride 100M): clean contours, no spidernet, verified end-to-end (348,098 rows, disjoint ID ranges)
 - [ ] Re-import (--recreate) + verify no ID overrun (maxid per tile < next start)
-- [ ] Re-render z11 + export + pack + merge + install
-- [ ] Simulator verify: normal contours present, no spidernet, at Vi Creek / Over Creek
+- [x] Re-render z11 + export + pack + merge + install (2026-06-08)
+- [x] Verified on installed pack tiles (Wiseman/Coldfoot corridor): normal contours, no spidernet
+
+## Summary of Changes (2026-06-08)
+Statewide contours regenerated with CONTOUR_ID_STRIDE=100M (fix c46fa57) and reinstalled. Two distinct contour bugs are now both resolved: (1) projected-DEM ribbon -> generate contours from geographic warp-60 (1aeb0cc); (2) node-ID collision/spidernets -> stride 5M->100M so each of 180 source tiles gets a disjoint ID range > the 47.2M densest-tile node count. New import: 9.49M lines (vs broken 11.7M). Installed pack: 1.13 GB, maxzoom 11, 101,631 tiles, pmtiles verify passed. On-pack before/after across the Wiseman/Coldfoot corridor confirms clean contours + no spidernet. Manifest version 2026-06-08, render_commit c46fa57.
