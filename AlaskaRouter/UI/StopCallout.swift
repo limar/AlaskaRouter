@@ -14,17 +14,15 @@ struct StopCallout: View {
     let additionalPassNumbers: [Int]       // other 1-based stop indices visiting this coord (ykuf step 4)
     let distanceFromPrevText: String?      // "45 km from previous" (nil for stop 1)
     let distanceToNextText: String?        // "78 km to next" (nil for the last stop)
-    let canPrev: Bool
-    let canNext: Bool
-    let onPrev: () -> Void
-    let onNext: () -> Void
+    let onShare: () -> Void
     let onClose: () -> Void
     let onRemove: () -> Void
-    // NB: 'Move earlier / Move later' reorder buttons used to live here but
-    // were pulled because (a) they sat between Prev/Next and got misclicked,
-    // and (b) 'Up/Down' naming is wrong for diagonal routes (Up doesn't mean
-    // upward on screen). Tracked as AlaskaRouter-mhax for a proper redesign
-    // — likely an on-map drag or route-aligned arrow labels.
+    // NB: Prev/Next browsing was removed (AlaskaRouter-55pn) — the map *is* the
+    // browser; people drag and follow the route ribbon rather than tap chevrons.
+    // The action row is now LEFT = Remove (trip-membership slot), RIGHT = Share,
+    // mirroring PreviewCallout's "Add to trip | Share" so Share is always the
+    // trailing button. 'Move earlier / Move later' reorder is still parked under
+    // AlaskaRouter-mhax (likely an on-map drag or route-aligned arrow labels).
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -85,20 +83,32 @@ struct StopCallout: View {
 
             Divider().opacity(0.4)
 
-            HStack(spacing: 6) {
-                actionItem(systemImage: "chevron.left",
-                           label: "Prev",
-                           enabled: canPrev,
-                           action: onPrev)
-                actionItem(systemImage: "chevron.right",
-                           label: "Next",
-                           enabled: canNext,
-                           action: onNext)
-                actionItem(systemImage: "trash",
-                           label: "Remove",
-                           enabled: true,
-                           destructive: true,
-                           action: onRemove)
+            // Single-row action band (replaces the taller stacked-icon
+            // toolbar). LEFT = Remove, styled ghost-red so a destructive
+            // action sitting under the thumb doesn't carry the bold solid
+            // weight of an "Add to trip" pill. RIGHT = Share, identical to the
+            // PreviewCallout trailing button.
+            HStack(spacing: 8) {
+                Button(action: onRemove) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                        Text("Remove")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(SheetPalette.destructive)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        Capsule().fill(SheetPalette.destructive.opacity(0.12))
+                    )
+                    .overlay(
+                        Capsule().stroke(SheetPalette.destructive.opacity(0.45), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                ShareCalloutButton(action: onShare)
             }
         }
         .padding(.horizontal, 14)
@@ -110,53 +120,6 @@ struct StopCallout: View {
                 .stroke(.white.opacity(0.10), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
-    }
-
-    private func actionItem(
-        systemImage: String,
-        label: String,
-        enabled: Bool,
-        destructive: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                // Destructive items (Remove): the icon sits inside a filled
-                // destructive disc with a white inner glyph. Same "colored
-                // disc + white inner" language as the search "+" and
-                // active-trip "✓" — visually heavier than Prev/Next which
-                // signals "this one is dangerous" while staying readable on
-                // both light and dark sheets.
-                if destructive {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(SheetPalette.destructive, in: Circle())
-                } else {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(height: 28)
-                        .foregroundStyle(itemColor(enabled: enabled, destructive: false))
-                }
-                Text(label)
-                    .font(.system(size: 10, weight: destructive ? .bold : .semibold))
-                    .foregroundStyle(itemColor(enabled: enabled, destructive: destructive))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .opacity(enabled ? 1.0 : 0.55)
-    }
-
-    private func itemColor(enabled: Bool, destructive: Bool) -> Color {
-        // Adaptive warm-red (AlaskaRouter-yxve) — pops against both the
-        // light material and the dark-mode warm-sepia material.
-        if destructive { return SheetPalette.destructive }
-        return enabled ? .primary : .secondary
     }
 
     /// "ALSO STOP 9 · 12" (or "ALSO STOP 9" for a single revisit). Nil when

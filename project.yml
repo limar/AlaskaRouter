@@ -19,6 +19,7 @@ targets:
       - path: AlaskaRouter/Map
       - path: AlaskaRouter/Routing
       - path: AlaskaRouter/Search
+      - path: AlaskaRouter/Sharing
       - path: AlaskaRouter/UI
       - path: AlaskaRouter/Resources
       - path: AlaskaRouter/Assets.xcassets
@@ -35,6 +36,10 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
         PRODUCT_BUNDLE_IDENTIFIER: dev.alaskarouter.AlaskaRouter
         GENERATE_INFOPLIST_FILE: "YES"
+        # Base Info.plist carries LSApplicationQueriesSchemes (canOpenURL probes
+        # for the maps chooser, AlaskaRouter-55pn). Xcode merges the generated
+        # INFOPLIST_KEY_* settings on top of this file.
+        INFOPLIST_FILE: AlaskaRouter/Info.plist
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "AlaskaRouter shows your position on the map so you can see how close you are to your trip stops. Used only while the app is open."
         DEVELOPMENT_TEAM: 8UGV7J3SKQ
     dependencies:

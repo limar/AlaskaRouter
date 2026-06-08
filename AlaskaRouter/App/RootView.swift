@@ -21,6 +21,7 @@ struct RootView: View {
 
     @State private var selectedWaypointID: UUID?
     @State private var previewedResult: SearchResult?
+    @State private var sharePresentation: SharePresentation?
     @State private var recentlyAddedWaypoint: Waypoint?
     @State private var recentlyDeletedSnapshot: DeletedStopSnapshot?
     @State private var isSearchFieldFocused: Bool = false
@@ -238,6 +239,10 @@ struct RootView: View {
                         result: preview,
                         distanceFromTripText: distanceLineFromTrip(to: preview.coord),
                         onAdd: { handleAddPreviewed(preview) },
+                        onShare: {
+                            sharePresentation = SharePresentation(
+                                place: SharePlace(name: preview.name, coordinate: preview.coord))
+                        },
                         onDismiss: { dismissPreview() }
                     )
                     .padding(.horizontal, 18)
@@ -265,10 +270,10 @@ struct RootView: View {
                         additionalPassNumbers: additionalPassNumbers(for: wp, in: ordered),
                         distanceFromPrevText: distanceFromPrevText(idx: idx, in: ordered),
                         distanceToNextText: distanceToNextText(idx: idx, in: ordered),
-                        canPrev: idx > 0,
-                        canNext: idx < ordered.count - 1,
-                        onPrev: { handleStopCalloutPrev(in: ordered, currentIdx: idx) },
-                        onNext: { handleStopCalloutNext(in: ordered, currentIdx: idx) },
+                        onShare: {
+                            sharePresentation = SharePresentation(
+                                place: SharePlace(name: wp.label, coordinate: wp.coordinate))
+                        },
                         onClose: { handleStopCalloutClose() },
                         onRemove: { handleStopCalloutRemove(wp) }
                     )
@@ -311,6 +316,9 @@ struct RootView: View {
                 // (xvb8) Full-screen by default — the panel has grown enough
                 // that .medium forced scrolling for the bottom sections.
                 .presentationDetents([.large])
+        }
+        .sheet(item: $sharePresentation) { presentation in
+            ShareToMapsSheet(place: presentation.place)
         }
         .onAppear {
             // (4r8l) Pre-parse places.geojson into the AdminAreaLookup
@@ -984,27 +992,6 @@ struct RootView: View {
         withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
     }
 
-    private func handleStopCalloutPrev(in ordered: [Waypoint], currentIdx: Int) {
-        guard currentIdx > 0 else { return }
-        let wp = ordered[currentIdx - 1]
-        // Preserve the user's chosen zoom — walking Prev/Next is a "scan my
-        // route at this scale" gesture, not a "fly me to each stop" gesture (q8nl).
-        withAnimation(.smooth(duration: 0.25)) {
-            selectedWaypointID = wp.id
-            mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
-        }
-    }
-
-    private func handleStopCalloutNext(in ordered: [Waypoint], currentIdx: Int) {
-        guard currentIdx < ordered.count - 1 else { return }
-        let wp = ordered[currentIdx + 1]
-        // Preserve the user's chosen zoom (q8nl).
-        withAnimation(.smooth(duration: 0.25)) {
-            selectedWaypointID = wp.id
-            mapCamera = .center(wp.coordinate, zoom: currentMapZoom())
-        }
-    }
-
     /// Callout's destructive primary action. Per user spec for kcq8: instant
     /// delete, no Undo toast, no confirmation alert. (Different from the
     /// sheet trash, which DOES get an Undo toast.)
@@ -1145,4 +1132,12 @@ struct RootView: View {
         default:                             return 13.0
         }
     }
+}
+
+/// Identifiable wrapper so the "Open in maps" chooser can be driven by
+/// `.sheet(item:)`. SharePlace itself stays a pure value type (no identity) for
+/// the URL-builder unit tests.
+private struct SharePresentation: Identifiable {
+    let id = UUID()
+    let place: SharePlace
 }

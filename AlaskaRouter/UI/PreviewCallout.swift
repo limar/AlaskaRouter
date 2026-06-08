@@ -11,6 +11,7 @@ struct PreviewCallout: View {
     let result: SearchResult
     let distanceFromTripText: String?       // e.g. "12 km from Healy", or nil if no trip
     let onAdd: () -> Void
+    let onShare: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -55,19 +56,28 @@ struct PreviewCallout: View {
                     .padding(.leading, 32)
             }
 
-            Button(action: onAdd) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Add to trip")
-                        .font(.system(size: 14, weight: .semibold))
+            // Action row. LEFT slot = trip-membership action (Add to trip);
+            // RIGHT slot = Share. The same left=membership / right=Share
+            // spatial grammar is used in StopCallout (where the left slot is
+            // "Remove"), so Share is always the trailing button across every
+            // callout variant (AlaskaRouter-55pn).
+            HStack(spacing: 8) {
+                Button(action: onAdd) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add to trip")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: .infinity)
+                    .background(SheetPalette.accentWarm, in: Capsule())
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .frame(maxWidth: .infinity)
-                .background(SheetPalette.accentWarm, in: Capsule())
+                .buttonStyle(.plain)
+
+                ShareCalloutButton(action: onShare)
             }
-            .buttonStyle(.plain)
             .padding(.top, 2)
         }
         .padding(.horizontal, 14)

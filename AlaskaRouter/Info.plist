@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Schemes we probe with canOpenURL when building the "Open in…" maps
+	  chooser (AlaskaRouter-55pn). Without this allow-list, canOpenURL returns
+	  false even when the app is installed, so the chooser would hide every
+	  third-party app. Apple Maps isn't listed because it uses a universal
+	  https link, not a custom scheme.
+
+	  The rest of the Info.plist is still generated (GENERATE_INFOPLIST_FILE =
+	  YES); Xcode merges the INFOPLIST_KEY_* build settings on top of this base.
+	-->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>comgooglemaps</string>
+		<string>waze</string>
+		<string>mapsme</string>
+	</array>
+</dict>
+</plist>
