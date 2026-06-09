@@ -21,11 +21,164 @@
     "places": {
       "type": "geojson",
       "data": "__PLACES_URL__"
+    },
+    "lat-lines": {
+      "type": "geojson",
+      "data": {"type":"FeatureCollection","features":[{"type":"Feature","properties":{"kind":"arctic","name":"Arctic Circle"},"geometry":{"type":"LineString","coordinates":[[-180,66.5634],[-160,66.5634],[-140,66.5634],[-120,66.5634],[-100,66.5634],[-80,66.5634],[-60,66.5634],[-40,66.5634],[-20,66.5634],[0,66.5634],[20,66.5634],[40,66.5634],[60,66.5634],[80,66.5634],[100,66.5634],[120,66.5634],[140,66.5634],[160,66.5634],[180,66.5634]]}},{"type":"Feature","properties":{"kind":"equator","name":"Equator"},"geometry":{"type":"LineString","coordinates":[[-180,0.0],[-160,0.0],[-140,0.0],[-120,0.0],[-100,0.0],[-80,0.0],[-60,0.0],[-40,0.0],[-20,0.0],[0,0.0],[20,0.0],[40,0.0],[60,0.0],[80,0.0],[100,0.0],[120,0.0],[140,0.0],[160,0.0],[180,0.0]]}}]}
     }
   },
   "layers": [
     { "id": "bg", "type": "background", "paint": { "background-color": "#f0e8d2" } },
     { "id": "basemap", "type": "raster", "source": "basemap" },
+
+    {
+      "id": "lat-line-equator-casing",
+      "type": "line",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "equator"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "rgba(255,248,235,0.85)",
+        "line-width": 3.6,
+        "line-dasharray": [0.389, 0.778],
+        "line-blur": 0.4,
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.0, 1, 0.5, 3, 0.65, 22, 0.65]
+      }
+    },
+    {
+      "id": "lat-line-equator",
+      "type": "line",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "equator"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#5a564e",
+        "line-width": 1.4,
+        "line-dasharray": [1, 2],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.0, 1, 0.6, 3, 0.85, 22, 0.85]
+      }
+    },
+    {
+      "id": "lat-line-arctic-casing",
+      "type": "line",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "arctic"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "rgba(255,248,235,0.85)",
+        "line-width": 3.6,
+        "line-dasharray": [0.389, 0.778],
+        "line-blur": 0.4,
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.0, 1, 0.5, 2, 0.7, 22, 0.7]
+      }
+    },
+    {
+      "id": "lat-line-arctic",
+      "type": "line",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "arctic"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#4a3b2b",
+        "line-width": 1.4,
+        "line-dasharray": [1, 2],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.0, 1, 0.6, 2, 0.9, 22, 0.9]
+      }
+    },
+    {
+      "id": "lat-label-equator-halo",
+      "type": "symbol",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "equator"],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "symbol-placement": "line",
+        "symbol-spacing": 220,
+        "text-letter-spacing": 0.2,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 12.5, 6, 15, 10, 16.25],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "text-padding": 2
+      },
+      "paint": {
+        "text-color": "rgba(255,248,235,0.9)",
+        "text-halo-color": "rgba(255,248,235,0.9)",
+        "text-halo-width": 1.9,
+        "text-halo-blur": 0.4,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.0, 1, 0.0, 2, 0.85, 22, 0.85]
+      }
+    },
+    {
+      "id": "lat-label-equator",
+      "type": "symbol",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "equator"],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "symbol-placement": "line",
+        "symbol-spacing": 220,
+        "text-letter-spacing": 0.2,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 12.5, 6, 15, 10, 16.25],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "text-padding": 2
+      },
+      "paint": {
+        "text-color": "#5a564e",
+        "text-halo-color": "#5a564e",
+        "text-halo-width": 0.5,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.0, 1, 0.0, 2, 0.85, 22, 0.85]
+      }
+    },
+    {
+      "id": "lat-label-arctic-halo",
+      "type": "symbol",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "arctic"],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "symbol-placement": "line",
+        "symbol-spacing": 220,
+        "text-letter-spacing": 0.2,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 12.5, 6, 15, 10, 16.25],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "text-padding": 2
+      },
+      "paint": {
+        "text-color": "rgba(255,248,235,0.9)",
+        "text-halo-color": "rgba(255,248,235,0.9)",
+        "text-halo-width": 1.9,
+        "text-halo-blur": 0.4,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.0, 2, 0.9, 5, 0.95, 22, 0.95]
+      }
+    },
+    {
+      "id": "lat-label-arctic",
+      "type": "symbol",
+      "source": "lat-lines",
+      "filter": ["==", ["get", "kind"], "arctic"],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "symbol-placement": "line",
+        "symbol-spacing": 220,
+        "text-letter-spacing": 0.2,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 12.5, 6, 15, 10, 16.25],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "text-padding": 2
+      },
+      "paint": {
+        "text-color": "#4a3b2b",
+        "text-halo-color": "#4a3b2b",
+        "text-halo-width": 0.5,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.0, 2, 0.9, 5, 0.95, 22, 0.95]
+      }
+    },
 
     {
       "id": "label-region",

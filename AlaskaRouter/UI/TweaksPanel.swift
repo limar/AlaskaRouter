@@ -14,6 +14,7 @@ struct TweaksPanel: View {
     @State private var isSearchTweaksExpanded = true
     @State private var isMapLabelsTweaksExpanded = true
     @State private var isCancelButtonTweaksExpanded = true
+    @State private var isLatLinesTweaksExpanded = true
 
     var body: some View {
         NavigationStack {
@@ -139,6 +140,63 @@ struct TweaksPanel: View {
                 } footer: {
                     if isCancelButtonTweaksExpanded{
                         Text("Replaces the AK chip when the search field is focused (y7l0 spike). Slate-blue filled chip is the initial recommendation — cool counterpart to the warm AK and \"+\" buttons. Try all combinations on-device; once locked, the tweaks get stripped and the chosen combo becomes the constant default.")
+                            .font(.footnote)
+                    }
+                }
+
+                Section {
+                    if isLatLinesTweaksExpanded {
+                        Picker("Arctic color", selection: $tweaks.latArcticColor) {
+                            ForEach(Array(LatLines.arcticPalette.enumerated()), id: \.offset) { i, entry in
+                                Text("\(i) — \(entry.name)").tag(i)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        Picker("Equator color", selection: $tweaks.latEquatorColor) {
+                            ForEach(Array(LatLines.equatorPalette.enumerated()), id: \.offset) { i, entry in
+                                Text("\(i) — \(entry.name)").tag(i)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        sliderRow(
+                            label: "Line width",
+                            value: $tweaks.latLineWidth,
+                            range: 0.5...2.5, step: 0.1, format: "%.1f pt"
+                        )
+                        Picker("Dash style", selection: $tweaks.latDashStyle) {
+                            ForEach(Array(LatLines.dashNames.enumerated()), id: \.offset) { i, name in
+                                Text("\(i) — \(name)").tag(i)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        sliderRow(
+                            label: "Label size",
+                            value: $tweaks.latLabelSizeMultiplier,
+                            range: 0.70...2.00, step: 0.05, format: "%.2f ×"
+                        )
+                        sliderRow(
+                            label: "Label weight",
+                            value: $tweaks.latLabelWeight,
+                            range: 0.0...1.5, step: 0.1, format: "%.1f pt",
+                            annotations: [
+                                (0.0, "reg"), (0.5, "semi"), (1.0, "bold"),
+                            ]
+                        )
+                        sliderRow(
+                            label: "Label spacing",
+                            value: $tweaks.latLabelSpacing,
+                            range: 120...600, step: 20, format: "%.0f pt",
+                            annotations: [
+                                (160, "dense"), (300, "balanced"), (500, "sparse"),
+                            ]
+                        )
+                        Toggle("Equator label", isOn: $tweaks.latEquatorLabelEnabled)
+                    }
+                } header: {
+                    sectionHeader("Reference lines", isExpanded: $isLatLinesTweaksExpanded)
+                } footer: {
+                    if isLatLinesTweaksExpanded {
+                        Text("Arctic Circle (66.56°N) and Equator as atlas-style latitude lines (cv05). Each line/label is drawn as a dark core over a soft cream casing so it stays legible over ocean AND terrain. Colors set the dark core. Weight is a pseudo-bold halo (only Regular glyphs ship offline). The Arctic Circle is always labeled; the Equator label is optional. Labels fade out at far zoom. Converged values become the shipped defaults.")
                             .font(.footnote)
                     }
                 }

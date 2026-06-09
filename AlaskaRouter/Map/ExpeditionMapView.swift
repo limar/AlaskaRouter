@@ -660,6 +660,10 @@ struct ExpeditionMapView: View {
                 // multiplier matches the last applied value.
                 MapLabelSizing.apply(TweaksStore.shared.labelSizeMultiplier, to: style)
 
+                // Reference latitude lines look-and-feel (cv05). Idempotent —
+                // fingerprint-guarded so it only rebuilds on a tweak change.
+                LatLines.apply(TweaksStore.shared, to: style)
+
                 ExpeditionMapView.syncTripRouteLayer(
                     style: style,
                     trip: trip,

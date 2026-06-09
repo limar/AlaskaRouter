@@ -114,6 +114,56 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(cancelButtonFontWeight, forKey: K.cancelButtonFontWeight) }
     }
 
+    // MARK: - Reference lines (AlaskaRouter-cv05)
+
+    /// Index into the Arctic Circle line's curated earth/sepia palette.
+    /// See `LatLines.arcticPalette`. The chosen color drives BOTH the line
+    /// and its "ARCTIC CIRCLE" label.
+    var latArcticColor: Int {
+        didSet { UserDefaults.standard.set(latArcticColor, forKey: K.latArcticColor) }
+    }
+    /// Index into the Equator line's curated grey palette.
+    /// See `LatLines.equatorPalette`. Drives both the line and its label.
+    var latEquatorColor: Int {
+        didSet { UserDefaults.standard.set(latEquatorColor, forKey: K.latEquatorColor) }
+    }
+    /// Stroke width (pt) shared by both reference lines.
+    var latLineWidth: Double {
+        didSet { UserDefaults.standard.set(latLineWidth, forKey: K.latLineWidth) }
+    }
+    /// Dash treatment shared by both lines. See `LatLines.dashPattern`:
+    ///   0 — solid, 1 — fine dash, 2 — atlas dash [6,4], 3 — dotted
+    var latDashStyle: Int {
+        didSet { UserDefaults.standard.set(latDashStyle, forKey: K.latDashStyle) }
+    }
+    /// Multiplier on the reference-line labels' zoom-interpolated text-size
+    /// (on top of the zoom curve). 1.0 = the base values; the default (1.25)
+    /// reproduces the static text-size in style-base.json.
+    var latLabelSizeMultiplier: Double {
+        didSet { UserDefaults.standard.set(latLabelSizeMultiplier, forKey: K.latLabelSizeMultiplier) }
+    }
+    /// Pseudo-bold weight for the reference-line labels, expressed as the
+    /// dark same-color halo width (pt) on the core text layer. Only Regular
+    /// glyphs ship offline, so true bold isn't available; widening a
+    /// same-color halo fattens the strokes. 0 ≈ regular, ~0.5 ≈ semibold,
+    /// ~1.0 ≈ bold.
+    var latLabelWeight: Double {
+        didSet { UserDefaults.standard.set(latLabelWeight, forKey: K.latLabelWeight) }
+    }
+    /// Distance (pt) between repeated copies of a reference-line label along
+    /// the line (`symbol-spacing`). A globe-spanning line can't have a single
+    /// fixed label (its geometric center is at lon 0, off in Africa), so the
+    /// label repeats; this controls how often. Smaller = a copy is more
+    /// reliably on-screen; larger = sparser/cleaner.
+    var latLabelSpacing: Double {
+        didSet { UserDefaults.standard.set(latLabelSpacing, forKey: K.latLabelSpacing) }
+    }
+    /// Whether the Equator gets a label at all. The Arctic Circle is always
+    /// labeled (it's ambiguous without one); the Equator's label is optional.
+    var latEquatorLabelEnabled: Bool {
+        didSet { UserDefaults.standard.set(latEquatorLabelEnabled, forKey: K.latEquatorLabelEnabled) }
+    }
+
     /// One-call reset to v1 defaults.
     func resetToDefaults() {
         dotDiameterDefault     = Defaults.dotDiameterDefault
@@ -127,6 +177,14 @@ final class TweaksStore {
         cancelButtonStyle      = Defaults.cancelButtonStyle
         cancelButtonColor      = Defaults.cancelButtonColor
         cancelButtonFontWeight = Defaults.cancelButtonFontWeight
+        latArcticColor         = Defaults.latArcticColor
+        latEquatorColor        = Defaults.latEquatorColor
+        latLineWidth           = Defaults.latLineWidth
+        latDashStyle           = Defaults.latDashStyle
+        latLabelSizeMultiplier = Defaults.latLabelSizeMultiplier
+        latLabelWeight         = Defaults.latLabelWeight
+        latLabelSpacing        = Defaults.latLabelSpacing
+        latEquatorLabelEnabled = Defaults.latEquatorLabelEnabled
     }
 
     // MARK: - Init / persistence
@@ -144,6 +202,14 @@ final class TweaksStore {
         cancelButtonStyle      = (d.object(forKey: K.cancelButtonStyle)      as? Int)    ?? Defaults.cancelButtonStyle
         cancelButtonColor      = (d.object(forKey: K.cancelButtonColor)      as? Int)    ?? Defaults.cancelButtonColor
         cancelButtonFontWeight = (d.object(forKey: K.cancelButtonFontWeight) as? Int)    ?? Defaults.cancelButtonFontWeight
+        latArcticColor         = (d.object(forKey: K.latArcticColor)         as? Int)    ?? Defaults.latArcticColor
+        latEquatorColor        = (d.object(forKey: K.latEquatorColor)        as? Int)    ?? Defaults.latEquatorColor
+        latLineWidth           = (d.object(forKey: K.latLineWidth)           as? Double) ?? Defaults.latLineWidth
+        latDashStyle           = (d.object(forKey: K.latDashStyle)           as? Int)    ?? Defaults.latDashStyle
+        latLabelSizeMultiplier = (d.object(forKey: K.latLabelSizeMultiplier) as? Double) ?? Defaults.latLabelSizeMultiplier
+        latLabelWeight         = (d.object(forKey: K.latLabelWeight)         as? Double) ?? Defaults.latLabelWeight
+        latLabelSpacing        = (d.object(forKey: K.latLabelSpacing)        as? Double) ?? Defaults.latLabelSpacing
+        latEquatorLabelEnabled = (d.object(forKey: K.latEquatorLabelEnabled) as? Bool)   ?? Defaults.latEquatorLabelEnabled
     }
 
     private enum K {
@@ -158,6 +224,14 @@ final class TweaksStore {
         static let cancelButtonStyle      = "tweak.cancel.style"
         static let cancelButtonColor      = "tweak.cancel.color"
         static let cancelButtonFontWeight = "tweak.cancel.fontWeight"
+        static let latArcticColor         = "tweak.latlines.arcticColor"
+        static let latEquatorColor        = "tweak.latlines.equatorColor"
+        static let latLineWidth           = "tweak.latlines.lineWidth"
+        static let latDashStyle           = "tweak.latlines.dashStyle"
+        static let latLabelSizeMultiplier = "tweak.latlines.labelSizeMultiplier"
+        static let latLabelWeight         = "tweak.latlines.labelWeight"
+        static let latLabelSpacing        = "tweak.latlines.labelSpacing"
+        static let latEquatorLabelEnabled = "tweak.latlines.equatorLabelEnabled"
     }
 
     enum Defaults {
@@ -179,5 +253,16 @@ final class TweaksStore {
         static let cancelButtonStyle: Int         = 1
         static let cancelButtonColor: Int         = 0
         static let cancelButtonFontWeight: Int    = 2
+        // Reference lines (cv05) — mirror the static values in
+        // style-base.json's lat-line-* / lat-label-* layers. Cores are
+        // deliberately DARK; the cream casing carries contrast on dark ground.
+        static let latArcticColor: Int            = 3     // charcoal brown #4a3b2b
+        static let latEquatorColor: Int           = 3     // charcoal      #5a564e
+        static let latLineWidth: Double           = 1.4
+        static let latDashStyle: Int              = 3     // dotted
+        static let latLabelSizeMultiplier: Double = 1.25
+        static let latLabelWeight: Double         = 0.5   // ~semibold (pseudo-bold halo)
+        static let latLabelSpacing: Double        = 220   // pt between repeats
+        static let latEquatorLabelEnabled: Bool   = true
     }
 }
