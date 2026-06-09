@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-0bq8
 title: Render-pipeline performance vector (HDD/IO, PostgreSQL, osm2pgsql) for multi-region scaling
-status: draft
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-07T15:07:05Z
-updated_at: 2026-06-07T15:07:05Z
+updated_at: 2026-06-09T16:25:40Z
 parent: AlaskaRouter-6ihk
 ---
 

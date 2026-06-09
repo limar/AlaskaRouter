@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-6fop
 title: z11 contours collapse into a horizontal ribbon south of Galbraith Lake
-status: completed
+status: in-progress
 type: bug
 priority: high
 created_at: 2026-06-04T14:57:06Z
-updated_at: 2026-06-08T10:08:58Z
+updated_at: 2026-06-09T16:15:12Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -92,3 +92,23 @@ Raised ID_STRIDE default to 100,000,000 (>2x the 47.2M max). Keep --flat-nodes (
 
 ## Summary of Changes (2026-06-08)
 Statewide contours regenerated with CONTOUR_ID_STRIDE=100M (fix c46fa57) and reinstalled. Two distinct contour bugs are now both resolved: (1) projected-DEM ribbon -> generate contours from geographic warp-60 (1aeb0cc); (2) node-ID collision/spidernets -> stride 5M->100M so each of 180 source tiles gets a disjoint ID range > the 47.2M densest-tile node count. New import: 9.49M lines (vs broken 11.7M). Installed pack: 1.13 GB, maxzoom 11, 101,631 tiles, pmtiles verify passed. On-pack before/after across the Wiseman/Coldfoot corridor confirms clean contours + no spidernet. Manifest version 2026-06-08, render_commit c46fa57.
+
+## REOPENED again 2026-06-07 — high-node-id corruption (different from the collision)
+Stride 100M fixed the 5M collision but pushed max node id to 17.9B. Symptom: contours clean in the NORTH, then dropouts + thick spidernets from ~Fort Hamlin Hills (~66N) south through Livengood and Fairbanks. Diagnosis (server):
+- No per-tile collision (max nodes/tile 47.2M < 100M stride).
+- flat-nodes file is sized for all 17.9B ids (143GB logical / 19G actual) -> not a file cap; ids were stored.
+- The breakage tracks NODE-ID MAGNITUDE: northern (low-id) tiles clean, southern/eastern (high-id) tiles corrupt, with the onset where cumulative ids cross ~2^32 (4.29B) ~= Fort Hamlin Hills.
+=> osm2pgsql 1.2.0 mishandles node ids above ~2^32 in flat-nodes way-building (wrong offset lookup -> ways wired to wrong positions -> spidernet).
+
+ROOT problem: the per-tile-stride id scheme forces max id = n_tiles * stride. For 180 dense tiles there is no stride that is both > the 47M per-tile node count (avoid collision) AND keeps max id < ~2^32 (avoid this bug). Need to stop using big sparse ids.
+
+## FIX (robust; dovetails with perf 0bq8)
+1. CONTIGUOUS node/way ids so max id = total node count (~0.4B coarse / ~1.56B fine) -- far under 2^32 with margin, independent of tile count. Implement via osmium renumber after parallel generation (add osmium-tool to deps), or a sequential running-id counter.
+2. COARSEN contour DEM 0.0005deg -> ~0.001deg (~90m): ~4x fewer nodes (47M->~12M/tile, 1.56B->~0.4B total). Independently a perf + pack-size win; further shrinks ids. Negligible z11 visual loss.
+3. PERF Tier-1 (0bq8) for the re-render: flat-nodes on tmpfs (RAM), PostgreSQL import tuning, ZFS sync=disabled -> overnight import down to ~1-2h.
+4. LONG-TERM: newer osm2pgsql via the pinned image (msgi) handles 64-bit ids natively and removes this fragility entirely.
+
+- [ ] Implement contiguous-id assignment (osmium renumber or running counter)
+- [ ] Coarsen contour resolution
+- [ ] Apply perf Tier-1 (tmpfs flat-nodes + PG tuning + ZFS sync)
+- [ ] Re-render, verify Fort Hamlin Hills / Livengood / Fairbanks clean, install

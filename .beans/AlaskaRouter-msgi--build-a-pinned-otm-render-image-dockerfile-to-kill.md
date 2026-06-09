@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-msgi
 title: Build a pinned OTM render image (Dockerfile) to kill manual bootstrap + recreate fragility
-status: draft
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-04T17:04:26Z
-updated_at: 2026-06-04T17:04:26Z
+updated_at: 2026-06-09T16:25:40Z
 parent: AlaskaRouter-6ihk
 ---
 
