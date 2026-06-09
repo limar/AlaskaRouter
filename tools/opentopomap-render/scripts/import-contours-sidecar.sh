@@ -43,12 +43,26 @@ dropdb --if-exists "${DB}"
 createdb "${DB}" -O tirex
 psql -d "${DB}" -c "CREATE EXTENSION IF NOT EXISTS postgis;" >/dev/null
 
-# One parallel pass. --cache 0: rely on the tmpfs flat-nodes (in RAM) + ZFS ARC.
-# shellcheck disable=SC2086
-osm2pgsql --create --slim --output=pgsql -d "${DB}" \
-  --cache 0 --number-processes "${JOBS}" \
-  --style "${STYLE}" --flat-nodes "${FLAT}" \
-  ${files}
+# Batch the inputs: osm2pgsql 1.11 segfaults at startup when handed ~1000+ input
+# files in one invocation (verified: 100 and 545 OK, 1079 crashes even with a
+# raised nofile ulimit). Import in batches -- first batch --create, the rest
+# --append into the shared --flat-nodes. Postprocessing is ~0s for line-only
+# contour data, so the per-batch overhead is negligible. --cache 0: rely on the
+# tmpfs flat-nodes (RAM) + ZFS ARC.
+BATCH="${OSM2PGSQL_BATCH:-400}"
+tmpd="$(mktemp -d)"
+trap 'rm -rf "${tmpd}"' EXIT
+printf '%s\n' ${files} | split -l "${BATCH}" - "${tmpd}/b_"
+mode="--create"
+for b in "${tmpd}"/b_*; do
+  echo "  batch $(basename "${b}"): $(wc -l < "${b}") files (${mode})"
+  # shellcheck disable=SC2046,SC2086
+  osm2pgsql ${mode} --slim --output=pgsql -d "${DB}" \
+    --cache 0 --number-processes "${JOBS}" \
+    --style "${STYLE}" --flat-nodes "${FLAT}" \
+    $(cat "${b}")
+  mode="--append"
+done
 
 psql -d "${DB}" -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO tirex;" >/dev/null
 echo "Contour import complete: $(psql -d "${DB}" -XtAc "SELECT count(*) FROM planet_osm_line") lines"
