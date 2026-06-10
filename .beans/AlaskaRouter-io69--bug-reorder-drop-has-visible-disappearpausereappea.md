@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-io69
 title: 'Bug: reorder drop has visible disappear→pause→reappear (SwiftUI internal, not our code path)'
-status: todo
+status: scrapped
 type: bug
 priority: normal
 created_at: 2026-05-30T13:44:05Z
-updated_at: 2026-05-30T18:06:52Z
+updated_at: 2026-06-10T10:31:54Z
 parent: AlaskaRouter-e0vm
 ---
 

@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-unir
 title: Group search — see all matches highlighted on map and pick
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-05-19T07:59:36Z
-updated_at: 2026-05-21T15:12:22Z
+updated_at: 2026-06-10T10:31:15Z
 parent: AlaskaRouter-xtua
 ---
 

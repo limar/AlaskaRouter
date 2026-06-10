@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-limu
 title: Pin MapLibreSwiftUI to a tag/commit (currently main)
-status: todo
+status: scrapped
 type: task
 priority: normal
 created_at: 2026-05-19T07:17:24Z
-updated_at: 2026-05-19T07:17:24Z
+updated_at: 2026-06-10T10:31:15Z
 parent: AlaskaRouter-xtua
 ---
 

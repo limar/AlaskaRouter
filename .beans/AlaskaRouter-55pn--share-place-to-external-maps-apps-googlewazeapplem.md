@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-55pn
 title: Share place to external maps apps (Google/Waze/Apple/Maps.me)
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-06-08T14:47:58Z
-updated_at: 2026-06-08T15:00:43Z
+updated_at: 2026-06-10T10:31:34Z
 ---
 
 Export/share a place (waystop, POI, or dropped pin) to external maps/navigation apps for discovery (photos/ratings) and navigation.

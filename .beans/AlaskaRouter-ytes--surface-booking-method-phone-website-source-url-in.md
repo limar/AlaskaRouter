@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ytes
 title: Surface booking_method / phone / website / source_url in the app
-status: todo
+status: scrapped
 type: feature
 priority: normal
 created_at: 2026-06-02T12:39:09Z
-updated_at: 2026-06-02T12:39:09Z
+updated_at: 2026-06-10T10:31:15Z
 parent: AlaskaRouter-xtua
 blocked_by:
     - AlaskaRouter-ief3
