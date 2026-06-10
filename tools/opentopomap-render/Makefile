@@ -35,7 +35,7 @@ OUTDIR  = contours-$(REGION)
 DEXEC = docker exec $(CONTAINER)
 
 .DEFAULT_GOAL := help
-.PHONY: help render-image sidecar-image images save-images load-images deps \
+.PHONY: help render-image sidecar-image images save-images load-images deps style \
         fetch dem contours import render export pack render-region clean-region check-region
 
 help: ## Show this help
@@ -65,6 +65,10 @@ load-images: ## Load both images from $(IMAGE_DIR)/*.tar.gz (offline bootstrap)
 	gzip -dc $(IMAGE_DIR)/osm2pgsql-sidecar.tar.gz    | docker load
 
 deps: ## Restore in-container deps (python-gdal, tile dirs) + restart Tirex
+	bash $(SCRIPTS)/otm-docker.sh deps
+
+style: ## Apply our style patches (relief to z11, drop contours -- f7tt/xymz) + reload Tirex
+	$(DEXEC) bash /alaskarouter-scripts/patch-otm-style-vibrant-z11.sh
 	bash $(SCRIPTS)/otm-docker.sh deps
 
 fetch: check-region ## Fetch the region's OSM PBF + Copernicus DEM tiles

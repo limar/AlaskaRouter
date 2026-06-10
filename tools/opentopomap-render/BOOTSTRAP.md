@@ -66,6 +66,7 @@ docker compose -f config/docker-compose.otm.yml up -d
 #   00_setup_database 01_download_water_polys 02_import_osm_data 04_preprocess_osm_data
 #   (03/05/06 are DEM/contours -- replaced by our `make dem`/`contours` below)
 make deps             # tile dirs + Tirex restart (idempotent)
+make style            # our style patches: relief to z11, no contours (idempotent)
 ```
 
 > Tiles are served on the host at `127.0.0.1:8088` (localhost-only). The importer
