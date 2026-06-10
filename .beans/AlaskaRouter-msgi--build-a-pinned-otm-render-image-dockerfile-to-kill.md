@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-msgi
 title: Build a pinned OTM render image (Dockerfile) to kill manual bootstrap + recreate fragility
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-06-04T17:04:26Z
-updated_at: 2026-06-10T09:12:33Z
+updated_at: 2026-06-10T09:57:37Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -41,3 +41,11 @@ Implication: 1.11 fixes the 2^32 spidernet (AlaskaRouter-6fop) at the import lay
 - [x] Build modern osm2pgsql sidecar image + validate connectivity/data access
 - [x] POC: 1.11 sidecar re-import of the broken southern band -> spidernets gone, 693s, ~25x faster
 - [x] Bake recreate-safety config into a pinned render image: docker/otm-render/Dockerfile FROM jhassler/otm-docker@sha256:adbe421f... (pinned), bakes complete /etc/postgresql/10/main + python-gdal. Built + verified (files present, PG starts). Compose defaults to it. Makefile: render-image/images/save-images/load-images. Archived to data/images/*.tar.gz (own the bytes). REMAINING: switch the production container to it (recreate -- safe now since config is baked) + optionally publish the image tarball.
+
+## Summary of Changes (2026-06-10) -- DONE
+Achieved the three layers of 'own a reliable render image':
+1. PIN: docker/otm-render/Dockerfile FROM jhassler/otm-docker@sha256:adbe421f... (digest, not :latest).
+2. RECREATE-SAFETY: bakes a complete /etc/postgresql/10/main config + python-gdal so 'docker compose down/up' no longer breaks PostgreSQL. Built + verified (files present, PG boots, gdal helpers present). Compose defaults to alaskarouter/otm-render:2026-06-10 with a build context; Makefile render-image/images/save-images/load-images.
+3. OWN THE SOURCE: instead of a 2 GB image tarball (rejected), vendored the ~1.9 MB upstream SOURCE (github.com/lukey78/otm-docker @ a024111) under third_party/ with PROVENANCE.md + the fragile phyghtmap .deb. Gives us the build blueprint + the OTM cartography assets even if Docker Hub and the upstream GitHub vanish.
+
+Deferred by user: switch the PRODUCTION container onto the new image ('wait till we need it for real'). The compose already points to it, so the next container recreate applies it automatically. License clearance before any public/OSS release tracked in AlaskaRouter-1tpz.
