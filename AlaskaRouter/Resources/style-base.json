@@ -14,6 +14,13 @@
       "maxzoom": 10,
       "attribution": "© OpenTopoMap (CC-BY-SA), © OpenStreetMap"
     },
+    "minor-roads": {
+      "comment": "AlaskaRouter-levi spike — vector overlay of MINOR road classes only (unclassified/residential/service/track/path...). The raster basemap draws ONLY the major classes, so the sets are disjoint and no road can double-draw (AlaskaRouter-qp29 partition invariant). Tiles z8-14, built by tools/vector-roads-spike/build-corridor.sh.",
+      "type": "vector",
+      "url": "__MINOR_ROADS_URL__",
+      "minzoom": 8,
+      "maxzoom": 14
+    },
     "anchor-labels": {
       "type": "geojson",
       "data": "__ANCHOR_LABELS_URL__"
@@ -30,6 +37,72 @@
   "layers": [
     { "id": "bg", "type": "background", "paint": { "background-color": "#f0e8d2" } },
     { "id": "basemap", "type": "raster", "source": "basemap" },
+
+    {
+      "comment": "AlaskaRouter-levi spike, minor roads only — see the minor-roads source. minzoom 9 is the DISPLAY knob (tiles exist from z8; slide 9-11 to taste). Drawn directly over the raster, under every label.",
+      "id": "minor-roads-track",
+      "type": "line",
+      "source": "minor-roads",
+      "source-layer": "minor_roads",
+      "minzoom": 9,
+      "filter": ["==", ["get", "highway"], "track"],
+      "layout": { "line-cap": "butt", "line-join": "round" },
+      "paint": {
+        "line-color": "#4d3a26",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 9, 0.7, 11, 1.3, 14, 2.4],
+        "line-dasharray": [4, 2.5],
+        "line-opacity": 0.9
+      }
+    },
+    {
+      "id": "minor-roads-path",
+      "type": "line",
+      "source": "minor-roads",
+      "source-layer": "minor_roads",
+      "minzoom": 10,
+      "filter": ["in", ["get", "highway"], ["literal", ["path", "footway", "steps", "bridleway", "cycleway"]]],
+      "layout": { "line-cap": "butt", "line-join": "round" },
+      "paint": {
+        "line-color": "#5a564e",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 14, 1.4],
+        "line-dasharray": [1, 1.8],
+        "line-opacity": 0.85
+      }
+    },
+    {
+      "id": "minor-roads-casing",
+      "type": "line",
+      "source": "minor-roads",
+      "source-layer": "minor_roads",
+      "minzoom": 9,
+      "filter": ["in", ["get", "highway"], ["literal", ["unclassified", "residential", "living_street", "pedestrian", "road", "service"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#8a8378",
+        "line-width": ["interpolate", ["linear"], ["zoom"],
+          9,  ["match", ["get", "highway"], "service", 1.0, 1.6],
+          11, ["match", ["get", "highway"], "service", 1.8, 2.8],
+          14, ["match", ["get", "highway"], "service", 3.2, 5.0]
+        ]
+      }
+    },
+    {
+      "id": "minor-roads-fill",
+      "type": "line",
+      "source": "minor-roads",
+      "source-layer": "minor_roads",
+      "minzoom": 9,
+      "filter": ["in", ["get", "highway"], ["literal", ["unclassified", "residential", "living_street", "pedestrian", "road", "service"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#fdfdfb",
+        "line-width": ["interpolate", ["linear"], ["zoom"],
+          9,  ["match", ["get", "highway"], "service", 0.5, 0.9],
+          11, ["match", ["get", "highway"], "service", 1.0, 1.8],
+          14, ["match", ["get", "highway"], "service", 2.0, 3.6]
+        ]
+      }
+    },
 
     {
       "id": "lat-line-equator-casing",

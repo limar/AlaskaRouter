@@ -32,12 +32,20 @@ private let styleURL: URL = {
     guard let placesURL = Bundle.main.url(forResource: "places", withExtension: "geojson") else {
         fatalError("Missing places.geojson in bundle")
     }
+    // AlaskaRouter-levi spike — vector overlay carrying ONLY the minor road
+    // classes the raster basemap omits (disjoint sets => no double-draw,
+    // AlaskaRouter-qp29). Built by tools/vector-roads-spike/build-corridor.sh.
+    guard let minorRoadsURL = Bundle.main.url(forResource: "minor-roads-spike", withExtension: "pmtiles") else {
+        fatalError("Missing minor-roads-spike.pmtiles in bundle")
+    }
     let pmtilesRef = "pmtiles://\(pmtilesURL.absoluteString)"
+    let minorRoadsRef = "pmtiles://\(minorRoadsURL.absoluteString)"
     let glyphsBase = Bundle.main.bundleURL.appendingPathComponent("glyphs").absoluteString
         .replacingOccurrences(of: "file://", with: "file:///")
     do {
         var json = try String(contentsOf: templateURL, encoding: .utf8)
         json = json.replacingOccurrences(of: "__BASEMAP_URL__", with: pmtilesRef)
+        json = json.replacingOccurrences(of: "__MINOR_ROADS_URL__", with: minorRoadsRef)
         json = json.replacingOccurrences(of: "__GLYPHS_URL_BASE__", with: glyphsBase)
         json = json.replacingOccurrences(of: "__ANCHOR_LABELS_URL__", with: anchorLabelsURL.absoluteString)
         json = json.replacingOccurrences(of: "__PLACES_URL__", with: placesURL.absoluteString)

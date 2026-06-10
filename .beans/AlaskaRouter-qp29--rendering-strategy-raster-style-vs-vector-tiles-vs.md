@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-qp29
 title: 'Rendering strategy: raster-style vs vector tiles vs alternate sources for beautiful scalable maps'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-09T17:43:47Z
-updated_at: 2026-06-09T17:43:47Z
+updated_at: 2026-06-10T12:32:52Z
 parent: AlaskaRouter-7avb
 ---
 
@@ -20,3 +20,15 @@ As we add zoom levels/regions and want more beauty + control, what's the right r
 
 ## Deliverable
 A recommendation with rough effort/size/quality tradeoffs, enough to pick a direction for v2+. Note the vector-tiles option also unlocks the localization/political-naming use cases (6ihk).
+
+
+## DECISION (2026-06-10): Option 3 (hybrid), roads-first
+Picked **Option 3**: keep OTM's relief/hillshade as RASTER (its beauty -- and the part OTM's own vector effort is still WIP on; we deliberately do NOT vectorize the topo look). Add a VECTOR overlay for the sharp/interactive features: roads now; POIs + labels/[[6ihk]] later on the same rails.
+
+Governing invariant that kills double-draw (a hard user constraint): **exactly one layer owns each road class.** raster=major + vector=minor (small step, no re-render) OR raster=none + vector=all (big leap, [[f7tt]] re-render). The forbidden same-class-in-both config is never built.
+
+Two parallel tracks:
+- Track A = [[f7tt]] vibrant z11 + drop contours ([[xymz]]) -- pure raster restyle; also the bootstrap / mounted-PG ([[msgi]]) exercise.
+- Track B = vector minor-roads spike -> [[levi]].
+
+NOT taking: raster z12/z13 for the MAIN pack -- [[r1cf]] stays v2 optional corridor packs.

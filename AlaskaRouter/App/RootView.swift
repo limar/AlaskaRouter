@@ -846,11 +846,13 @@ struct RootView: View {
 
     /// Seed the camera from the last view the user left the app on, so the map
     /// opens where they were rather than at a fixed point far from the route.
-    /// Skipped when `initialZoom` is set so screenshot / UI-test launches stay
-    /// deterministic; falls back to the Alaska default when nothing is saved.
+    /// Skipped when `initialZoom`/`initialCenter` is set so screenshot /
+    /// UI-test launches stay deterministic; falls back to the Alaska default
+    /// when nothing is saved.
     private static func makeInitialCamera() -> MapViewCamera {
         let d = UserDefaults.standard
-        if LaunchArgs.initialZoom == nil, d.object(forKey: lastZoomKey) != nil {
+        if LaunchArgs.initialZoom == nil, LaunchArgs.initialCenter == nil,
+           d.object(forKey: lastZoomKey) != nil {
             let center = CLLocationCoordinate2D(
                 latitude: d.double(forKey: lastCenterLatKey),
                 longitude: d.double(forKey: lastCenterLonKey)
@@ -860,7 +862,10 @@ struct RootView: View {
                 return .center(center, zoom: zoom)
             }
         }
-        return .center(defaultCenter, zoom: LaunchArgs.initialZoom ?? defaultZoom)
+        return .center(
+            LaunchArgs.initialCenter ?? defaultCenter,
+            zoom: LaunchArgs.initialZoom ?? defaultZoom
+        )
     }
 
     /// Persist the current map center + zoom so the next launch restores it.

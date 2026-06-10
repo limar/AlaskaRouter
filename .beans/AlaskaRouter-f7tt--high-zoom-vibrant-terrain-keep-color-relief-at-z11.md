@@ -5,7 +5,7 @@ status: todo
 type: feature
 priority: normal
 created_at: 2026-06-09T17:43:47Z
-updated_at: 2026-06-09T17:43:47Z
+updated_at: 2026-06-10T12:32:52Z
 parent: AlaskaRouter-7avb
 ---
 
@@ -21,3 +21,7 @@ Make our self-rendered z>=11 as beautiful as the vibrant z<=10 (color-relief ter
 
 ## Risk
 color-relief at high zoom can muddy detail (the reason OTM drops it). Tune opacity / blend mode (grain-merge) to keep both beauty and legibility.
+
+
+## Now Track A of the [[qp29]] hybrid decision (2026-06-10)
+Parallel raster track: vibrant color-relief at z11 + DROP contours ([[xymz]]). Pure raster restyle -- no road classes change owners, so NO double-draw risk. Reuses the mounted PG (skip import) => doubles as the bootstrap / recreate-safety ([[msgi]]) exercise (overnight render). In the big-leap end state this same re-render also strips ROADS from the raster so the vector overlay ([[levi]]) owns 100% of roads.

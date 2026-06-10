@@ -5,7 +5,7 @@ status: todo
 type: task
 priority: normal
 created_at: 2026-06-09T17:43:47Z
-updated_at: 2026-06-10T06:42:03Z
+updated_at: 2026-06-10T12:32:52Z
 parent: AlaskaRouter-7avb
 ---
 
@@ -25,3 +25,7 @@ Recommend: measure, then likely drop or thin contours (e.g. only major intervals
 
 ## MEASURED (2026-06-10): contours are NOT the pack-size driver
 Statewide z11 mbtiles: fine+contours ~686 MB, coarse+contours 738 MB, coarse+NO-contours ~738 MB. Within noise -> contours (thin lines) add ~nothing to pack size whether fine, coarse, or absent. The pack is dominated by the HILLSHADE raster + OSM features. So: dropping/coarsening contours yields ~0 storage win. Contours' only real cost is render time + visual clutter. The lever for smaller packs (for more zoom levels) is the hillshade (resolution, PNG->JPEG) or vector tiles -- see AlaskaRouter-qp29 / r1cf. Coarsening was also a no-op for size; keep contours fine for looks unless render time matters.
+
+
+## USER DECISION (2026-06-10): drop contours for v1 (a LOOK call, not size)
+User: "If z11 looks like z0-z10's valleys/mountains I don't care about contours AT ALL" -- and z0-10 (relief only, no contours) is exactly the look he likes. So drop the contour layer from the z11 render for v1; lean on hillshade + vibrant color-relief ([[f7tt]]). The measured ~0 size win stands -- this is a clutter/look decision, and it also drops the whole phyghtmap/contour-import chain off the v1 path. Spot-height point markers are the useful replacement if ever wanted -- not dense brown lines. Keep the contour tooling parked; just stop running it for v1.

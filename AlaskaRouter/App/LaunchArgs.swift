@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// Launch-argument-driven configuration so we can pin design states for screenshots
@@ -50,6 +51,18 @@ enum LaunchArgs {
     static var initialZoom: Double? {
         let raw = UserDefaults.standard.string(forKey: "initialZoom") ?? ""
         return Double(raw)
+    }
+
+    /// Override the initial camera center ("lat,lon") for screenshot
+    /// evaluation — pair with `initialZoom` to pin an exact view (e.g. the
+    /// Galbraith corridor for the minor-roads overlay, AlaskaRouter-levi).
+    static var initialCenter: CLLocationCoordinate2D? {
+        let raw = UserDefaults.standard.string(forKey: "initialCenter") ?? ""
+        let parts = raw.split(separator: ",")
+        guard parts.count == 2,
+              let lat = Double(parts[0]), let lon = Double(parts[1]) else { return nil }
+        let coord = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        return CLLocationCoordinate2DIsValid(coord) ? coord : nil
     }
 
     /// Open the bottom sheet directly to its trips-switcher mode (Step 3 of
