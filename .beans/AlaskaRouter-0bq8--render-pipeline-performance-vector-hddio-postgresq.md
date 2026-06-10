@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-07T15:07:05Z
-updated_at: 2026-06-10T10:23:47Z
+updated_at: 2026-06-10T16:06:49Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -46,3 +46,6 @@ Node parse ~5.8M/s (vs 1.2.0 ~20k/s). Southern band (545 files, 2.08M lines) imp
 Two render-safety/hardening items that outlived erai and fit this scaling/perf vector:
 - [ ] Region-isolated data dirs (/mnt/data/<region>/srtm/...) + a pre-render assert that style-facing rasters' gdalinfo coverage intersects the region bbox (would have caught the Israel-hillshade-in-Alaska contamination before shipping).
 - [ ] pg_dump / snapshot the contour PostGIS DB once good; VERIFY (not assume) what survives a container recreate before touching the container again.
+
+## Scope shift (2026-06-10): contours left the v1 render path
+[[xymz]]/[[f7tt]] shipped contour-FREE rendering: statewide z11 now renders in ~14 min (was ~1.5 h) -- the render-time bottleneck this bean tracked is largely gone for v1. The contour IMPORT chain (osmium sort, flat-nodes tmpfs, ID-stride) only matters again if contours/spot-heights return or a new region needs the contours DB for some other layer. The erai-folded items (gdalinfo coverage assert, pg_dump of the contours DB) drop in urgency accordingly -- keep for the day contour data is regenerated, not before.

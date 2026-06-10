@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-qp29
 title: 'Rendering strategy: raster-style vs vector tiles vs alternate sources for beautiful scalable maps'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-06-09T17:43:47Z
-updated_at: 2026-06-10T13:31:52Z
+updated_at: 2026-06-10T16:06:48Z
 parent: AlaskaRouter-7avb
 ---
 
@@ -35,3 +35,11 @@ NOT taking: raster z12/z13 for the MAIN pack -- [[r1cf]] stays v2 optional corri
 
 ## Small step SHIPPED statewide (2026-06-10)
 [[levi]] approved by user and scaled to all Alaska in-session: 28 MB / 122,410 minor-road features z8-14 (~2.3% pack growth; raster z12 would have been ~2.6 GB). Worst-case density (Anchorage z11) verified legible, zero double-draw. Productionization -> [[4he7]]. Remaining strategy decisions: Track A vibrant/contourless re-render ([[f7tt]]), then the overzoom-cap verdict ([[5h4y]]), then optionally the big leap (raster roads-free, vector all classes).
+
+## Summary of Changes
+
+Question ANSWERED and the answer SHIPPED (2026-06-10): hybrid architecture (Option 3). Raster keeps OTM's terrain beauty (vibrant contour-free z11 shipped via [[f7tt]]/[[xymz]], pack 2026-06-10.2); a vector overlay owns sharp/interactive features (statewide minor roads shipped via [[levi]], 28 MB). Governing invariant: exactly one layer owns each highway class (raster=major, vector=minor today).
+
+Device-verified by user: vibrant z11 + crisp minor roads + ~6x faster renders.
+
+Still-open derivatives, each tracked: [[4he7]] productionize the overlay; [[eqpe]] overzoom-cap verdict; the BIG LEAP (raster roads-free + vector all classes) stays an option, gated on wanting full >z11 consistency -- slide the partition, never duplicate it. Labels/POIs ride the same vector rails later ([[6ihk]], [[21xq]]).
