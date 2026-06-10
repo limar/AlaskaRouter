@@ -28,6 +28,11 @@ MAX_NODES_PER_WAY="${CONTOUR_MAX_NODES_PER_WAY:-2000}"
 TILE_DIR="${CONTOUR_TILE_DIR:-contour-tiles-${TILE_SIZE}}"
 OUTPUT_DIR="${CONTOUR_OUTPUT_DIR:-contours-${TILE_SIZE}}"
 OUTPUT_FORMAT="${CONTOUR_OUTPUT_FORMAT:-pbf}"
+# Contour generator binary. Defaults to `phyghtmap` (the command the OTM base
+# image provides). A from-scratch rebuild installs the maintained py3 fork
+# `pyhgtmap` (pip, https://github.com/agrenott/pyhgtmap) -- point at it with
+# PHYGHTMAP_BIN=pyhgtmap, no script edit. See third_party/otm-docker/PROVENANCE.md.
+PHYGHTMAP_BIN="${PHYGHTMAP_BIN:-phyghtmap}"
 
 case "${OUTPUT_FORMAT}" in
   pbf|xml)
@@ -43,7 +48,7 @@ if [[ "${OUTPUT_FORMAT}" == "xml" ]]; then
   OUTPUT_EXTENSION="osm"
 fi
 
-export ID_START ID_STRIDE MAX_NODES_PER_TILE MAX_NODES_PER_WAY OUTPUT_DIR OUTPUT_FORMAT
+export ID_START ID_STRIDE MAX_NODES_PER_TILE MAX_NODES_PER_WAY OUTPUT_DIR OUTPUT_FORMAT PHYGHTMAP_BIN
 
 cd "${SRTM_DIR}"
 
@@ -79,7 +84,7 @@ done | xargs -n 2 -P "${JOBS}" sh -c '
     if [ "${OUTPUT_FORMAT}" = "pbf" ]; then
       pbf_arg="--pbf"
     fi
-    phyghtmap \
+    "${PHYGHTMAP_BIN}" \
       -o "${OUTPUT_DIR}/contour-${base}" \
       --start-node-id="${start_id}" \
       --start-way-id="${start_id}" \

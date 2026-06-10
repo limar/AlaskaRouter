@@ -56,10 +56,10 @@ If we ever must rebuild the base from this source, it needs modernizing:
   is unmaintained. The `.deb` was `_all` (pure Python) anyway — never needed to
   be a binary. Instead `pip install pyhgtmap` — the maintained Python-3 fork
   (https://github.com/agrenott/pyhgtmap, on PyPI, command `pyhgtmap`). Pin a
-  version. Note: our `scripts/prepare-copernicus-contours.sh` invokes the
-  command name **`phyghtmap`** (provided today by the base image). A rebuild on
-  `pyhgtmap` needs either a `phyghtmap`→`pyhgtmap` shim/alias or a one-word
-  change to that script. (We do NOT vendor the binary — build on demand.)
+  version. Our `scripts/prepare-copernicus-contours.sh` defaults to the
+  command name **`phyghtmap`** (provided today by the base image) but honours
+  `PHYGHTMAP_BIN` — a rebuild on the fork just sets `PHYGHTMAP_BIN=pyhgtmap`,
+  no script edit. (We do NOT vendor the binary — build on demand.)
 
 ## What we actually run
 We don't build from this directory today. We run a thin image
