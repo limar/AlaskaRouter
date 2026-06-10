@@ -47,35 +47,33 @@ server across updates.
 
 ---
 
-## 2. Stand up the render container (one-time)
+## 2. Build the images + stand up the container (one-time)
 
-We run the upstream OpenTopoMap stack image (Mapnik + Tirex + PostGIS). It needs
-a few manual touches on first run; baking these into a pinned image is tracked in
-**AlaskaRouter-msgi**.
+We run a **thin image over the upstream OpenTopoMap stack pinned by digest**
+(`docker/otm-render/Dockerfile`) that bakes the `/etc/postgresql` config +
+`python-gdal`, so a container recreate no longer breaks PostgreSQL. Plus the
+modern osm2pgsql importer sidecar.
 
 ```bash
 cd ~/tiles/AlaskaRouter/tools/opentopomap-render
-# a) bring up the container (compose mounts data/docker/* and scripts)
-bash scripts/prepare-otm-docker.sh <REGION>      # wires the data layout
+make images          # build alaskarouter/otm-render + the osm2pgsql sidecar
+#   ...or, if Docker Hub no longer has the base, load the archived tarballs:
+#   make load-images   (expects data/images/*.tar.gz -- see `make save-images`)
+
+bash scripts/prepare-otm-docker.sh <REGION>      # wire the data layout
 docker compose -f config/docker-compose.otm.yml up -d
-# b) run the OTM first-run import scripts INSIDE the container, in order:
-#    00_setup_database 01_download_water_polys 02_import_osm_data 04_preprocess_osm_data
-#    (03/05/06 are DEM/contours -- we replace those with our scripts below)
-# c) restore deps + tile dirs + Tirex:
-make deps
-# d) if PostgreSQL won't start after a container RECREATE, see
-#    docs/TROUBLESHOOTING.md "container recreate breaks PostgreSQL".
+# First run only: run the OTM import scripts INSIDE the container, in order:
+#   00_setup_database 01_download_water_polys 02_import_osm_data 04_preprocess_osm_data
+#   (03/05/06 are DEM/contours -- replaced by our `make dem`/`contours` below)
+make deps             # tile dirs + Tirex restart (idempotent)
 ```
 
-Build the modern importer sidecar (used by the `import` stage):
-
-```bash
-make sidecar-image
-```
-
-> The render container publishes tiles on the host at `127.0.0.1:8088`
-> (localhost-only). PostgreSQL is reached by the sidecar over the container's
-> network namespace -- no extra exposure. See RUNBOOK.
+> Tiles are served on the host at `127.0.0.1:8088` (localhost-only). The importer
+> sidecar reaches PostgreSQL over the container's network namespace -- no extra
+> exposure. PG data lives on the `data/docker/db` + `data/docker/tablespace` bind
+> mounts and survives a recreate; with the baked image, PG also boots cleanly
+> after one. To keep the kitchen independent of Docker Hub, archive the images
+> once with `make save-images` (and optionally publish the tarballs).
 
 ---
 

@@ -13,7 +13,9 @@
 
 REGION          ?= alaska_z11
 CONTAINER       ?= alaskarouter-otm
+RENDER_IMAGE    ?= alaskarouter/otm-render:2026-06-10
 SIDECAR_IMAGE   ?= alaskarouter/osm2pgsql:1.11
+IMAGE_DIR       ?= data/images
 CONTOUR_SRC_DEG ?= 0.001        # contour DEM resolution (deg); ~0.001=90m. Hillshade unaffected.
 RENDER_PROCS    ?= 8
 FLAT_TMPFS      ?= 170g         # tmpfs size for the osm2pgsql flat-nodes (held in RAM)
@@ -33,8 +35,8 @@ OUTDIR  = contours-$(REGION)
 DEXEC = docker exec $(CONTAINER)
 
 .DEFAULT_GOAL := help
-.PHONY: help sidecar-image deps fetch dem contours import render export pack \
-        render-region clean-region check-region
+.PHONY: help render-image sidecar-image images save-images load-images deps \
+        fetch dem contours import render export pack render-region clean-region check-region
 
 help: ## Show this help
 	@echo "Render pipeline (run on the server). REGION=$(REGION)"
@@ -44,8 +46,23 @@ help: ## Show this help
 check-region: ## Validate REGION exists in config/regions.json
 	@$(REGPY) bbox >/dev/null && echo "REGION=$(REGION) extent=[$(EXTENT)] zooms=[$(ZOOMS)]"
 
+render-image: ## Build the pinned, recreate-safe OTM render image
+	docker build -t $(RENDER_IMAGE) $(HERE)/docker/otm-render
+
 sidecar-image: ## Build the modern osm2pgsql 1.11 importer sidecar image
 	docker build -t $(SIDECAR_IMAGE) $(HERE)/docker/osm2pgsql-sidecar
+
+images: render-image sidecar-image ## Build both images
+
+save-images: ## Archive both images to $(IMAGE_DIR)/*.tar.gz (own the bytes, no Docker Hub needed)
+	mkdir -p $(IMAGE_DIR)
+	docker save $(RENDER_IMAGE)  | gzip > $(IMAGE_DIR)/otm-render.tar.gz
+	docker save $(SIDECAR_IMAGE) | gzip > $(IMAGE_DIR)/osm2pgsql-sidecar.tar.gz
+	@ls -lah $(IMAGE_DIR)/*.tar.gz
+
+load-images: ## Load both images from $(IMAGE_DIR)/*.tar.gz (offline bootstrap)
+	gzip -dc $(IMAGE_DIR)/otm-render.tar.gz          | docker load
+	gzip -dc $(IMAGE_DIR)/osm2pgsql-sidecar.tar.gz    | docker load
 
 deps: ## Restore in-container deps (python-gdal, tile dirs) + restart Tirex
 	bash $(SCRIPTS)/otm-docker.sh deps

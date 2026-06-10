@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-04T17:04:26Z
-updated_at: 2026-06-09T16:55:49Z
+updated_at: 2026-06-10T09:12:33Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -40,4 +40,4 @@ Implication: 1.11 fixes the 2^32 spidernet (AlaskaRouter-6fop) at the import lay
 
 - [x] Build modern osm2pgsql sidecar image + validate connectivity/data access
 - [x] POC: 1.11 sidecar re-import of the broken southern band -> spidernets gone, 693s, ~25x faster
-- [ ] Bake recreate-safety config (pg_hba/pg_ident/conf.d, tuned postgresql.conf) into a pinned render image (still desirable, separate from the importer)
+- [x] Bake recreate-safety config into a pinned render image: docker/otm-render/Dockerfile FROM jhassler/otm-docker@sha256:adbe421f... (pinned), bakes complete /etc/postgresql/10/main + python-gdal. Built + verified (files present, PG starts). Compose defaults to it. Makefile: render-image/images/save-images/load-images. Archived to data/images/*.tar.gz (own the bytes). REMAINING: switch the production container to it (recreate -- safe now since config is baked) + optionally publish the image tarball.
