@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-07T15:07:05Z
-updated_at: 2026-06-09T16:25:40Z
+updated_at: 2026-06-09T16:55:49Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -38,3 +38,6 @@ Bake the tuned postgresql.conf + newer osm2pgsql + the tmpfs-flat-nodes + ZFS co
 ## Notes
 - Do NOT apply mid-run to the current import; these target future/region imports.
 - Relates to: AlaskaRouter-msgi (pinned image), AlaskaRouter-r1cf (region packs).
+
+## POC measurement (2026-06-09): osm2pgsql 1.11 + tmpfs flat-nodes + -P8
+Node parse ~5.8M/s (vs 1.2.0 ~20k/s). Southern band (545 files, 2.08M lines) imported in 693s. Extrapolated full FINE import ~50 min vs ~22h under 1.2.0 (~25x). Tier-1 (tmpfs flat-nodes) + modern importer validated. Coarsening (Tier-2) would cut another ~4x.

@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-04T17:04:26Z
-updated_at: 2026-06-09T16:38:27Z
+updated_at: 2026-06-09T16:55:49Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -39,4 +39,5 @@ Built tools/opentopomap-render/docker/osm2pgsql-sidecar/Dockerfile (FROM ubuntu:
 Implication: 1.11 fixes the 2^32 spidernet (AlaskaRouter-6fop) at the import layer. The per-tile-stride/contiguous-id workarounds AND the 1.2.0 chunked-import workaround are unnecessary; 1.11 can import all PBFs in one parallel invocation. Coarsening becomes a size/perf choice only.
 
 - [x] Build modern osm2pgsql sidecar image + validate connectivity/data access
+- [x] POC: 1.11 sidecar re-import of the broken southern band -> spidernets gone, 693s, ~25x faster
 - [ ] Bake recreate-safety config (pg_hba/pg_ident/conf.d, tuned postgresql.conf) into a pinned render image (still desirable, separate from the importer)
