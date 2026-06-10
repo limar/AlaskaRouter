@@ -1,17 +1,31 @@
 # OpenTopoMap Self-Render Pipeline
 
-This workspace supports `AlaskaRouter-6ihk`: render OpenTopoMap-compatible
-raster tiles ourselves instead of bulk-downloading public tile-server PNGs.
+Render OpenTopoMap-compatible raster tiles ourselves (`AlaskaRouter-6ihk`)
+instead of bulk-downloading public tile-server PNGs.
 
-The immediate v1 driver is `AlaskaRouter-2ptw`: add statewide Alaska z=11
-detail. The preferred flow is now:
+## Start here
 
-1. Render only the Alaska z=11 delta from OSM/SRTM source data.
-2. Convert rendered PNG tiles to MBTiles/PMTiles.
-3. Merge the z=11 PMTiles with the existing z=0..10 `alaska-pack.pmtiles`.
-4. Publish the replacement pack through the existing GitHub Releases flow.
+| You want to... | Go to |
+|---|---|
+| **Render a region** (the how-to) | the **`Makefile`** — `make help`, `make render-region REGION=alaska_z11` |
+| **Set up from zero** (new server/laptop) | **`BOOTSTRAP.md`** |
+| **Understand the architecture / why** | **`docs/RUNBOOK.md`** |
+| **A stage failed / looks wrong** | **`docs/TROUBLESHOOTING.md`** |
+| **Publish / install the pack** | `../build-pack/` (`release-pack.sh`, `fetch-pack.sh`) + BOOTSTRAP §4 |
 
-Runtime package infrastructure remains deferred.
+## Layout
+- `Makefile` — pipeline orchestration (one target per stage).
+- `config/regions.json` — region definitions (bbox, zooms, Geofabrik URL).
+- `scripts/` — fetch / DEM / contour / import / export / pack steps + helpers.
+- `docker/osm2pgsql-sidecar/` — modern osm2pgsql 1.11 importer image.
+- `config/docker-compose.otm.yml` — the upstream OTM render container.
+- `tests/` — unit tests (Python; multi-hour renders are too costly to test live).
+- `data/` — gitignored scratch (DEM, warps, tiles, mbtiles).
+
+The pipeline (per region): fetch OSM + Copernicus DEM → build hillshade
+(EPSG:3857) + geographic contour DEM → generate contours → import via the
+osm2pgsql 1.11 sidecar → render → export → pack → (laptop) merge + install +
+publish.
 
 ## Disk And Bandwidth
 

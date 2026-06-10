@@ -1,8 +1,12 @@
-# How We Rendered the Maps
+# How We Rendered the Maps (architecture & post-mortem)
 
-A runbook + post-mortem for the self-rendered OpenTopoMap pipeline that produced
-the Alaska **z11 + hillshade** layer now bundled in
-`AlaskaRouter/Resources/alaska-pack.pmtiles`.
+> **Want to actually render something?** Start with [../BOOTSTRAP.md](../BOOTSTRAP.md)
+> (zero-to-pack) and the **Makefile** (`make render-region REGION=...`). Hit a
+> wall? [TROUBLESHOOTING.md](TROUBLESHOOTING.md). This document is the *why* —
+> architecture, the machine split, and the post-mortem — not the step-by-step.
+
+A post-mortem for the self-rendered OpenTopoMap pipeline that produced the Alaska
+**z11 + hillshade** layer bundled in `AlaskaRouter/Resources/alaska-pack.pmtiles`.
 
 This document was reconstructed from the `render-maps` session transcript and the
 bean history of [`AlaskaRouter-6ihk`](../../.beans) (the render pipeline) and
@@ -201,29 +205,23 @@ verifies as the hillshaded 20 KiB PNG (sha `ada28d4…`).
 - HD corridor packs (Dalton/Denali/Kenai z12–13) reuse this unchanged except for
   `regions.json` bbox/zoom — but only after the georeferencing bugs below are fixed.
 
-## 7. Known bugs (open) — both are georeferencing in the projected DEM chain
+## 7. The georeferencing/import bugs — all RESOLVED
 
-The whole DEM derivative chain lives in **projected Mercator meters** (confirmed
-in-session: `gdal_translate` treated the raster's meters as if they were lon/lat).
-Both open bugs sit on that axis.
+The original z11 render had a chain of bugs, all now fixed (and shipping):
 
-- **Bug A — hillshade shifted SE.** The z11 hillshade is translated relative to
-  the OSM/contour layers (and relative to the upstream-scraped z6–10 tiles, hence
-  a visible jump at the z10→z11 seam). Terrain that OTM places *west* of Galbraith
-  Lake appears *south* in our render. Leading suspects: (1) `warp-30` (hillshade
-  source) and `warp-60` (contour source) are warped independently with no `-tap`,
-  so their grids don't share an origin and neither is guaranteed to land on true
-  EPSG:3857 tile bounds; (2) WGS84-ellipsoid → `+ellps=sphere` Mercator without a
-  datum shift introduces a latitude-dependent offset, largest at 68°N.
-- **Bug B — contours collapse into a horizontal ribbon.** South of the lake the
-  brown lines pile into one dense horizontal band with nothing below it. `phyghtmap`
-  is built for *geographic* DEMs but is fed the *projected Mercator* `warp-60.tif`;
-  cut into retile chunks, its coordinate handling degenerates at a tile seam and
-  squishes a whole tile's contours onto one latitude. Upstream OTM generates
-  contours from the geographic DEM, not the Mercator warp — that's the deviation
-  to correct.
+- **Hillshade shifted SE** (AlaskaRouter-lg59): the DEM was warped to PROJ's
+  `+ellps=sphere` (radius 6370997) instead of EPSG:3857 (6378137). Fixed:
+  `-t_srs EPSG:3857` for the hillshade/relief warps.
+- **Contours collapsed into a ribbon** (AlaskaRouter-6fop): `phyghtmap` was fed a
+  projected Mercator DEM. Fixed: `warp-60` is now geographic EPSG:4326.
+- **Contours spidernetted in high-id tiles** (6fop, the deep one): osm2pgsql
+  1.2.0 mishandles node ids >2³². Fixed by importing through the **osm2pgsql 1.11
+  sidecar** (`make import`), which also forced sorting all per-tile PBFs into one
+  file via `osmium sort` (1.11 segfaults on many `--create` inputs and on
+  `--append`).
 
-**To confirm root cause** (needs the server — ties back to §6.1): `gdalinfo` on
-`warp-30.tif`, `warp-60.tif`, `hillshade-30-jpeg.tif`; compare origins/extents to
-true z11 tile bounds for the Galbraith area; check whether `phyghtmap` is
-reprojecting or mis-reading the Mercator geotransform.
+Full failure-mode details and recovery steps live in
+[docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md). The current, reproducible pipeline
+is the **Makefile** (`make render-region REGION=...`) — see
+[../BOOTSTRAP.md](../BOOTSTRAP.md). The §5 sequence below is the original
+hand-run history; the import stage there is superseded by the sidecar.

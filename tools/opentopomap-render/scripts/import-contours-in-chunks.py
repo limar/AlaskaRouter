@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Import generated contour PBFs into the OpenTopoMap contours database.
+"""DEPRECATED -- do not use for new renders. Use import-contours-sidecar.sh.
+
+This drives the in-container osm2pgsql 1.2.0, which corrupts contour geometry for
+node ids above ~2^32 (the spidernet bug, AlaskaRouter-6fop). The supported path
+is the osm2pgsql 1.11 sidecar (`make import` / import-contours-sidecar.sh), which
+handles 64-bit ids natively. Kept only for historical reference.
+
+Import generated contour PBFs into the OpenTopoMap contours database.
 
 The upstream OpenTopoMap script imports every contour PBF in one osm2pgsql
 process. Alaska's contour set is large enough to crash osm2pgsql 1.2 after the

@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-iobu
 title: Reproducible from-zero bootstrap of the render kitchen (docs + end-to-end driver + pinned image)
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-06-10T08:17:10Z
-updated_at: 2026-06-10T08:17:10Z
+updated_at: 2026-06-10T08:40:26Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -29,3 +29,11 @@ GAPS (priority):
 - [ ] Pin the render image by digest; fold the container bootstrap into msgi (recreate-safety + deps baked).
 - [ ] Retire/relabel the 1.2.0 import-contours-in-chunks.py.
 - [ ] Dry-run the bootstrap on a clean checkout to prove it.
+
+## Progress 2026-06-10 (high-usability foundation landed)
+- [x] Makefile: per-stage targets + 'render-region' full chain; encapsulates the sidecar/osmium import orchestration that was server scratch. 'make help' lists everything.
+- [x] BOOTSTRAP.md: zero-to-pack for new laptop + new server.
+- [x] docs/: RUNBOOK.md (moved; stale 'open bugs' rewritten to RESOLVED + start-here banner) + TROUBLESHOOTING.md (every trap from the saga).
+- [x] helpers + tests: scripts/region.py (+ test) reads bbox/zoom from config; scripts/wait-tirex-drain.sh. 24 tooling tests pass.
+- [x] Deprecated import-contours-in-chunks.py (1.2.0) -> sidecar.
+REMAINING: pin/bake image (msgi); laptop-side make for packaging; clean-checkout dry-run.
