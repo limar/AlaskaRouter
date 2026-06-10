@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-06-10T08:17:10Z
-updated_at: 2026-06-10T08:40:26Z
+updated_at: 2026-06-10T10:20:11Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -23,11 +23,11 @@ GAPS (priority):
 5. Trap: old import-contours-in-chunks.py (1.2.0) still committed beside import-contours-sidecar.sh; clarify/retire it.
 
 ## Deliverables
-- [ ] Rewrite RENDERING-RUNBOOK.md to the CURRENT pipeline (sidecar import via osmium sort; coarse contour DEM; EPSG:3857 hillshade; the fixes); remove the stale 'open bugs' section.
-- [ ] Commit an end-to-end render-region.sh (parameterized by region) + a sidecar-import wrapper that encapsulates the docker run (netns, tmpfs, mounts, style, tirex stop/deps).
-- [ ] BOOTSTRAP.md: zero-to-rendered checklist for new laptop + new server, incl. git-bundle deploy and prereqs.
-- [ ] Pin the render image by digest; fold the container bootstrap into msgi (recreate-safety + deps baked).
-- [ ] Retire/relabel the 1.2.0 import-contours-in-chunks.py.
+- [x] Rewrite RENDERING-RUNBOOK.md to the CURRENT pipeline (sidecar import via osmium sort; coarse contour DEM; EPSG:3857 hillshade; the fixes); remove the stale 'open bugs' section.
+- [x] Commit an end-to-end render-region.sh (parameterized by region) + a sidecar-import wrapper that encapsulates the docker run (netns, tmpfs, mounts, style, tirex stop/deps).
+- [x] BOOTSTRAP.md: zero-to-rendered checklist for new laptop + new server, incl. git-bundle deploy and prereqs.
+- [x] Pin the render image by digest; fold the container bootstrap into msgi (recreate-safety + deps baked).
+- [x] Retire/relabel the 1.2.0 import-contours-in-chunks.py.
 - [ ] Dry-run the bootstrap on a clean checkout to prove it.
 
 ## Progress 2026-06-10 (high-usability foundation landed)

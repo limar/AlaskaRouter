@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-06-04T14:51:34Z
-updated_at: 2026-06-04T16:49:15Z
+updated_at: 2026-06-10T10:20:11Z
 ---
 
 Scan the maps-session.md transcript in chunks (skipping embedded images), produce a dedicated runbook 'how we rendered the maps' under tools/opentopomap-render/, map the Docker container contract and PostGIS durability, and form an opinion on workflow improvements (git-on-both-ends vs manual ssh, remote-work mode, reproducibility). Output feeds the fix of the two known z11 georeferencing bugs (hillshade SE shift; contour ribbon collapse).
@@ -26,8 +26,8 @@ Both open bugs are georeferencing in the projected-Mercator DEM chain: hillshade
 
 Decision: keep working LOCAL + reach server via ssh, but switch server provenance from rsync to git. No more rsync of scripts.
 
-- [ ] Server renders from a committed SHA: 'git pull' the render-maps branch under /home/mlifshitz/tiles/AlaskaRouter instead of rsync; mount the git checkout's scripts/ at /alaskarouter-scripts.
-- [ ] Stamp the render commit SHA into alaska-pack.manifest.json so each pack is traceable to source.
+- [x] Server renders from a committed SHA: 'git pull' the render-maps branch under /home/mlifshitz/tiles/AlaskaRouter instead of rsync; mount the git checkout's scripts/ at /alaskarouter-scripts.
+- [x] Stamp the render commit SHA into alaska-pack.manifest.json so each pack is traceable to source.
 - [ ] Region-isolated data dirs (/mnt/data/<region>/srtm/...) + pre-render assert that style-facing rasters' gdalinfo coverage intersects the region bbox (would have caught the Israel-hillshade-in-Alaska contamination before shipping).
 - [ ] pg_dump / snapshot the contour PostGIS DB once good; VERIFY (not assume) what survives a container recreate before touching the container again.
 
@@ -41,4 +41,4 @@ Verified before recreating: PG cluster + tablespace are on host ZFS bind mounts 
 
 NEW FRAGILITY FOUND: the image ships only postgresql.conf in /etc/postgresql/10/main; pg_hba.conf, pg_ident.conf, conf.d are created at first-run in the EPHEMERAL layer, so recreate loses them and PG won't boot. Recovered by recreating those files (trust auth, PG port not published) + chown postgres + otm-docker.sh deps (restores python-gdal, /mnt/tiles, tirex). Documented in RENDERING-RUNBOOK.md.
 
-- [ ] HARDENING TODO: persist a complete /etc/postgresql via bind mount (populated, not empty) OR self-heal the missing config files at container startup, so 'docker compose down/up' is safe unattended. Until then, do NOT recreate the container without the documented recovery on hand.
+- [x] HARDENING TODO: persist a complete /etc/postgresql via bind mount (populated, not empty) OR self-heal the missing config files at container startup, so 'docker compose down/up' is safe unattended. Until then, do NOT recreate the container without the documented recovery on hand.
