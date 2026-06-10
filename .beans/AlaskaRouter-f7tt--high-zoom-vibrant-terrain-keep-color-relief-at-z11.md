@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-f7tt
 title: 'High-zoom vibrant terrain: keep color-relief at z11+ instead of OTM''s white topo style'
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-06-09T17:43:47Z
-updated_at: 2026-06-10T14:39:24Z
+updated_at: 2026-06-10T15:44:34Z
 parent: AlaskaRouter-7avb
 ---
 
@@ -37,7 +37,11 @@ The washed-out z11 is NOT a different palette: `styles-otm/basemap-relief.xml` g
 NOTE: the live style lives in the CONTAINER's /home/otm; repo third_party copy is the blueprint. Sample A/B render on the server needs ssh access (blocked this session -- ask user).
 
 ## Remaining to ship (needs the render server)
-- [ ] Apply on server: `make style` (after granting ssh access -- blocked by permissions this session)
-- [ ] Sample render first: a Galbraith + a Fairbanks block at z11, eyeball vibrancy/legibility vs current, THEN statewide z11 re-render (render/export/pack only -- no dem/contours/import; PG + warps reused)
-- [ ] Laptop: pmtiles merge + manifest bump + install (BOOTSTRAP section 4)
-- [ ] After this ships, the overzoom-cap verdict ([[5h4y]]) can be judged on the new base
+- [x] Applied on server via `make style` (idempotent rerun confirmed).
+- [x] Sample render eyeballed by user ("Looks good") -> statewide z11 re-render: ~14 min total (!), 74,955 tiles, 0 errors/0 failed. Contour-free Mapnik is much faster. mbtiles = 1.1 GB (vs ~0.7 GB white -- colored relief compresses worse; JPEG lever in r1cf if needed).
+- [x] Laptop: md5-verified pull, pmtiles convert+extract+merge -> 1.5 GB pack installed + verified; manifest 2026-06-10.2 (+sha256 sidecars); simulator-verified at Galbraith + Fairbanks WITH the minor-roads overlay on top.
+- [x] Overzoom-cap verdict is now UNBLOCKED -> spun into its own bean (see qp29 trail).
+
+## Summary of Changes
+
+Shipped end-to-end on 2026-06-10: relief-500 gate z8->z11 (ramp A unchanged -- user pick from rasterio previews), contours dropped ([[xymz]]), patch script + `make style` + BOOTSTRAP; statewide z11 re-render (14 min, 74,955 tiles, clean); pack 2026-06-10.2 (1.5 GB) installed and simulator-verified with the [[levi]] vector minor-roads overlay. z11 now matches the vibrant z<=10 look. GitHub release publish deliberately left pending user GO.

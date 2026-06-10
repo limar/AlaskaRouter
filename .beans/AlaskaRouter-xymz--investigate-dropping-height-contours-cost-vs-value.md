@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-xymz
 title: Investigate dropping height contours (cost vs value given hillshade)
-status: todo
+status: completed
 type: task
 priority: normal
 created_at: 2026-06-09T17:43:47Z
-updated_at: 2026-06-10T12:32:52Z
+updated_at: 2026-06-10T15:44:34Z
 parent: AlaskaRouter-7avb
 ---
 
@@ -29,3 +29,7 @@ Statewide z11 mbtiles: fine+contours ~686 MB, coarse+contours 738 MB, coarse+NO-
 
 ## USER DECISION (2026-06-10): drop contours for v1 (a LOOK call, not size)
 User: "If z11 looks like z0-z10's valleys/mountains I don't care about contours AT ALL" -- and z0-10 (relief only, no contours) is exactly the look he likes. So drop the contour layer from the z11 render for v1; lean on hillshade + vibrant color-relief ([[f7tt]]). The measured ~0 size win stands -- this is a clutter/look decision, and it also drops the whole phyghtmap/contour-import chain off the v1 path. Spot-height point markers are the useful replacement if ever wanted -- not dense brown lines. Keep the contour tooling parked; just stop running it for v1.
+
+## Summary of Changes
+
+Decision shipped 2026-06-10 inside [[f7tt]]'s Track A render: contours Layer removed by scripts/patch-otm-style-vibrant-z11.sh, statewide z11 re-rendered without them. Bonus finding: render time collapsed (~14 min statewide vs ~1.5 h) -- contours were the render-time cost, exactly as this bean predicted (storage ~0, render time real). Contour tooling stays parked for future spot-heights.

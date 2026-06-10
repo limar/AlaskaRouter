@@ -1,37 +1,47 @@
 {
   "schema_version": 1,
   "pack_id": "alaska-pack",
-  "version": "2026-06-10",
+  "version": "2026-06-10.2",
   "title": "Alaska + World Skeleton",
-  "description": "OpenTopoMap raster tiles. World skeleton z=0-5 (every tile globally) + Alaska statewide z=6-11 (lon -180..-130, lat 51..72). Includes the Aleutian chain. Alaska z=11 is self-rendered with corrected EPSG:3857 hillshade and geographic-DEM contours.",
+  "description": "OpenTopoMap raster tiles. World skeleton z=0-5 (every tile globally) + Alaska statewide z=6-11 (lon -180..-130, lat 51..72). Includes the Aleutian chain. Alaska z=11 is self-rendered: vibrant color-relief extended to z11 (stock OTM goes white above z8), NO contour lines (AlaskaRouter-f7tt/xymz), corrected EPSG:3857 hillshade.",
   "source": {
     "name": "OpenTopoMap",
     "url": "https://opentopomap.org",
     "license": "CC-BY-SA",
-    "attribution": "Map data © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)"
+    "attribution": "Map data \u00a9 OpenStreetMap contributors, SRTM | Map style: \u00a9 OpenTopoMap (CC-BY-SA)"
   },
   "format": "pmtiles",
   "tile_format": "png",
   "file": "alaska-pack.pmtiles",
-  "byte_size": 1196763125,
+  "byte_size": 1571705801,
   "coverage": [
     {
       "name": "world_skeleton",
       "minzoom": 0,
       "maxzoom": 5,
-      "bbox": [-180.0, -85.05, 180.0, 85.05],
+      "bbox": [
+        -180.0,
+        -85.05,
+        180.0,
+        85.05
+      ],
       "tile_count": 1365
     },
     {
       "name": "alaska",
       "minzoom": 6,
       "maxzoom": 11,
-      "bbox": [-180.0, 51.0, -130.0, 72.0],
+      "bbox": [
+        -180.0,
+        51.0,
+        -130.0,
+        72.0
+      ],
       "tile_count": 100266
     }
   ],
   "total_tile_count": 101631,
-  "built_at": "2026-06-10T09:46:00Z",
-  "render_commit": "ed30f452fb9f560726d8db1c8dd495bf36f9773c",
-  "notes": "v1: pack is bundled inside the app. v2+ will host regional packs in iCloud Drive and ship only the world skeleton in the binary. Alaska z=11 self-rendered: hillshade in true EPSG:3857 (AlaskaRouter-lg59); contours from a geographic DEM at 0.001 deg (~90 m), imported via a modern osm2pgsql 1.11 sidecar (osmium sort + single --create) which handles 64-bit node ids natively and removed the contour spidernets that osm2pgsql 1.2.0 produced above ~2^32 (AlaskaRouter-6fop)."
+  "built_at": "2026-06-10T15:42:10Z",
+  "render_commit": "0a34079348abdde416b3d37a9c31046617f90387",
+  "notes": "v1: pack is bundled inside the app. v2+ will host regional packs in iCloud Drive and ship only the world skeleton in the binary. z=11 re-rendered 2026-06-10 with patch-otm-style-vibrant-z11.sh: relief-500 gate z8->z11 (ramp unchanged -- user pick), contours layer dropped. Minor roads are NOT in the raster by design: they ship as the separate vector overlay minor-roads-spike.pmtiles (AlaskaRouter-levi, raster=major/vector=minor partition, AlaskaRouter-qp29)."
 }
