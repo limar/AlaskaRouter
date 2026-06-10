@@ -43,13 +43,14 @@ dropdb --if-exists "${DB}"
 createdb "${DB}" -O tirex
 psql -d "${DB}" -c "CREATE EXTENSION IF NOT EXISTS postgis;" >/dev/null
 
-# Batch the inputs: osm2pgsql 1.11 segfaults at startup when handed ~1000+ input
-# files in one invocation (verified: 100 and 545 OK, 1079 crashes even with a
-# raised nofile ulimit). Import in batches -- first batch --create, the rest
-# --append into the shared --flat-nodes. Postprocessing is ~0s for line-only
-# contour data, so the per-batch overhead is negligible. --cache 0: rely on the
-# tmpfs flat-nodes (RAM) + ZFS ARC.
-BATCH="${OSM2PGSQL_BATCH:-400}"
+# Batch the inputs: osm2pgsql 1.11 segfaults at startup when handed too many
+# input files in one invocation (verified on the coarse set: 100 files OK, ~400+
+# crash at setup regardless of --number-processes or nofile ulimit). Import in
+# batches of 100 -- first batch --create, the rest --append into the shared
+# --flat-nodes. Postprocessing is ~0s for line-only contour data, so the
+# per-batch overhead is negligible. --cache 0: rely on the tmpfs flat-nodes
+# (RAM) + ZFS ARC. NOTE: osm2pgsql -P is PORT; process count is --number-processes.
+BATCH="${OSM2PGSQL_BATCH:-100}"
 tmpd="$(mktemp -d)"
 trap 'rm -rf "${tmpd}"' EXIT
 printf '%s\n' ${files} | split -l "${BATCH}" - "${tmpd}/b_"
