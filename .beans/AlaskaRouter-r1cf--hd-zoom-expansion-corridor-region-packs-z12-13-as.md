@@ -5,7 +5,7 @@ status: draft
 type: feature
 priority: normal
 created_at: 2026-06-04T17:04:26Z
-updated_at: 2026-06-04T17:04:26Z
+updated_at: 2026-06-10T06:42:03Z
 parent: AlaskaRouter-ttvk
 ---
 
@@ -42,3 +42,6 @@ More zoom detail than statewide z11, without bloating the bundled pack or blowin
 - Exact corridor bboxes + which to ship first (Dalton likely #1).
 - Pack granularity: per-corridor vs per-zoom-per-corridor.
 - In-app download/import UX vs manual Files import for v1.5.
+
+## Size finding (2026-06-10)
+Measured: z11 statewide pack is ~700-740 MB and is HILLSHADE-dominated, not contour-dominated (contours add ~nothing). So per-zoom size for z12/z13 will scale ~4x/16x on the hillshade+OSM tiles regardless of contours. To make more-zoom-levels affordable, the levers are: JPEG (not PNG) tiles, lower hillshade detail at high zoom, region packs over corridors, or vector tiles (AlaskaRouter-qp29). Coarsening contours does NOT help pack size.

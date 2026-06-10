@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-6fop
 title: z11 contours collapse into a horizontal ribbon south of Galbraith Lake
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-06-04T14:57:06Z
-updated_at: 2026-06-09T16:15:12Z
+updated_at: 2026-06-10T06:48:02Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -112,3 +112,9 @@ ROOT problem: the per-tile-stride id scheme forces max id = n_tiles * stride. Fo
 - [ ] Coarsen contour resolution
 - [ ] Apply perf Tier-1 (tmpfs flat-nodes + PG tuning + ZFS sync)
 - [ ] Re-render, verify Fort Hamlin Hills / Livengood / Fairbanks clean, install
+
+## POC: osm2pgsql 1.11 sidecar fixes the high-id spidernet (2026-06-09)
+Re-imported the 545-file southern band (Fairbanks/Livengood, the broken high-id region; existing fine contours-sw2, ids to 17.9B) via the osm2pgsql 1.11 sidecar (tmpfs flat-nodes, --number-processes 8, --cache 0), then re-rendered. Before/after confirms spidernets GONE - 1.11 handles 64-bit ids natively. No stride/contiguous-id changes needed; the importer upgrade alone fixes 6fop. Import: 693s for 545 files / 2.08M lines (vs ~22h full run under 1.2.0).
+
+## Summary of Changes (2026-06-10) -- FULLY RESOLVED
+The contour bug had three layers, all now fixed: (1) projected-Mercator DEM ribbon -> generate contours from a geographic EPSG:4326 DEM; (2) node-ID collision spidernets from a too-small stride -> larger stride; (3) the stride pushed ids >2^32, which osm2pgsql 1.2.0 mis-handles (geometry wired to wrong nodes) -> THE real fix: import via a modern osm2pgsql 1.11 sidecar (AlaskaRouter-msgi) that handles 64-bit ids natively. The 1.11 import has its own sharp edges (segfaults on a single --create with ~400+ files, and on --append), solved with 'osmium sort' merging all per-tile PBFs into one ordered file -> single --create. Contours are now generated at 0.001 deg (~90 m, env CONTOUR_SRC_DEG; hillshade untouched). Final coarse statewide pack (render_commit ed30f45) installed 2026-06-10: 1.11 GB, maxzoom 11, clean contours statewide incl. Fairbanks/Livengood (verified). Side finding: contours are NOT the pack-size driver (hillshade is) -- see AlaskaRouter-xymz.
