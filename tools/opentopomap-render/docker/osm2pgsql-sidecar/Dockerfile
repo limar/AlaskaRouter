@@ -10,8 +10,12 @@
 # --number-processes. It joins the render container's network namespace
 # (docker run --network container:alaskarouter-otm) to reach PG on 127.0.0.1 --
 # no PostgreSQL listen_addresses change, no extra network exposure.
+# osmium-tool: merge the many per-tile contour PBFs into one file before import.
+# osm2pgsql 1.11 segfaults on a single --create with ~400+ input files, AND its
+# --append path (legacy pgsql output) segfaults too -- so neither one-shot-many
+# nor batched import works. Merging to one file -> one --create sidesteps both.
 FROM ubuntu:24.04
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      osm2pgsql python3 postgresql-client ca-certificates \
+      osm2pgsql osmium-tool python3 postgresql-client ca-certificates \
  && rm -rf /var/lib/apt/lists/*

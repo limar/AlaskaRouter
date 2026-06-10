@@ -43,27 +43,22 @@ dropdb --if-exists "${DB}"
 createdb "${DB}" -O tirex
 psql -d "${DB}" -c "CREATE EXTENSION IF NOT EXISTS postgis;" >/dev/null
 
-# Batch the inputs: osm2pgsql 1.11 segfaults at startup when handed too many
-# input files in one invocation (verified on the coarse set: 100 files OK, ~400+
-# crash at setup regardless of --number-processes or nofile ulimit). Import in
-# batches of 100 -- first batch --create, the rest --append into the shared
-# --flat-nodes. Postprocessing is ~0s for line-only contour data, so the
-# per-batch overhead is negligible. --cache 0: rely on the tmpfs flat-nodes
-# (RAM) + ZFS ARC. NOTE: osm2pgsql -P is PORT; process count is --number-processes.
-BATCH="${OSM2PGSQL_BATCH:-100}"
-tmpd="$(mktemp -d)"
-trap 'rm -rf "${tmpd}"' EXIT
-printf '%s\n' ${files} | split -l "${BATCH}" - "${tmpd}/b_"
-mode="--create"
-for b in "${tmpd}"/b_*; do
-  echo "  batch $(basename "${b}"): $(wc -l < "${b}") files (${mode})"
-  # shellcheck disable=SC2046,SC2086
-  osm2pgsql ${mode} --slim --output=pgsql -d "${DB}" \
-    --cache 0 --number-processes "${JOBS}" \
-    --style "${STYLE}" --flat-nodes "${FLAT}" \
-    $(cat "${b}")
-  mode="--append"
-done
+# Merge+sort all per-tile PBFs into ONE ordered file, then a single --create.
+# Why: osm2pgsql 1.11 segfaults on a single --create with ~400+ input files, AND
+# its --append path (legacy pgsql output) segfaults too -- so neither
+# one-shot-many nor batched import works. `osmium sort` merges the files and
+# fixes osm2pgsql's node-before-way ordering requirement (per-tile files
+# interleave nodes and ways). --cache 0: rely on the tmpfs flat-nodes (RAM) +
+# ZFS ARC. NOTE: osm2pgsql -P is PORT; process count is --number-processes.
+MERGED="${MERGED:-${SRTM_DIR}/_merged-contours.osm.pbf}"
+trap 'rm -f "${MERGED}"' EXIT
+echo "  merging+sorting $(echo "${files}" | wc -w) PBFs -> ${MERGED}"
+# shellcheck disable=SC2086
+osmium sort --overwrite -o "${MERGED}" ${files}
+osm2pgsql --create --slim --output=pgsql -d "${DB}" \
+  --cache 0 --number-processes "${JOBS}" \
+  --style "${STYLE}" --flat-nodes "${FLAT}" \
+  "${MERGED}"
 
 psql -d "${DB}" -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO tirex;" >/dev/null
 echo "Contour import complete: $(psql -d "${DB}" -XtAc "SELECT count(*) FROM planet_osm_line") lines"
