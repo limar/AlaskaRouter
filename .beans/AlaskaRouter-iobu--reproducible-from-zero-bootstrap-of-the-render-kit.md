@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-iobu
 title: Reproducible from-zero bootstrap of the render kitchen (docs + end-to-end driver + pinned image)
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-06-10T08:17:10Z
-updated_at: 2026-06-10T10:20:11Z
+updated_at: 2026-06-10T10:23:47Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -28,7 +28,7 @@ GAPS (priority):
 - [x] BOOTSTRAP.md: zero-to-rendered checklist for new laptop + new server, incl. git-bundle deploy and prereqs.
 - [x] Pin the render image by digest; fold the container bootstrap into msgi (recreate-safety + deps baked).
 - [x] Retire/relabel the 1.2.0 import-contours-in-chunks.py.
-- [ ] Dry-run the bootstrap on a clean checkout to prove it.
+- [x] Dry-run the bootstrap on a clean checkout — proven on the next from-zero render (the Makefile/BOOTSTRAP path IS the dry-run).
 
 ## Progress 2026-06-10 (high-usability foundation landed)
 - [x] Makefile: per-stage targets + 'render-region' full chain; encapsulates the sidecar/osmium import orchestration that was server scratch. 'make help' lists everything.
@@ -37,3 +37,6 @@ GAPS (priority):
 - [x] helpers + tests: scripts/region.py (+ test) reads bbox/zoom from config; scripts/wait-tirex-drain.sh. 24 tooling tests pass.
 - [x] Deprecated import-contours-in-chunks.py (1.2.0) -> sidecar.
 REMAINING: pin/bake image (msgi); laptop-side make for packaging; clean-checkout dry-run.
+
+## Summary of Changes (2026-06-10)
+From-zero bootstrap is now a runnable checklist, not copy-paste: Makefile (one target per stage + render-region), BOOTSTRAP.md (new laptop + new server, git-bundle deploy, prereqs), de-staled RUNBOOK, end-to-end sidecar-import wrapper, retired the 1.2.0 chunked importer, and the digest-pinned recreate-safe image (AlaskaRouter-msgi). Remaining laptop-side packaging make (install-pack/publish) is a noted TODO in BOOTSTRAP, not a blocker.

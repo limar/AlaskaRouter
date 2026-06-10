@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-06-07T15:07:05Z
-updated_at: 2026-06-09T16:55:49Z
+updated_at: 2026-06-10T10:23:47Z
 parent: AlaskaRouter-6ihk
 ---
 
@@ -41,3 +41,8 @@ Bake the tuned postgresql.conf + newer osm2pgsql + the tmpfs-flat-nodes + ZFS co
 
 ## POC measurement (2026-06-09): osm2pgsql 1.11 + tmpfs flat-nodes + -P8
 Node parse ~5.8M/s (vs 1.2.0 ~20k/s). Southern band (545 files, 2.08M lines) imported in 693s. Extrapolated full FINE import ~50 min vs ~22h under 1.2.0 (~25x). Tier-1 (tmpfs flat-nodes) + modern importer validated. Coarsening (Tier-2) would cut another ~4x.
+
+## Folded in from erai (2026-06-10)
+Two render-safety/hardening items that outlived erai and fit this scaling/perf vector:
+- [ ] Region-isolated data dirs (/mnt/data/<region>/srtm/...) + a pre-render assert that style-facing rasters' gdalinfo coverage intersects the region bbox (would have caught the Israel-hillshade-in-Alaska contamination before shipping).
+- [ ] pg_dump / snapshot the contour PostGIS DB once good; VERIFY (not assume) what survives a container recreate before touching the container again.

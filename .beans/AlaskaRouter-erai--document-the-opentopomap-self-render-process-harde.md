@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-erai
 title: Document the OpenTopoMap self-render process + harden the workflow
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-06-04T14:51:34Z
-updated_at: 2026-06-10T10:20:11Z
+updated_at: 2026-06-10T10:23:47Z
 ---
 
 Scan the maps-session.md transcript in chunks (skipping embedded images), produce a dedicated runbook 'how we rendered the maps' under tools/opentopomap-render/, map the Docker container contract and PostGIS durability, and form an opinion on workflow improvements (git-on-both-ends vs manual ssh, remote-work mode, reproducibility). Output feeds the fix of the two known z11 georeferencing bugs (hillshade SE shift; contour ribbon collapse).
@@ -28,8 +28,8 @@ Decision: keep working LOCAL + reach server via ssh, but switch server provenanc
 
 - [x] Server renders from a committed SHA: 'git pull' the render-maps branch under /home/mlifshitz/tiles/AlaskaRouter instead of rsync; mount the git checkout's scripts/ at /alaskarouter-scripts.
 - [x] Stamp the render commit SHA into alaska-pack.manifest.json so each pack is traceable to source.
-- [ ] Region-isolated data dirs (/mnt/data/<region>/srtm/...) + pre-render assert that style-facing rasters' gdalinfo coverage intersects the region bbox (would have caught the Israel-hillshade-in-Alaska contamination before shipping).
-- [ ] pg_dump / snapshot the contour PostGIS DB once good; VERIFY (not assume) what survives a container recreate before touching the container again.
+- [x] (→ AlaskaRouter-0bq8) Region-isolated data dirs (/mnt/data/<region>/srtm/...) + pre-render assert that style-facing rasters' gdalinfo coverage intersects the region bbox (would have caught the Israel-hillshade-in-Alaska contamination before shipping).
+- [x] (→ AlaskaRouter-0bq8) pg_dump / snapshot the contour PostGIS DB once good; VERIFY (not assume) what survives a container recreate before touching the container again.
 
 Bug beans opened: AlaskaRouter-lg59 (hillshade SE shift), AlaskaRouter-6fop (contour ribbon).
 
@@ -42,3 +42,6 @@ Verified before recreating: PG cluster + tablespace are on host ZFS bind mounts 
 NEW FRAGILITY FOUND: the image ships only postgresql.conf in /etc/postgresql/10/main; pg_hba.conf, pg_ident.conf, conf.d are created at first-run in the EPHEMERAL layer, so recreate loses them and PG won't boot. Recovered by recreating those files (trust auth, PG port not published) + chown postgres + otm-docker.sh deps (restores python-gdal, /mnt/tiles, tirex). Documented in RENDERING-RUNBOOK.md.
 
 - [x] HARDENING TODO: persist a complete /etc/postgresql via bind mount (populated, not empty) OR self-heal the missing config files at container startup, so 'docker compose down/up' is safe unattended. Until then, do NOT recreate the container without the documented recovery on hand.
+
+## Summary of Changes (2026-06-10)
+Docs + workflow hardening shipped: docs/RUNBOOK.md (de-staled to the current sidecar/osmium-sort/EPSG:3857 pipeline), docs/TROUBLESHOOTING.md, BOOTSTRAP.md, README index; render runs from committed source (git-bundle deploy + scripts/ mounted); render_commit stamped into alaska-pack.manifest.json; recreate-safety baked into the image (AlaskaRouter-msgi). The two remaining items (region-coverage gdalinfo assert; pg_dump snapshot) are render-safety/scaling concerns moved to AlaskaRouter-0bq8.

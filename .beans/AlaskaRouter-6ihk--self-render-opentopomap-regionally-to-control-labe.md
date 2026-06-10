@@ -5,7 +5,7 @@ status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-23T19:29:19Z
-updated_at: 2026-06-07T15:21:08Z
+updated_at: 2026-06-10T10:23:47Z
 ---
 
 ## Why
@@ -120,16 +120,16 @@ Each `region pack` = one Geofabrik extract → one PostGIS database → renders 
 
 ## Checklist
 
-- [ ] Lock open architectural questions (PMTiles edit/rebuild, SRTM scope, overlay vs in-place, Docker vs native, tile-spec consistency)
-- [ ] `tools/opentopomap-render/install.sh` — toolchain bootstrap on the linux server
-- [ ] `fetch-osm.sh` — Geofabrik download with SHA verify
-- [ ] `fetch-srtm.sh` — SRTM3 download
-- [ ] `import.sh` — osm2pgsql → PostGIS for a small region
-- [ ] `render-tiles.sh` — mapnik render a single tile from a bbox
+- [x] Lock open architectural questions (PMTiles edit/rebuild, SRTM scope, overlay vs in-place, Docker vs native, tile-spec consistency)
+- [x] `tools/opentopomap-render/install.sh` — toolchain bootstrap on the linux server
+- [x] `fetch-osm.sh` — Geofabrik download with SHA verify
+- [x] `fetch-srtm.sh` — SRTM3 download
+- [x] `import.sh` — osm2pgsql → PostGIS for a small region
+- [x] `render-tiles.sh` — mapnik render a single tile from a bbox
 - [ ] Visual diff between our render and opentopomap.org render of the same tile
 - [ ] First label override: CartoCSS patch for Israel low-zoom visibility
-- [ ] `splice-into-pack.sh` — pmtiles edit
-- [ ] Verify in-app
+- [x] `splice-into-pack.sh` — pmtiles edit
+- [x] Verify in-app
 
 
 ## Architecture LOCKED (2026-05-24)
@@ -638,3 +638,8 @@ DIFFICULTY per use case:
 - Recognize Somaliland as a country: HARDEST. OSM models it as disputed/within Somalia; needs custom data injection (boundary+label feature), not just a name change.
 
 ARCHITECTURAL FLAG: raster pre-rendering means each localization/political variant = a separate render+pack. Runtime per-user locale or per-user Malvinas/Falklands switching is only possible with VECTOR tiles (client renders labels from name:lang). If localization becomes a real product direction, vector tiles are the architecture shift to consider.
+
+## Checklist refreshed (2026-06-10)
+The original per-script checklist was superseded by the Makefile pipeline (make fetch/dem/contours/import/render/export/pack; SRTM3 → Copernicus GLO-30; splice = pmtiles merge). The full Alaska render shipped and is confirmed in-app. **What actually remains is the label-control thesis this bean was opened for** — none of it is done yet:
+- [ ] Visual diff between our render and opentopomap.org render of the same tile
+- [ ] First label override (the original goal): Israel low-zoom CartoCSS, Falklands/Malvinas locale naming, bilingual-stack toning. See der-stefan/OpenTopoMap style under third_party/ + the cartography epic AlaskaRouter-7avb.
