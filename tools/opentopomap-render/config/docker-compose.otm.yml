@@ -1,6 +1,11 @@
 services:
   otm-docker:
-    image: ${OTM_DOCKER_IMAGE:-jhassler/otm-docker:latest}
+    # Our thin image over the digest-pinned upstream stack (AlaskaRouter-msgi):
+    # bakes the /etc/postgresql config + python-gdal so a recreate doesn't break
+    # PostgreSQL. `docker compose up --build` builds it from docker/otm-render.
+    image: ${OTM_DOCKER_IMAGE:-alaskarouter/otm-render:2026-06-10}
+    build:
+      context: ../docker/otm-render
     container_name: ${OTM_CONTAINER_NAME:-alaskarouter-otm}
     restart: unless-stopped
     environment:

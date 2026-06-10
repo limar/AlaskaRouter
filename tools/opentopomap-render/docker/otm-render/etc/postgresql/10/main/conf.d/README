@@ -1,0 +1,2 @@
+# PostgreSQL include_dir; intentionally empty. Keeps the dir in git so the
+# baked config is complete (postgresql.conf has include_dir = conf.d).
