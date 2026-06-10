@@ -51,9 +51,15 @@ If we ever must rebuild the base from this source, it needs modernizing:
   `--output=pgsql`** the OTM import scripts rely on. Pin a 1.x tag. (This is the
   same version trap we solved at import time with the osm2pgsql 1.11 sidecar.)
 - `certbot-auto` was **retired (2021)** — drop or replace it.
-- **phyghtmap** is fetched from a personal server (`katze.tfiu.de`). Archived
-  here as `vendor-debs/phyghtmap_2.21-1_all.deb` (md5 dd1bb09b0f4ddebd9fef24025982f6b2)
-  so a rebuild doesn't depend on that host.
+- **phyghtmap** is fetched from a personal server (`katze.tfiu.de`) as a
+  `.deb`. Don't. That host is now serving a bad TLS cert and the original tool
+  is unmaintained. The `.deb` was `_all` (pure Python) anyway — never needed to
+  be a binary. Instead `pip install pyhgtmap` — the maintained Python-3 fork
+  (https://github.com/agrenott/pyhgtmap, on PyPI, command `pyhgtmap`). Pin a
+  version. Note: our `scripts/prepare-copernicus-contours.sh` invokes the
+  command name **`phyghtmap`** (provided today by the base image). A rebuild on
+  `pyhgtmap` needs either a `phyghtmap`→`pyhgtmap` shim/alias or a one-word
+  change to that script. (We do NOT vendor the binary — build on demand.)
 
 ## What we actually run
 We don't build from this directory today. We run a thin image
