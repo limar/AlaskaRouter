@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-levi
 title: 'Spike: vector minor-roads overlay over raster (prove no double-draw, judge overzoom)'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-06-10T12:32:00Z
-updated_at: 2026-06-10T13:20:10Z
+updated_at: 2026-06-10T13:30:59Z
 parent: AlaskaRouter-7avb
 ---
 
@@ -26,7 +26,7 @@ EXACTLY ONE layer owns each OSM road class. Always.
 - [x] 4 MapLibre line layers in style-base.json (track dashed brown / path dotted / casing+fill white-gray for unclassified-residential-service), source minzoom 8, DISPLAY minzoom 9-10 (the free knob). Bundled as minor-roads-spike.pmtiles (gitignored, rebuilt by the script).
 - [x] VERIFY AID produced. Anchors: Galbraith camp road (~6.7 km unpaved unclassified, 68.478,-149.494) + airstrip services; **Toolik Lake Road** (68.625,-149.561) + camp service roads; Coldfoot cluster (Airport Rd/Coldfoot Rd, 67.25,-150.19); Old Dalton Highway (67.805,-149.82); Sag River Camp Road (68.76,-148.87).
 - [x] SIMULATOR verified (2026-06-10): Galbraith + Toolik screenshots show the missing roads, native-looking, drawn ONCE. Double-draw disproven by construction AND observation: the raw z11 raster tile (pmtiles tile 11/173/482) contains ZERO minor roads, so every minor road on screen is vector-only. App launches/renders normally.
-- [ ] USER eyeball on the real iPhone: roads look native? styling/widths to taste? perf on device? (then decide ship-as-is vs big leap)
+- [x] USER APPROVED (2026-06-10, simulator screenshots): "Looks wonderful to my taste. And now I understand that they were missing VERY MUCH." Real-device perf rides along with normal dogfooding; productionization tracked in the follow-up bean.
 
 ## Open UX fork -- judge IN the spike, do not answer from the old screenshot
 When to show / how far to allow zoom. Today the app PROHIBITS zoom past z11 because overzoomed RASTER looked bad. BUT that verdict was on the OLD base (contours + labels -- the worst overzoom offenders). Dropping contours ([[xymz]], [[f7tt]]) + crisp vector roads on top likely changes it. Re-judge: raster source maxzoom stays 11 (softens gracefully -- relief is smooth), view maxzoom opens to ~13, vector roads stay crisp throughout. Decide from the new screenshot.
@@ -49,3 +49,14 @@ WIRED END-TO-END, simulator-verified. Implementation: `tools/vector-roads-spike/
 DISPLAY-minzoom note: track/casing/fill at 9, path at 10 -- slide to taste, zero rebuild.
 
 Remaining: user judgment on real device + styling taste pass; the overzoom (>z11 cap, [[5h4y]]) verdict deliberately WAITS for Track A's contourless base ([[f7tt]]).
+
+## Summary of Changes
+
+Spike PROVEN and approved, then scaled statewide in the same session:
+- tools/vector-roads-spike/build-corridor.sh: OSM PBF -> osmium extract/filter (minor classes only) -> tippecanoe -> PMTiles, installed into Resources. BBOX env-overridable.
+- Corridor proof: 341 KB / 432 features (Dalton/Galbraith). Verified vs a raster-tile-only "before" (z11 tile 11/173/482 has ZERO minor roads -> no double-draw possible or observed).
+- STATEWIDE build: **28 MB / 122,410 features, all Alaska z8-14** (~2.3% pack growth; a single raster z12 would have been ~2.6 GB). Galbraith + Anchorage (worst-case density) simulator-verified: majors raster/orange, minors vector/white, disjoint, legible.
+- App: minor-roads vector source + 4 line layers in style-base.json; __MINOR_ROADS_URL__ substitution; initialCenter LaunchArg added for pinned-camera screenshots; project.yml regenerated (Resources glob picks up the pmtiles).
+- The overzoom verdict ([[5h4y]] cap) still deliberately waits for Track A ([[f7tt]]).
+
+Productionization (rename off -spike, docs, manifest/attribution, refresh cadence, device perf) -> follow-up bean.
