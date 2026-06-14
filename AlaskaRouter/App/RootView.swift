@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import MapLibreSwiftUI
 import CoreLocation
+import UniformTypeIdentifiers
 
 /// The single root screen: full-screen map + floating chrome + bottom sheet.
 /// Search → add-to-trip supports two flows:
@@ -399,6 +400,14 @@ struct RootView: View {
         .onChange(of: locationProvider.lastLocation) { _, new in
             guard pendingLocateMeFocus, let new else { return }
             focusOnUserLocation(new.coordinate)
+        }
+        // A `.akrtrip` file opened from Files / received over AirDrop
+        // (AlaskaRouter-h113). Import it as a new copy and make it active.
+        .onOpenURL { url in
+            guard url.pathExtension.lowercased() == UTType.alaskaRouterTripExtension else { return }
+            if let imported = try? TripFileImport.importFile(at: url, into: modelContext) {
+                TripStore.setActive(imported)
+            }
         }
     }
 

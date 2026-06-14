@@ -18,5 +18,63 @@
 		<string>waze</string>
 		<string>mapsme</string>
 	</array>
+
+	<!--
+	  Lossless trip export/import (AlaskaRouter-h113). The exported UTI
+	  `dev.alaskarouter.trip` (a JSON subtype, extension `.akrtrip`) lets Files,
+	  AirDrop and the share sheet recognize the format and hand a tapped file
+	  back to the app via .onOpenURL. CFBundleDocumentTypes registers the app as
+	  an Owner/Editor of that type.
+	-->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>dev.alaskarouter.trip</string>
+			<key>UTTypeDescription</key>
+			<string>AlaskaRouter Trip</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>akrtrip</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/json</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>AlaskaRouter Trip</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>dev.alaskarouter.trip</string>
+			</array>
+			<!--
+			  Brand the .akrtrip file with the app icon (AlaskaRouter-h113)
+			  instead of the white schematic default. Loose PNGs generated from
+			  AppIcon.png and bundled at the resource root; iOS picks the best
+			  size and applies its own document-corner framing.
+			-->
+			<key>CFBundleTypeIconFiles</key>
+			<array>
+				<string>TripDocumentIcon-320</string>
+				<string>TripDocumentIcon-64</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -21,6 +21,8 @@
 import SwiftUI
 import SwiftData
 import CoreLocation
+import UniformTypeIdentifiers
+import UIKit
 
 enum TripSheetDetent: CaseIterable {
     case collapsed   // ~ 100 pt — trip name + summary line
@@ -83,6 +85,10 @@ struct TripBottomSheet: View {
     // Step B of 53x1). Single value, so arming a new row automatically dismisses
     // any other. nil = no row armed.
     @State private var armedDeleteID: UUID? = nil
+
+    // Trip file export/import (AlaskaRouter-h113).
+    @State private var importerShown = false
+    @State private var importError: String?
 
     var body: some View {
         GeometryReader { geo in
@@ -170,6 +176,24 @@ struct TripBottomSheet: View {
         } message: {
             Text("All stops in this trip will be removed. This cannot be undone.")
         }
+        .fileImporter(
+            isPresented: $importerShown,
+            allowedContentTypes: [.alaskaRouterTrip, .json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleImportResult(result)
+        }
+        .alert(
+            "Import failed",
+            isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
     }
 
     // MARK: - Header
@@ -229,14 +253,7 @@ struct TripBottomSheet: View {
                 Spacer(minLength: 0)
 
                 if mode == .stops {
-                    Button(action: openRename) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(SheetPalette.textMuted)
-                            .frame(width: 30, height: 30)
-                            .background(Color.black.opacity(0.05), in: Circle())
-                    }
-                    .buttonStyle(.plain)
+                    tripActionsMenu
                 }
             }
 
@@ -249,6 +266,65 @@ struct TripBottomSheet: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
+    }
+
+    /// Trip-level actions: rename, export to a `.akrtrip` file (share sheet /
+    /// AirDrop / Files), and import one (AlaskaRouter-h113). The `ShareLink`
+    /// builds the document lazily when the menu opens, so the segment-cache
+    /// lookups in `TripDocument.export` only run on demand.
+    private var tripActionsMenu: some View {
+        Menu {
+            Button(action: openRename) {
+                Label("Rename", systemImage: "pencil")
+            }
+            ShareLink(
+                item: ExportedTripFile(
+                    document: TripDocument.export(trip, context: modelContext),
+                    baseName: TripFileNaming.sanitizedBaseName(trip.name)
+                ),
+                preview: SharePreview(trip.name, image: tripFilePreviewImage)
+            ) {
+                Label("Export Trip…", systemImage: "square.and.arrow.up")
+            }
+            Button { importerShown = true } label: {
+                Label("Import Trip…", systemImage: "square.and.arrow.down")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SheetPalette.textMuted)
+                .frame(width: 30, height: 30)
+                .background(Color.black.opacity(0.05), in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Branded share-sheet thumbnail (AlaskaRouter-h113): the app icon, loaded
+    /// from the bundled document-icon PNG, so the share preview shows our mark
+    /// instead of the white schematic default. Purely cosmetic — falls back to
+    /// an SF Symbol only if the bundled asset is somehow absent.
+    private var tripFilePreviewImage: Image {
+        if let url = Bundle.main.url(forResource: "TripDocumentIcon-320", withExtension: "png"),
+           let ui = UIImage(contentsOfFile: url.path) {
+            return Image(uiImage: ui)
+        }
+        return Image(systemName: "map")
+    }
+
+    private func handleImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            do {
+                let imported = try TripFileImport.importFile(at: url, into: modelContext)
+                TripStore.setActive(imported)
+                withAnimation(.smooth(duration: 0.2)) { mode = .stops }
+            } catch {
+                importError = error.localizedDescription
+            }
+        case .failure(let error):
+            importError = error.localizedDescription
+        }
     }
 
     /// Three-cell stat strip — Distance / Stops / Blocks. The mock has a
