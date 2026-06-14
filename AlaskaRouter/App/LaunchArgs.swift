@@ -92,6 +92,16 @@ enum LaunchArgs {
         UserDefaults.standard.bool(forKey: "seedDemoTrip")
     }
 
+    /// AlaskaRouter-56kj spike — render an offline map snapshot at "lat,lon" on
+    /// launch and write it to Documents/preview-spike.png, to prove the
+    /// MLNMapSnapshotter resolves our pmtiles:// scheme. Dev-only.
+    static var spikePreviewSnapshot: CLLocationCoordinate2D? {
+        let raw = UserDefaults.standard.string(forKey: "spikePreview") ?? ""
+        let parts = raw.split(separator: ",")
+        guard parts.count == 2, let lat = Double(parts[0]), let lon = Double(parts[1]) else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
     /// After prefill query results land, auto-trigger this action for screenshot
     /// capture: `preview:<index>` opens the preview callout; `add:<index>` runs
     /// the fast-add flow. Index is into the results list.

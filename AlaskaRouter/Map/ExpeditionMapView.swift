@@ -15,7 +15,9 @@ import MapLibreSwiftDSL
 
 // MARK: - Style resolution (patches bundle URLs into the style template)
 
-private let styleURL: URL = {
+// Module-internal (not private): reused by TripPreviewRenderer to render the
+// same offline basemap into an MLNMapSnapshotter (AlaskaRouter-56kj).
+let styleURL: URL = {
     guard let templateURL = Bundle.main.url(forResource: "style-base", withExtension: "json") else {
         fatalError("Missing style-base.json in bundle")
     }

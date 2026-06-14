@@ -90,6 +90,11 @@ struct TripBottomSheet: View {
     @State private var importerShown = false
     @State private var importError: String?
 
+    // Export share-sheet preview (AlaskaRouter-56kj): an offline map snapshot of
+    // the first waypoint, rendered async and fed to SharePreview. nil until the
+    // first render lands (SharePreview falls back to the app icon meanwhile).
+    @State private var tripPreviewImage: Image?
+
     var body: some View {
         GeometryReader { geo in
             let targetHeight = detent.height(in: geo.size.height)
@@ -183,6 +188,9 @@ struct TripBottomSheet: View {
         ) { result in
             handleImportResult(result)
         }
+        // Pre-render the export preview so it's ready when the menu opens.
+        .onAppear { regenerateTripPreview() }
+        .onChange(of: previewSignature) { _, _ in regenerateTripPreview() }
         .alert(
             "Import failed",
             isPresented: Binding(
@@ -282,7 +290,7 @@ struct TripBottomSheet: View {
                     document: TripDocument.export(trip, context: modelContext),
                     baseName: TripFileNaming.sanitizedBaseName(trip.name)
                 ),
-                preview: SharePreview(trip.name, image: tripFilePreviewImage)
+                preview: SharePreview(trip.name, image: tripPreviewImage ?? tripFilePreviewImage)
             ) {
                 Label("Export Trip…", systemImage: "square.and.arrow.up")
             }
@@ -309,6 +317,32 @@ struct TripBottomSheet: View {
             return Image(uiImage: ui)
         }
         return Image(systemName: "map")
+    }
+
+    /// Changes whenever the preview-relevant trip state changes (first stop's
+    /// identity/position, or the trip color), so we re-render the snapshot.
+    private var previewSignature: String {
+        let first = trip.orderedWaypoints.first
+        let coord = first.map { String(format: "%.4f,%.4f", $0.lat, $0.lon) } ?? "none"
+        return "\(trip.id.uuidString)|\(trip.colorRaw)|\(first?.id.uuidString ?? "empty")|\(coord)"
+    }
+
+    /// Render the offline map snapshot for the export preview. Centers on the
+    /// first waypoint (with its name); an empty trip falls back to a generic
+    /// Alaska center with no name pill (AlaskaRouter-56kj).
+    private func regenerateTripPreview() {
+        let first = trip.orderedWaypoints.first
+        let center = first?.coordinate
+            ?? CLLocationCoordinate2D(latitude: 63.07, longitude: -151.0)  // Denali massif
+        let c = trip.color.swiftUIColor
+        let markerColor = UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1)
+        TripPreviewRenderer.renderPreview(
+            center: center,
+            name: first?.label,
+            markerColor: markerColor
+        ) { image in
+            if let image { tripPreviewImage = Image(uiImage: image) }
+        }
     }
 
     private func handleImportResult(_ result: Result<[URL], Error>) {

@@ -347,6 +347,28 @@ struct RootView: View {
                 if let key = pendingSnapKey { fireSnap(forKey: key) }
             }
             scheduleSnapForCurrentTrip()
+            // AlaskaRouter-56kj spike — render an offline map snapshot and dump
+            // it to the app container so we can confirm pmtiles:// resolves in
+            // MLNMapSnapshotter (no network). Dev-only, gated on the LaunchArg.
+            if let spikeCenter = LaunchArgs.spikePreviewSnapshot {
+                let tint = activeTrip?.color.swiftUIColor
+                let markerColor = tint.map { UIColor(red: $0.red, green: $0.green, blue: $0.blue, alpha: 1) }
+                    ?? UIColor.orange
+                TripPreviewRenderer.renderPreview(
+                    center: spikeCenter,
+                    name: activeTrip?.orderedWaypoints.first?.label ?? "Denali Visitor Center",
+                    markerColor: markerColor,
+                    zoom: 8.5,
+                    size: CGSize(width: 600, height: 600)
+                ) { img in
+                    guard let data = img?.pngData() else {
+                        print("[spike] snapshot produced no image"); return
+                    }
+                    let url = URL.documentsDirectory.appendingPathComponent("preview-spike.png")
+                    try? data.write(to: url)
+                    print("[spike] wrote \(url.path) (\(data.count) bytes)")
+                }
+            }
             if LaunchArgs.autoLocateMe {
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 600_000_000)

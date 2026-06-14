@@ -1,26 +1,40 @@
 ---
 # AlaskaRouter-56kj
-title: App icon shows white corners in share-sheet apps row (alpha + baked rounding)
-status: todo
-type: bug
+title: 'Export share-sheet preview: per-trip map snapshot of first waypoint'
+status: completed
+type: feature
 priority: normal
 created_at: 2026-06-14T16:24:38Z
-updated_at: 2026-06-14T16:24:38Z
+updated_at: 2026-06-14T19:06:21Z
 ---
 
-The AlaskaRouter app icon renders with ugly white triangular corners in the iOS share-sheet "applications" row (the "Open in AlaskaRouter" tile). The document/file icon (TripDocumentIcon, used for the .akrtrip preview) looks correct — only the APP icon is affected.
+The top of the iOS share sheet is a PREVIEW of the document being shared (separate UI role from the apps-row app icon, and from the static Files-app type icon). We supply that preview as an image via `SharePreview(image:)`. Instead of the app icon, render a real map snapshot of the trip so the export is recognizable and beautiful.
 
-## Diagnosis (confirmed)
-`AlaskaRouter/Assets.xcassets/AppIcon.appiconset/AppIcon.png` is 1024x1024 with `hasAlpha: yes` and baked-in rounded corners — the area outside the rounding is transparent. This violates Apple's rule that app icons be opaque, full-bleed squares with NO alpha and NO pre-applied rounding (iOS applies its own squircle mask). iOS composites the transparent corners onto white -> white slivers. Pre-existing; visible anywhere iOS masks the icon, surfaced by the export share sheet (AlaskaRouter-h113).
+## Decision (2026-06-14)
+- Per-trip preview: square map at zoom 8-9 centered on the trip's FIRST waypoint, with its marker + name. Empty trips fall back to a generic map sample with a no-name pin.
+- This is sender-side only (the share-sheet preview). It does NOT change the Files-app file icon (a static type icon) — that stays as-is / future proper document icon.
+- Approach approved: spike the offline snapshot path first, then build.
 
-## Why the first fix attempt failed (h113 session)
-Flattening AppIcon.png onto opaque cream did NOT fix it: at runtime the corners were still WHITE (not the cream fill), and the freshly-built bundle's app icon still reported `hasAlpha: yes`. So the edited source never reached the compiled asset — almost certainly actool asset-catalog caching in DerivedData / the single 1024 "universal" icon not being recompiled on an incremental build. Verification was also done against the springboard (blue wallpaper) which masked the issue instead of the share-sheet apps row (white bg). Both mistakes noted.
+## Why feasible
+- We already `import MapLibre` (native), which exposes `MLNMapSnapshotter` / `MLNMapSnapshotOptions` / `MLNMapCamera`.
+- `ExpeditionMapView.styleURL` (built from the bundled PMTiles) is reusable -> the snapshotter renders the same offline basemap, no network.
 
-## Proper fix
-- [ ] Replace AppIcon.png with a TRUE full-bleed opaque 1024x1024 icon: paper/terrain art extends into all four square corners, no alpha channel, no baked rounding. (The current art is a pre-rounded squircle on transparency — needs the source redrawn/extended, not just flattened.)
-- [ ] CLEAN build (clear DerivedData / actool cache) so the new icon is actually compiled in; confirm bundled icon `hasAlpha: no`.
-- [ ] Regenerate `AlaskaRouter/Resources/TripDocumentIcon-{320,64}.png` from the corrected icon for consistency (current ones are flattened-cream derivatives that happen to look fine).
-- [ ] VERIFY in the actual share-sheet apps row on a light background (not the springboard), at full resolution — open Export from a trip and inspect the "AlaskaRouter" tile.
+## Open risk to retire in the SPIKE
+- Unknown: does `MLNMapSnapshotter` (a separate render path from the live `MLNMapView`) resolve our custom `pmtiles://` scheme? The scheme is registered inside the MapLibre package, not our code; need to confirm it works in the snapshotter.
+- If snapshotter can't do pmtiles -> fallback: capture an offscreen `MLNMapView` (same renderer that already works), or a constant bundled sample image.
 
-## Notes
-- Document-icon branding (CFBundleTypeIconFiles + SharePreview, in h113) works and stays — this bean is only about the app launch icon.
+## Plan
+### Spike (do first)
+- [x] Exposed styleURL (made module-internal); added TripPreviewRenderer.render using MLNMapSnapshotter.
+- [x] SPIKE GREEN: LaunchArg -spikePreview writes Documents/preview-spike.png. Confirmed the OFFLINE basemap renders in MLNMapSnapshotter (Denali 63.73,-148.91 z8.5 — hillshade, labels, Parks Hwy). pmtiles:// resolves in the snapshotter. Note: MapLibre bakes an attribution strip at the bottom — decide keep/crop.
+### Build (after spike green)
+- [x] Compose marker (white ring / trip-color disc / white center) + name pill over the snapshot (UIGraphicsImageRenderer). Verified composited output from the real app.
+- [x] Pre-render into @State on appear + on previewSignature change; SharePreview uses tripPreviewImage ?? app-icon fallback. First-waypoint center, z8.5, 600px square.
+- [x] Empty-trip fallback: generic Denali-massif center, no name pill.
+- [x] Verified: composited image pulled from the running app, AND user eyeballed the in-sheet SharePreview ("looks good"). Attribution kept. Dev-only -spikePreview LaunchArg kept as a headless verification affordance.
+
+## History
+Repurposed from the app-icon white-corner bug. That patch (flood-fill, commit reverted) was abandoned: the real win is this preview. The app-icon white corners remain a separate, deferred cosmetic issue (needs proper full-bleed art); not tracked here anymore.
+
+## Summary
+Export share-sheet preview now renders a per-trip OFFLINE map snapshot of the first waypoint (MLNMapSnapshotter + bundled PMTiles) with a marker + name pill, fed to SharePreview (app-icon fallback until ready; generic-center fallback for empty trips). Spike retired the pmtiles-in-snapshotter risk. User-confirmed complete.
