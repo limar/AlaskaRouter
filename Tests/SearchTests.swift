@@ -122,3 +122,69 @@ final class SearchTests: XCTestCase {
         return service.results
     }
 }
+
+/// Collapse/expand + Cancel-visibility rules for the floating search bar
+/// (AlaskaRouter-th0e). Locks the rule set that fixes the two regressions:
+///   - the bar getting stuck expanded after the field blurs, and
+///   - Cancel disappearing once the field blurs while a query remains.
+final class SearchBarRuleTests: XCTestCase {
+
+    // MARK: isSearchActive — the single predicate everything derives from
+
+    func testFocusedWithEmptyQueryIsActive() {
+        XCTAssertTrue(SearchBarRule.isSearchActive(fieldFocused: true, query: ""))
+    }
+
+    func testBlurredWithQueryIsActive() {
+        // The crux of th0e: the field blurs on Return / on the interactive
+        // scroll-to-dismiss of the results list, but a non-empty query still
+        // means the user is searching.
+        XCTAssertTrue(SearchBarRule.isSearchActive(fieldFocused: false, query: "visitor"))
+    }
+
+    func testBlurredWithEmptyQueryIsNotActive() {
+        XCTAssertFalse(SearchBarRule.isSearchActive(fieldFocused: false, query: ""))
+    }
+
+    // MARK: restingState — bar collapses iff not search-active
+
+    func testRestingStateExpandedWhenActive() {
+        XCTAssertEqual(SearchBarRule.restingState(searchActive: true), .expanded)
+    }
+
+    func testRestingStateCollapsedWhenInactive() {
+        XCTAssertEqual(SearchBarRule.restingState(searchActive: false), .collapsed)
+    }
+
+    // MARK: Cancel visibility — shown whenever expanded, never focus-gated
+
+    func testCancelShownWhenExpanded() {
+        XCTAssertTrue(SearchBarRule.showsCancel(state: .expanded))
+    }
+
+    func testCancelHiddenWhenCollapsed() {
+        XCTAssertFalse(SearchBarRule.showsCancel(state: .collapsed))
+    }
+
+    // MARK: End-to-end regression — the exact corner case from the report
+
+    /// Type "visitor", then hit Return (or scroll the results): the field
+    /// blurs but the query remains. The bar must stay expanded AND keep
+    /// Cancel so the user can get back to the map. Pre-th0e this reverted to
+    /// the decorative AK chip and stranded the user.
+    func testReturnWhileQueryPresentKeepsBarExpandedWithCancel() {
+        let active = SearchBarRule.isSearchActive(fieldFocused: false, query: "visitor")
+        let state = SearchBarRule.restingState(searchActive: active)
+
+        XCTAssertEqual(state, .expanded)
+        XCTAssertTrue(SearchBarRule.showsCancel(state: state),
+                      "Cancel must survive the field blurring while a query remains (th0e).")
+    }
+
+    /// After Cancel clears the query and blurs the field, the bar collapses
+    /// back to the map-mode pill.
+    func testClearingQueryAndBlurCollapsesBar() {
+        let active = SearchBarRule.isSearchActive(fieldFocused: false, query: "")
+        XCTAssertEqual(SearchBarRule.restingState(searchActive: active), .collapsed)
+    }
+}

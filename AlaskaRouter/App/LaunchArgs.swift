@@ -7,11 +7,15 @@ import Foundation
 enum LaunchArgs {
 
     /// Force the search bar into a particular state for screenshot evaluation.
-    /// - expanded (default initial state)
-    /// - collapsed (skip straight to the compact view)
+    /// - collapsed (default resting state — map mode, trip-name pill; th0e)
+    /// - expanded (skip straight to the full search pill)
+    /// A normal launch is not "search active", so the bar rests collapsed;
+    /// the screenshot override (`-barState expanded`) still pins it open. A
+    /// launch that also sets a `prefillQuery` makes search active and the
+    /// bar expands on its own (RootView.syncBarState).
     static var initialBarState: FloatingSearchBarState {
-        let raw = UserDefaults.standard.string(forKey: "barState") ?? "expanded"
-        return FloatingSearchBarState(rawValue: raw) ?? .expanded
+        let raw = UserDefaults.standard.string(forKey: "barState") ?? "collapsed"
+        return FloatingSearchBarState(rawValue: raw) ?? .collapsed
     }
 
     /// Pre-fill the search query at launch (for screenshot-driven evaluation

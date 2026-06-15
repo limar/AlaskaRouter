@@ -2,14 +2,22 @@
 //
 // Two states:
 //   - .expanded:  full Safari-style pill with search field, clear-x (when
-//                  there's text), and a trailing chip that swaps form by
-//                  focus state:
-//                    - blurred  → AK region chip (orange circle "AK")
-//                    - focused  → Cancel button (y7l0 spike — calls onCancel)
+//                  there's text), and a trailing Cancel button. Cancel is
+//                  ALWAYS present while expanded — it's the dismiss
+//                  affordance, so it must not depend on keyboard focus.
 //                  Tap Cancel to dismiss search entirely; tap clear-x to
 //                  wipe the query but keep typing.
 //   - .collapsed: thin oval pill below the Dynamic Island, showing the active
 //                  trip name + chevron. Tap to re-expand.
+//
+// Expand/collapse + Cancel visibility follow one rule (SearchBarRule, see
+// bottom of file): the bar is expanded while "search is active" (field
+// focused OR a non-empty query) and collapsed otherwise; Cancel shows
+// whenever the bar is expanded. Gating Cancel on keyboard focus instead was
+// the th0e regression — Cancel vanished (reverting to a decorative AK chip)
+// the moment the field blurred while a query remained (hit Return, or the
+// interactive scroll-to-dismiss on the results list), stranding the user
+// with no way back to the map.
 //
 // Layout: the parent in RootView is a top-anchored VStack with standard
 // keyboard avoidance — the VStack's bottom shrinks when the keyboard
@@ -87,18 +95,17 @@ struct FloatingSearchBar: View {
                 .buttonStyle(.plain)
             }
             Spacer(minLength: 0)
-            // Trailing chip swaps by focus (y7l0):
-            //   - blurred → orange AK region indicator
-            //   - focused → Cancel button → onCancel?() → RootView dismisses
-            // The AK chip is decorative-only today (region indicator; one
-            // day tappable to switch the active region pack). Cancel is the
-            // user-facing dismissal affordance — never an icon, to avoid the
-            // two-x antipattern (clear-x for query vs dismiss-x for search).
-            if fieldFocused {
-                cancelButton
-            } else {
-                akChip
-            }
+            // Trailing affordance: Cancel, always present while expanded
+            // (th0e). Cancel is the user-facing dismissal affordance — never
+            // an icon, to avoid the two-x antipattern (clear-x for query vs
+            // dismiss-x for search). It must NOT be gated on keyboard focus:
+            // the field blurs on Return and on interactive scroll-to-dismiss
+            // of the results list, and the user still needs a way out.
+            // (The old focus-blurred state showed a decorative "AK" region
+            // chip here; retired in th0e — it had no function and stole the
+            // dismiss affordance. A region indicator can return elsewhere
+            // when it becomes tappable.)
+            cancelButton
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -109,14 +116,7 @@ struct FloatingSearchBar: View {
         .onTapGesture { fieldFocused = true }
     }
 
-    // MARK: - Trailing chip variants (y7l0)
-
-    private var akChip: some View {
-        Circle()
-            .fill(Color.orange.opacity(0.85))
-            .frame(width: 24, height: 24)
-            .overlay(Text("AK").font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
-    }
+    // MARK: - Trailing affordance (y7l0 spike → th0e: always Cancel)
 
     /// Cancel button. Three visual variants × six colors × five font weights,
     /// all driven by TweaksStore — see y7l0 spike. Generous invisible
@@ -225,4 +225,33 @@ struct FloatingSearchBar: View {
         }
     }
 
+}
+
+/// Pure decision rules for the floating search bar's collapse/expand state
+/// and its dismiss affordance. Extracted from the view (th0e) so the rule
+/// set is unit-testable without driving SwiftUI.
+///
+/// Single source of truth: **search is active** when the field is focused
+/// OR there is a non-empty query. The bar is expanded while search is
+/// active and collapsed otherwise; Cancel shows whenever the bar is
+/// expanded. Keeping these derived from one predicate is what prevents the
+/// bar from getting stuck expanded after the field blurs (the th0e bug).
+enum SearchBarRule {
+    /// Whether the user is currently in "search mode".
+    static func isSearchActive(fieldFocused: Bool, query: String) -> Bool {
+        fieldFocused || !query.isEmpty
+    }
+
+    /// The bar's resting state for a given search-active condition.
+    static func restingState(searchActive: Bool) -> FloatingSearchBarState {
+        searchActive ? .expanded : .collapsed
+    }
+
+    /// Whether the Cancel (dismiss) affordance is shown. Cancel is available
+    /// whenever the bar is expanded — explicitly NOT gated on keyboard focus,
+    /// which was the th0e regression: Cancel disappeared after Return / a
+    /// results-list scroll blurred the field while a query remained.
+    static func showsCancel(state: FloatingSearchBarState) -> Bool {
+        state == .expanded
+    }
 }

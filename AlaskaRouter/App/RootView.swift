@@ -107,9 +107,26 @@ struct RootView: View {
     }
 
     /// "Search mode active" — field is focused OR there's a non-empty query.
-    /// We hide the bottom sheet and dim/hold the map during this state.
+    /// We hide the bottom sheet and dim/hold the map during this state, and
+    /// (th0e) keep the bar expanded for exactly this condition.
     private var isSearchActive: Bool {
-        isSearchFieldFocused || !searchService.query.isEmpty
+        SearchBarRule.isSearchActive(
+            fieldFocused: isSearchFieldFocused,
+            query: searchService.query
+        )
+    }
+
+    /// Single source of truth for the bar's collapse/expand state (th0e).
+    /// Driven from `isSearchActive` so the bar can't get stuck expanded
+    /// after the field blurs (hit Return, scrolled the results list) while a
+    /// query remains — the regression that lost the collapse behavior. The
+    /// eager `state = .expanded` on a collapsed-pill tap is preserved: that
+    /// path animates open before focus lands, and this no-ops once focus
+    /// arrives (target already expanded).
+    private func syncBarState(active: Bool) {
+        let target = SearchBarRule.restingState(searchActive: active)
+        guard barState != target else { return }
+        withAnimation(.smooth(duration: 0.25)) { barState = target }
     }
 
     /// Fixed clearance above the screen bottom for on-map controls + scale.
@@ -405,6 +422,15 @@ struct RootView: View {
                     }
                 }
             }
+        }
+        // (th0e) Keep the bar's collapse/expand state in lockstep with
+        // search-active. Covers every blur path uniformly: Return, the
+        // interactive scroll-to-dismiss on the results list, tapping a
+        // result to preview (blurs but keeps the query → stays expanded so
+        // Cancel remains reachable), and clearing the query while blurred
+        // (→ collapse).
+        .onChange(of: isSearchActive) { _, active in
+            syncBarState(active: active)
         }
         .onChange(of: tripGeometryKey) { _, newKey in
             scheduleSnapForCurrentTrip(key: newKey)
