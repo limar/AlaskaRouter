@@ -9,12 +9,14 @@ import SwiftUI
 struct TweaksPanel: View {
     @Bindable var tweaks: TweaksStore
     @Environment(\.dismiss) private var dismiss
-    @State private var isWaypointDotTweaksExpanded = true
-    @State private var isUnitsTweaksExpanded = true
-    @State private var isSearchTweaksExpanded = true
-    @State private var isMapLabelsTweaksExpanded = true
-    @State private var isCancelButtonTweaksExpanded = true
-    @State private var isLatLinesTweaksExpanded = true
+    // Collapsed by default — the panel has grown enough that opening every
+    // section at once is a wall of controls. Tap a header to expand.
+    @State private var isWaypointDotTweaksExpanded = false
+    @State private var isUnitsTweaksExpanded = false
+    @State private var isSearchTweaksExpanded = false
+    @State private var isMapLabelsTweaksExpanded = false
+    @State private var isCancelButtonTweaksExpanded = false
+    @State private var isLatLinesTweaksExpanded = false
 
     var body: some View {
         NavigationStack {
@@ -73,12 +75,23 @@ struct TweaksPanel: View {
                 Section {
                     if isSearchTweaksExpanded{
                         Toggle("Loose matcher", isOn: $tweaks.useLooseMatcher)
+                        Picker("Result dot color", selection: $tweaks.searchResultColor) {
+                            ForEach(Array(SearchResultStyle.palette.enumerated()), id: \.offset) { i, entry in
+                                HStack {
+                                    Circle()
+                                        .fill(Color(uiColor: entry.color))
+                                        .frame(width: 14, height: 14)
+                                    Text("\(i) — \(entry.name)")
+                                }.tag(i)
+                            }
+                        }
+                        .pickerStyle(.menu)
                     }
                 } header: {
                     sectionHeader("Search", isExpanded: $isSearchTweaksExpanded)
                 } footer: {
                     if isSearchTweaksExpanded{
-                        Text("When ON, search retries with synonyms (bike↔motorcycle, sign↔wayside, ferry↔ferries, …) and drops descriptor tokens (\"ferry\", \"sign\", \"the\", …) if the strict query returns nothing. Catches \"Ferry Whittier\" → Whittier Terminal, \"Arctic Circle Sign\" → Arctic Circle Wayside. Flip OFF to compare against the original strict behavior.")
+                        Text("Loose matcher: when ON, search retries with synonyms (bike↔motorcycle, sign↔wayside, ferry↔ferries, …) and drops descriptor tokens (\"ferry\", \"sign\", \"the\", …) if the strict query returns nothing. Catches \"Ferry Whittier\" → Whittier Terminal, \"Arctic Circle Sign\" → Arctic Circle Wayside. Flip OFF to compare against the original strict behavior.\n\nResult dot color: fill for the group-search (multi-result) dots shown on the map after pressing Return.")
                             .font(.footnote)
                     }
                 }

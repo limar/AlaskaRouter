@@ -31,11 +31,15 @@ struct FloatingSearchBar: View {
     @Binding var state: FloatingSearchBarState
     @Binding var query: String
     @Binding var isFieldFocused: Bool   // mirrors @FocusState outward for RootView
-    let activeTripName: String
     /// y7l0 — invoked when the user taps the Cancel button (replaces the AK
     /// chip while the field is focused). RootView wires this to
     /// `dismissSearch()`. Optional so a unit-test instance can omit it.
     var onCancel: (() -> Void)? = nil
+    /// AlaskaRouter-unir — invoked when the user commits the query from the
+    /// keyboard (Return / the .search submit key). RootView wires this to
+    /// promote the typed query into a nearest-N group search rendered on the
+    /// map. Tapping an individual result ROW stays the single-pick path.
+    var onSubmit: (() -> Void)? = nil
 
     /// Reactive read of the TweaksStore so the bar re-renders when the user
     /// flips the Cancel button style/color/weight from the Tweaks panel.
@@ -73,6 +77,7 @@ struct FloatingSearchBar: View {
                 .textFieldStyle(.plain)
                 .focused($fieldFocused)
                 .submitLabel(.search)
+                .onSubmit { onSubmit?() }
                 // Place names (Native, Russian, Athabaskan transliterations
                 // like "Kotsina") aren't English words; autocorrect mangles
                 // them mid-type. Disable correction + capitalization + spell.
@@ -195,21 +200,21 @@ struct FloatingSearchBar: View {
     }
 
     private var collapsedPill: some View {
+        // (unir) The collapsed pill is a SEARCH affordance, not a trip-name
+        // readout. The old prominent black trip name didn't help anything in
+        // the search bar and read as a heavy label; replaced with a light-grey
+        // "Search…" placeholder, mirroring a resting search field.
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text(activeTripName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Image(systemName: "chevron.down")
-                .font(.system(size: 10, weight: .bold))
+            Text("Search…")
+                .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
         .background(.thinMaterial, in: Capsule(style: .continuous))
         .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.08), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.06), radius: 8, y: 2)

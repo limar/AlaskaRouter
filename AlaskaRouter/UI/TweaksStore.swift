@@ -82,6 +82,15 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(labelSizeMultiplier, forKey: K.labelSizeMultiplier) }
     }
 
+    // MARK: - Search results (AlaskaRouter-unir)
+
+    /// Index into `SearchResultStyle.palette` — the fill color for the
+    /// group-search result dots. Live-tunable so we can find a color that
+    /// pops on the vibrant basemap without clashing with the route/preview pin.
+    var searchResultColor: Int {
+        didSet { UserDefaults.standard.set(searchResultColor, forKey: K.searchResultColor) }
+    }
+
     // MARK: - Search bar Cancel button (AlaskaRouter-y7l0 spike harness)
 
     /// Visual treatment for the Cancel button that replaces the AK chip
@@ -174,6 +183,7 @@ final class TweaksStore {
         distanceUnitIsMiles    = Defaults.distanceUnitIsMiles
         placeMarkerStyle       = Defaults.placeMarkerStyle
         labelSizeMultiplier    = Defaults.labelSizeMultiplier
+        searchResultColor      = Defaults.searchResultColor
         cancelButtonStyle      = Defaults.cancelButtonStyle
         cancelButtonColor      = Defaults.cancelButtonColor
         cancelButtonFontWeight = Defaults.cancelButtonFontWeight
@@ -199,6 +209,7 @@ final class TweaksStore {
         distanceUnitIsMiles    = (d.object(forKey: K.distanceUnitIsMiles)    as? Bool)   ?? Defaults.distanceUnitIsMiles
         placeMarkerStyle       = (d.object(forKey: K.placeMarkerStyle)       as? Int)    ?? Defaults.placeMarkerStyle
         labelSizeMultiplier    = (d.object(forKey: K.labelSizeMultiplier)    as? Double) ?? Defaults.labelSizeMultiplier
+        searchResultColor      = (d.object(forKey: K.searchResultColor)      as? Int)    ?? Defaults.searchResultColor
         cancelButtonStyle      = (d.object(forKey: K.cancelButtonStyle)      as? Int)    ?? Defaults.cancelButtonStyle
         cancelButtonColor      = (d.object(forKey: K.cancelButtonColor)      as? Int)    ?? Defaults.cancelButtonColor
         cancelButtonFontWeight = (d.object(forKey: K.cancelButtonFontWeight) as? Int)    ?? Defaults.cancelButtonFontWeight
@@ -221,6 +232,7 @@ final class TweaksStore {
         static let distanceUnitIsMiles    = "tweak.units.distanceIsMiles"
         static let placeMarkerStyle       = "tweak.places.markerStyle"
         static let labelSizeMultiplier    = "tweak.places.labelSizeMultiplier"
+        static let searchResultColor      = "tweak.searchResult.color"
         static let cancelButtonStyle      = "tweak.cancel.style"
         static let cancelButtonColor      = "tweak.cancel.color"
         static let cancelButtonFontWeight = "tweak.cancel.fontWeight"
@@ -246,6 +258,7 @@ final class TweaksStore {
         static let distanceUnitIsMiles: Bool      = false  // km by default
         static let placeMarkerStyle: Int          = 3      // vyfe iteration 6 winner: translucent + halo
         static let labelSizeMultiplier: Double    = 1.25    // unchanged from style defaults
+        static let searchResultColor: Int         = 0      // unir — strong electric blue (palette[0])
         // y7l0 spike — initial recommendations:
         //   style: 1 (filled chip) — preserves visual weight when swapping out AK
         //   color: 0 (slate blue)  — cool counterpart to warm AK/+ palette

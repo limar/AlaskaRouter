@@ -107,6 +107,14 @@ struct ExpeditionMapView: View {
     /// fires our unsafe hook with the new tweak values applied to icons.
     let tweaksFingerprint: String
 
+    /// Group-search result-set (AlaskaRouter-unir). Rendered as a highlighted
+    /// pin layer (accent halo + per-category glyph) distinct from the single
+    /// preview pin and committed trip stops. Empty = no active group search.
+    /// Each pin is tappable and routes through `onPlaceTap` (it carries the
+    /// same name/category/admin_area attributes) → the existing preview→add
+    /// flow, so adding one result leaves the rest of the set on the map.
+    var searchResults: [SearchResult] = []
+
     /// Map tap on a waypoint marker (AlaskaRouter-kcq8). Fires only when
     /// a marker is actually hit — empty taps go through `onEmptyMapTap`
     /// (4r8l) so the parent can drop a pin rather than just clear state.
@@ -139,8 +147,14 @@ struct ExpeditionMapView: View {
         "places-tier-misc",
         "places-tier-long-tail",
     ]
+    /// Group-search result pins (AlaskaRouter-unir). Tappable so a result
+    /// dispatches through the same place-tap → preview → add path; carries
+    /// name/category/admin_area attributes like a places.geojson feature.
+    private static let searchResultLayerIDs: Set<String> = [
+        "search-result-dots",
+    ]
     private static let allTappableLayerIDs: Set<String> =
-        waypointLayerIDs.union(placesLayerIDs)
+        waypointLayerIDs.union(placesLayerIDs).union(searchResultLayerIDs)
     private static let labelCoverLayerIDs: [String] = [
         "label-region",
         "label-water",
@@ -691,7 +705,79 @@ struct ExpeditionMapView: View {
                     previewCoord: previewCoord,
                     previewName: previewName
                 )
+                // Group-search result-set layer (unir). Built after the marker
+                // layers so the accent halo + glyph sit above ambient POIs.
+                ExpeditionMapView.syncSearchResultLayer(style: style, results: searchResults)
             }
         }
+    }
+
+    // MARK: - Group-search result layer (AlaskaRouter-unir)
+
+    /// Zoom→radius stops for the result dot (screen points). Small dot when
+    /// zoomed out (the set reads as a density cloud), grows and separates as
+    /// the user leans in — the "good zoomable thing".
+    private static let searchResultDotStops: [Double: Double] = [
+        6: 4.5, 9: 7, 12: 11, 15: 15,
+    ]
+
+    /// Render the nearest-N group results as a single generic, strongly-colored
+    /// circle (disc + white stroke) — NOT the per-category glyph, so the set
+    /// reads as one homogeneous "your matches" layer that pops above ambient
+    /// category icons. Fill is the live-tunable `SearchResultStyle` color.
+    /// Source shape + fill are refreshed in place on subsequent calls (so a
+    /// Tweaks color change applies without a rebuild); the layer is created
+    /// once. Empty results → tear the layer + source down.
+    fileprivate static func syncSearchResultLayer(style: MLNStyle, results: [SearchResult]) {
+        let sourceID = "search-results"
+        let layerID = "search-result-dots"
+
+        if results.isEmpty {
+            if let layer = style.layer(withIdentifier: layerID) { style.removeLayer(layer) }
+            if let src = style.source(withIdentifier: sourceID) { style.removeSource(src) }
+            return
+        }
+
+        // Dedup by coord (6 decimals ≈ 11 cm) so stacked same-spot results
+        // don't pile dots on one pixel — mirrors the trip-marker dedup. Carry
+        // name/category/admin_area so a tap dispatches through onPlaceTap.
+        var seen = Set<String>()
+        var features: [MLNPointFeature] = []
+        for r in results {
+            let key = String(format: "%.6f|%.6f", r.coord.latitude, r.coord.longitude)
+            guard seen.insert(key).inserted else { continue }
+            let f = MLNPointFeature()
+            f.coordinate = r.coord
+            f.attributes = [
+                "name": r.name,
+                "category": r.category,
+                "admin_area": r.adminArea,
+            ]
+            features.append(f)
+        }
+        let shape = MLNShapeCollectionFeature(shapes: features)
+        let fill = SearchResultStyle.uiColor(for: TweaksStore.shared.searchResultColor)
+
+        if let existing = style.source(withIdentifier: sourceID) as? MLNShapeSource {
+            existing.shape = shape
+            // Keep the fill live-tunable from the Tweaks panel.
+            if let layer = style.layer(withIdentifier: layerID) as? MLNCircleStyleLayer {
+                layer.circleColor = NSExpression(forConstantValue: fill)
+            }
+            return
+        }
+
+        let source = MLNShapeSource(identifier: sourceID, shape: shape, options: nil)
+        style.addSource(source)
+
+        let dot = MLNCircleStyleLayer(identifier: layerID, source: source)
+        dot.circleColor = NSExpression(forConstantValue: fill)
+        dot.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+        dot.circleStrokeWidth = NSExpression(forConstantValue: 2.0)
+        dot.circleRadius = NSExpression(
+            format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'exponential', 1.5, %@)",
+            searchResultDotStops as NSDictionary
+        )
+        style.addLayer(dot)
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import MapLibre
 import MapLibreSwiftUI
 import CoreLocation
 import UniformTypeIdentifiers
@@ -22,6 +23,14 @@ struct RootView: View {
 
     @State private var selectedWaypointID: UUID?
     @State private var previewedResult: SearchResult?
+    /// (unir) The committed query text shown on the results badge while a
+    /// group result-set is on the map. Captured before the query is cleared on
+    /// promote-to-group; e.g. "west" → badge reads "west · 23".
+    @State private var groupQueryLabel: String = ""
+    /// (unir) Transient search feedback shown when Enter finds no EXACT match
+    /// but fuzzy suggestions are visible — explains why the commit didn't act.
+    @State private var searchToast: String?
+    @State private var searchToastTask: Task<Void, Never>?
     @State private var sharePresentation: SharePresentation?
     @State private var recentlyAddedWaypoint: Waypoint?
     @State private var recentlyDeletedSnapshot: DeletedStopSnapshot?
@@ -79,13 +88,14 @@ struct RootView: View {
     /// markers re-rendered with the new tweak values.
     private var tweaksFingerprint: String {
         String(
-            format: "d%.0f-s%.0f-w%.2f-r%.2f-m%d-L%.2f",
+            format: "d%.0f-s%.0f-w%.2f-r%.2f-m%d-L%.2f-R%d",
             tweaksStore.dotDiameterDefault,
             tweaksStore.dotDiameterSelected,
             tweaksStore.dotFontWeight,
             tweaksStore.dotFontSizeRatio,
             tweaksStore.placeMarkerStyle,       // vyfe spike — re-register place icons on change
-            tweaksStore.labelSizeMultiplier     // vyfe iter 7 — apply label-size scaling on change
+            tweaksStore.labelSizeMultiplier,    // vyfe iter 7 — apply label-size scaling on change
+            tweaksStore.searchResultColor       // unir — recolor group-result dots on change
         )
     }
 
@@ -104,6 +114,63 @@ struct RootView: View {
                 .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
         }
         .buttonStyle(.plain)
+    }
+
+    /// (unir) Category shortcuts shown in the dropdown's EMPTY state (field
+    /// open, nothing typed). Rendered by SearchShortcutsView on the same
+    /// surface as the live suggestions. Deliberately a SHORT set — past a few,
+    /// scanning is slower than typing. Each targets a canonical category key.
+    private static let searchShortcuts: [SearchShortcut] = [
+        SearchShortcut(label: "Gas", category: "fuel", systemImage: "fuelpump.fill"),
+        SearchShortcut(label: "Camp", category: "camping", systemImage: "tent.fill"),
+        SearchShortcut(label: "Visitor center", category: "visitor_center", systemImage: "info.circle.fill"),
+    ]
+
+    /// (unir) Results badge — a dedicated accent pill (the result-dot color)
+    /// that sits under the search bar while a group result-set is on the map.
+    /// Single-tap operations only: the body reframes the camera to the whole
+    /// set (handy after panning while exploring), the trailing ✕ resets. The
+    /// result set is otherwise stable across every map gesture — only ✕ or a
+    /// brand-new search changes it.
+    private var resultsBadge: some View {
+        let accent = SearchResultStyle.color(for: tweaksStore.searchResultColor)
+        let count = searchService.groupResults.count
+        let label = groupQueryLabel.isEmpty ? "\(count) results" : "\(groupQueryLabel) · \(count)"
+        return HStack(spacing: 6) {
+            Button {
+                fitCameraToResults(searchService.groupResults)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(label)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(.white)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                clearGroupSearch()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(Color.white.opacity(0.22), in: Circle())
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear search results")
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(accent, in: Capsule(style: .continuous))
+        .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.30), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
     }
 
     /// "Search mode active" — field is focused OR there's a non-empty query.
@@ -148,6 +215,7 @@ struct RootView: View {
                 pendingPairIndices: pendingPairIndices.isEmpty ? nil : pendingPairIndices,
                 userLocation: locationProvider.lastLocation?.coordinate,
                 tweaksFingerprint: tweaksFingerprint,
+                searchResults: searchService.groupResults,
                 onWaypointTap: handleMapWaypointTap,
                 onPlaceTap: handleMapPlaceTap,
                 onEmptyMapTap: handleMapEmptyTap
@@ -211,36 +279,53 @@ struct RootView: View {
             .allowsHitTesting(!isSearchActive)   // taps pass through to scrim when search is active
 
             VStack(spacing: 0) {
-                FloatingSearchBar(
-                    state: $barState,
-                    query: Binding(
-                        get: { searchService.query },
-                        set: { searchService.setQuery($0) }
-                    ),
-                    isFieldFocused: $isSearchFieldFocused,
-                    activeTripName: activeTrip?.name ?? "(no trip)",
-                    onCancel: dismissSearch
-                )
-                if barState == .expanded
-                    && !searchService.results.isEmpty
-                    && previewedResult == nil
-                {
-                    // Restored ab23a70's layout: a plain ScrollView that
-                    // scrolls internally when content overflows. The bar
-                    // stays put (it's earlier in the VStack and has its
-                    // intrinsic height). No artificial cap — the user sees
-                    // every match. Dismissal is handled by the y7l0 Cancel
-                    // button (always available when focused) and the
-                    // map-touch scrim (any gesture on visible map → dismiss).
-                    ScrollView {
-                        SearchResultsView(
-                            results: searchService.results,
-                            parsed: searchService.parsed,
-                            onPreview: handlePreviewSelected,
-                            onFastAdd: handleFastAdd
-                        )
+                // (unir) ONE top slot, mutually exclusive: the results badge
+                // REPLACES the search bar while a group result-set is on the
+                // map — never both at once. The badge is the collapsed search
+                // bar's stand-in: body tap reframes the set, ✕ is the only
+                // thing that clears it (returning to the Search… bar). To run
+                // a new search the user clears (✕) then taps the bar. Cancel /
+                // map gestures never touch the set.
+                if !searchService.groupResults.isEmpty {
+                    resultsBadge
+                        .padding(.top, 8)
+                        .transition(.opacity)
+                } else {
+                    FloatingSearchBar(
+                        state: $barState,
+                        query: Binding(
+                            get: { searchService.query },
+                            set: { searchService.setQuery($0) }
+                        ),
+                        isFieldFocused: $isSearchFieldFocused,
+                        onCancel: dismissSearch,
+                        onSubmit: runGroupSearch
+                    )
+                    // One dropdown surface, two contents (unir): category
+                    // shortcuts before anything is typed, live suggestions
+                    // after. Mutually exclusive by `query.isEmpty`.
+                    if barState == .expanded && previewedResult == nil {
+                        if searchService.query.isEmpty {
+                            SearchShortcutsView(shortcuts: Self.searchShortcuts) { shortcut in
+                                runCategoryGroupSearch(
+                                    label: shortcut.label, category: shortcut.category)
+                            }
+                            .transition(.opacity)
+                        } else if !searchService.results.isEmpty {
+                            // Restored ab23a70's layout: a plain ScrollView that
+                            // scrolls internally when content overflows. No
+                            // artificial cap — the user sees every match.
+                            ScrollView {
+                                SearchResultsView(
+                                    results: searchService.results,
+                                    parsed: searchService.parsed,
+                                    onPreview: handlePreviewSelected,
+                                    onFastAdd: handleFastAdd
+                                )
+                            }
+                            .scrollDismissesKeyboard(.interactively)
+                        }
                     }
-                    .scrollDismissesKeyboard(.interactively)
                 }
                 Spacer(minLength: 0)
             }
@@ -324,6 +409,26 @@ struct RootView: View {
             // is kept so a different feedback channel (haptic, shake-to-undo,
             // ⌘Z) can be wired up later without rewiring the mutation paths.
 
+            // (unir) Search feedback toast — e.g. "No exact matches for …".
+            // Bottom-anchored so it never collides with the top search dropdown;
+            // non-interactive so it can't block taps.
+            if let toast = searchToast {
+                VStack {
+                    Spacer()
+                    Text(toast)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 11)
+                        .background(.regularMaterial, in: Capsule(style: .continuous))
+                        .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.10), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
+                        .padding(.bottom, 80)
+                }
+                .allowsHitTesting(false)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // First-launch welcome card — once-only, gated by UserDefaults.
             if showWelcome {
                 WelcomeOverlay(onDismiss: dismissWelcome)
@@ -350,12 +455,17 @@ struct RootView: View {
                     Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 800_000_000)
                         let idx = action.index
-                        guard idx < searchService.results.count else { return }
-                        let target = searchService.results[idx]
                         switch action.kind {
-                        case "preview": handlePreviewSelected(target)
-                        case "add":     handleFastAdd(target)
-                        default:        break
+                        case "group":
+                            // (unir) Promote the prefilled query to a nearest-N
+                            // group search — no result index needed.
+                            runGroupSearch()
+                        case "preview" where idx < searchService.results.count:
+                            handlePreviewSelected(searchService.results[idx])
+                        case "add" where idx < searchService.results.count:
+                            handleFastAdd(searchService.results[idx])
+                        default:
+                            break
                         }
                     }
                 }
@@ -456,6 +566,10 @@ struct RootView: View {
             if let imported = try? TripFileImport.importFile(at: url, into: modelContext) {
                 TripStore.setActive(imported)
             }
+        }
+        // (unir) Group-search results arrive async — frame them when they land.
+        .onChange(of: searchService.groupResults) { _, results in
+            fitCameraToResults(results)
         }
     }
 
@@ -737,8 +851,116 @@ struct RootView: View {
     /// collapses the bar to the pill state.
     private func dismissSearch() {
         searchService.setQuery("")
+        searchService.clearGroupResults()
+        groupQueryLabel = ""
         isSearchFieldFocused = false
         withAnimation(.smooth(duration: 0.25)) { barState = .collapsed }
+    }
+
+    /// Explicit reset of the group result-set (the badge ✕). Deliberate act —
+    /// the only thing besides a new search that clears the map.
+    private func clearGroupSearch() {
+        withAnimation(.smooth(duration: 0.25)) {
+            searchService.clearGroupResults()
+            groupQueryLabel = ""
+        }
+    }
+
+    // MARK: - Group search (AlaskaRouter-unir)
+
+    /// Promote the typed query into a nearest-N group search rendered on the
+    /// map. Fired on Return from the search field. We clear the query text and
+    /// collapse the bar so (a) the dropdown closes and (b) `isSearchActive`
+    /// goes false — otherwise the search-dismiss scrim would sit over the map
+    /// and eat taps on the very result pins we just rendered. The group layer
+    /// lives in `searchService.groupResults`, independent of the query, so it
+    /// survives the bar collapsing. Camera framing happens in the `onChange`
+    /// above once the async results land.
+    private func runGroupSearch() {
+        let label = searchService.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !searchService.parsed.isEmpty else { return }
+        // Decide on the async result — NEVER promote optimistically. Promote to
+        // the badge only when the strict matcher actually found something; if it
+        // found nothing but the dropdown is showing (fuzzy) suggestions, explain
+        // via a toast and stay in search. An empty dropdown (e.g. "kkk") needs
+        // no toast — the empty list is its own feedback.
+        searchService.runGroupSearch(near: currentMapCenter()) { count in
+            if count > 0 {
+                promoteGroupResults(label: label)
+            } else if !searchService.results.isEmpty {
+                showSearchToast("No exact matches for “\(label)”")
+            }
+        }
+    }
+
+    /// A category-chip tap → category group search. Mirrors runGroupSearch
+    /// but targets a category key directly and labels the badge with the
+    /// chip's word (e.g. "Gas · 24").
+    private func runCategoryGroupSearch(label: String, category: String) {
+        // Same promote-only-when-found gate. A chip with zero hits (not
+        // expected for Gas/Camp/Visitor in Alaska) simply stays in search —
+        // no toast, since the empty-state dropdown shortcuts are still shown.
+        searchService.runGroupSearch(category: category, near: currentMapCenter()) { count in
+            if count > 0 { promoteGroupResults(label: label) }
+        }
+    }
+
+    /// Promote a non-empty group result-set: stamp the badge label, drop the
+    /// keyboard, clear the query and collapse the bar so the badge takes the
+    /// single top slot.
+    private func promoteGroupResults(label: String) {
+        groupQueryLabel = label
+        isSearchFieldFocused = false
+        withAnimation(.smooth(duration: 0.25)) {
+            searchService.setQuery("")
+            barState = .collapsed
+        }
+    }
+
+    /// Transient search feedback (e.g. "No exact matches for …"). Auto-dismisses.
+    private func showSearchToast(_ message: String) {
+        searchToastTask?.cancel()
+        withAnimation(.smooth(duration: 0.25)) { searchToast = message }
+        searchToastTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            withAnimation(.smooth(duration: 0.25)) { searchToast = nil }
+        }
+    }
+
+    /// The reference point for "nearest" — the current map center, or the
+    /// user's location when the camera is in a tracking mode.
+    private func currentMapCenter() -> CLLocationCoordinate2D {
+        if case let .centered(center, _, _, _, _) = mapCamera.state {
+            return center
+        }
+        return locationProvider.lastLocation?.coordinate ?? Self.defaultCenter
+    }
+
+    /// Auto-fit the camera to the group result-set. One result → center on it;
+    /// many → fit their bounding box with insets that clear the top search bar
+    /// and leave bottom room for the (future) result count handle.
+    private func fitCameraToResults(_ results: [SearchResult]) {
+        guard let first = results.first else { return }
+        if results.count == 1 {
+            withAnimation(.smooth(duration: 0.45)) {
+                mapCamera = .center(first.coord, zoom: zoomForCategory(first.category))
+            }
+            return
+        }
+        var minLat = first.coord.latitude, maxLat = first.coord.latitude
+        var minLon = first.coord.longitude, maxLon = first.coord.longitude
+        for r in results {
+            minLat = min(minLat, r.coord.latitude); maxLat = max(maxLat, r.coord.latitude)
+            minLon = min(minLon, r.coord.longitude); maxLon = max(maxLon, r.coord.longitude)
+        }
+        let bounds = MLNCoordinateBounds(
+            sw: CLLocationCoordinate2D(latitude: minLat, longitude: minLon),
+            ne: CLLocationCoordinate2D(latitude: maxLat, longitude: maxLon)
+        )
+        let padding = UIEdgeInsets(top: 120, left: 48, bottom: 160, right: 48)
+        withAnimation(.smooth(duration: 0.5)) {
+            mapCamera = .boundingBox(bounds, edgePadding: padding)
+        }
     }
 
     private func dismissWelcome() {

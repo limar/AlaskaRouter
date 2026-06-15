@@ -63,6 +63,13 @@ final class SearchService {
     private(set) var parsed: StructuredQuery = StructuredQuery(nameTokens: [], categoryHints: [])
     private(set) var results: [SearchResult] = []
 
+    /// Group / "show all matches near here" results (AlaskaRouter-unir).
+    /// Distinct from `results` (the top-N relevance list shown in the dropdown
+    /// for the single-pick flow). Populated by `runGroupSearch` and rendered as
+    /// a highlighted pin layer on the map. Persists independently of `query` so
+    /// the layer survives the search bar collapsing after a promote-to-group.
+    private(set) var groupResults: [SearchResult] = []
+
     private var pendingTask: Task<Void, Never>?
     private let debounceNs: UInt64 = 150_000_000   // 150 ms
 
@@ -101,6 +108,123 @@ final class SearchService {
     }
 
     private static let debounceNsValue: UInt64 = 150_000_000
+
+    // MARK: - Group search (AlaskaRouter-unir)
+
+    /// "Show all matches near here." Runs the CURRENT parsed query (category
+    /// hints and/or name tokens) ranked by proximity to `center`, and publishes
+    /// the nearest `limit` into `groupResults`. Unlike `setQuery`, this is a
+    /// one-shot (no debounce) triggered by an explicit commit (Enter / chip),
+    /// and it skips the loose/fuzzy NAME stages — group mode is category +
+    /// proximity, not typo recovery. Replaces any prior group result-set.
+    /// `onComplete` reports the strict-match count once the async query lands
+    /// (0 when nothing matched). The caller decides whether to promote to the
+    /// results badge or stay in search — promote ⟺ count > 0.
+    func runGroupSearch(
+        near center: CLLocationCoordinate2D,
+        limit: Int = 24,
+        onComplete: (@MainActor (Int) -> Void)? = nil
+    ) {
+        let parsedQ = parsed
+        guard !parsedQ.isEmpty else { groupResults = []; onComplete?(0); return }
+        let dbRef = db
+        Task { [weak self] in
+            let hits = await Self.runGroupQuery(
+                handle: dbRef.handle, query: parsedQ, center: center, limit: limit)
+            await MainActor.run {
+                self?.groupResults = hits
+                onComplete?(hits.count)
+            }
+        }
+    }
+
+    /// Group search for a specific category directly — a category-chip tap.
+    /// Bypasses the text parser: `category` is a canonical place_meta.category
+    /// key ("fuel", "camping", "visitor_center", …). Same proximity ranking.
+    func runGroupSearch(
+        category: String,
+        near center: CLLocationCoordinate2D,
+        limit: Int = 24,
+        onComplete: (@MainActor (Int) -> Void)? = nil
+    ) {
+        let q = StructuredQuery(nameTokens: [], categoryHints: [category])
+        let dbRef = db
+        Task { [weak self] in
+            let hits = await Self.runGroupQuery(
+                handle: dbRef.handle, query: q, center: center, limit: limit)
+            await MainActor.run {
+                self?.groupResults = hits
+                onComplete?(hits.count)
+            }
+        }
+    }
+
+    /// Dismiss the group result-set (search cleared / tapped away).
+    func clearGroupResults() { groupResults = [] }
+
+    /// Category + proximity query. No relevance/BM25 ranking — matches are
+    /// gathered (FTS on name tokens and/or a `category IN (...)` filter) then
+    /// ranked in Swift by distance from `center`, nearest `limit` returned.
+    /// At 12,617 rows a full gather + sort is sub-ms; the SQL `LIMIT 5000` is
+    /// only a guard against a pathological 1-char prefix pulling everything.
+    nonisolated private static func runGroupQuery(
+        handle: OpaquePointer,
+        query: StructuredQuery,
+        center: CLLocationCoordinate2D,
+        limit: Int
+    ) async -> [SearchResult] {
+        guard !query.nameTokens.isEmpty || !query.categoryHints.isEmpty else { return [] }
+
+        var whereClauses: [String] = []
+        let ftsArg = buildFTSExpression(
+            tokens: query.nameTokens, expandSynonyms: false, dropDroppable: false)
+        let baseFrom: String
+        if ftsArg != nil {
+            baseFrom = "places_word JOIN place_meta AS m ON m.rowid = places_word.rowid"
+            whereClauses.append("places_word MATCH ?")
+        } else {
+            baseFrom = "place_meta AS m"
+        }
+        var catParams: [String] = []
+        if !query.categoryHints.isEmpty {
+            let placeholders = query.categoryHints.map { _ in "?" }.joined(separator: ",")
+            whereClauses.append("m.category IN (\(placeholders))")
+            catParams = query.categoryHints
+        }
+        let whereSql = whereClauses.isEmpty ? "1=1" : whereClauses.joined(separator: " AND ")
+        let sql = """
+        SELECT m.rowid, m.name, m.alt_names, m.category, m.lat, m.lon, m.importance, m.admin_area
+        FROM \(baseFrom)
+        WHERE \(whereSql)
+        LIMIT 5000;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        // Bind order = textual `?` order: FTS MATCH (if present), then cat params.
+        var idx: Int32 = 1
+        if let fts = ftsArg {
+            sqlite3_bind_text(stmt, idx, fts, -1, SQLITE_TRANSIENT); idx += 1
+        }
+        for c in catParams {
+            sqlite3_bind_text(stmt, idx, c, -1, SQLITE_TRANSIENT); idx += 1
+        }
+        var rows: [SearchResult] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            rows.append(readRow(stmt: stmt, stage: SearchStage.strict.rawValue, editDistance: 0))
+        }
+
+        // Proximity rank — equirectangular approximation. Longitude degrees are
+        // scaled by cos(lat) so it stays sane at Alaska's ~64°N; exact great-
+        // circle distance isn't needed for a nearest-N ordering.
+        let cosLat = cos(center.latitude * .pi / 180)
+        func dist2(_ c: CLLocationCoordinate2D) -> Double {
+            let dLat = c.latitude - center.latitude
+            let dLon = (c.longitude - center.longitude) * cosLat
+            return dLat * dLat + dLon * dLon
+        }
+        return Array(rows.sorted { dist2($0.coord) < dist2($1.coord) }.prefix(limit))
+    }
 
     // MARK: - Off-main-actor query
 
