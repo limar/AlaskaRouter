@@ -81,6 +81,60 @@ final class ValhallaProviderTests: XCTestCase {
         let auto = try XCTUnwrap(costingOptions["auto"] as? [String: Any])
         XCTAssertEqual(auto["use_ferry"] as? Double, 0.5)
     }
+
+    // MARK: - No-route error-body classification (AlaskaRouter-d0wt)
+    //
+    // A 400 from Valhalla can mean "no drivable path" (permanent, must
+    // trigger bisection recovery) OR something else (malformed request,
+    // exceeded-max-locations) that we'd rather treat as a transport error.
+    // isNoRouteErrorBody must distinguish them so an off-road stop doesn't
+    // get shoved into the rate-limit backoff loop.
+
+    func testOSRMFormatNoRouteBodyClassifiedAsNoRoute() {
+        // THE shape we actually get: format=osrm makes Valhalla mirror
+        // OSRM's error envelope. Verified live against the FOSSGIS demo —
+        // this is the body that was silently misclassified before d0wt.
+        let body = Data(#"{"code":"NoRoute","message":"Impossible route between points"}"#.utf8)
+        XCTAssertTrue(ValhallaProvider.isNoRouteErrorBody(body))
+    }
+
+    func testOSRMFormatNoSegmentBodyClassifiedAsNoRoute() {
+        // NoSegment = a coordinate couldn't be snapped to any road — the
+        // canonical off-road-waypoint case (e.g. centre of Denali Park).
+        let body = Data(#"{"code":"NoSegment","message":"One of the supplied input coordinates could not snap to street segment."}"#.utf8)
+        XCTAssertTrue(ValhallaProvider.isNoRouteErrorBody(body))
+    }
+
+    func testNativeValhallaNoPathBodyClassifiedAsNoRoute() {
+        // Fallback shape, kept in case a non-osrm path ever surfaces it.
+        let body = Data(#"{"error_code":442,"error":"No path could be found for input"}"#.utf8)
+        XCTAssertTrue(ValhallaProvider.isNoRouteErrorBody(body))
+    }
+
+    func testOSRMInvalidOptionsNotClassifiedAsNoRoute() {
+        // A request-shape error (not a no-route) must NOT trigger bisection.
+        let body = Data(#"{"code":"InvalidOptions","message":"Options are invalid."}"#.utf8)
+        XCTAssertFalse(ValhallaProvider.isNoRouteErrorBody(body))
+    }
+
+    func testNoPathByMessageAloneClassifiedAsNoRoute() {
+        // Belt-and-suspenders: even if the error_code drifts, the message
+        // text still pins it as a no-route.
+        let body = Data(#"{"error":"No path could be found for input"}"#.utf8)
+        XCTAssertTrue(ValhallaProvider.isNoRouteErrorBody(body))
+    }
+
+    func testExceededMaxLocationsNotClassifiedAsNoRoute() {
+        // A different 400 — must NOT be swallowed as no-route, or we'd
+        // bisect a request that failed for an unrelated reason.
+        let body = Data(#"{"error_code":154,"error":"Exceeded max locations:20"}"#.utf8)
+        XCTAssertFalse(ValhallaProvider.isNoRouteErrorBody(body))
+    }
+
+    func testGarbageBodyNotClassifiedAsNoRoute() {
+        XCTAssertFalse(ValhallaProvider.isNoRouteErrorBody(Data("not json".utf8)))
+        XCTAssertFalse(ValhallaProvider.isNoRouteErrorBody(Data()))
+    }
 }
 
 @MainActor

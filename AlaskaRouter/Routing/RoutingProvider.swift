@@ -46,6 +46,15 @@ enum RoutingError: Error {
     case http(statusCode: Int)
     case decoding(String)
     case server(code: String)   // OSRM's `code` field when not "Ok"
+    /// At least one leg in the request has no drivable path (e.g. a
+    /// waypoint miles off any road — the geographic centre of Denali
+    /// Park). This is a PERMANENT, geometry-bound verdict: it won't fix
+    /// itself on retry, so callers must treat it differently from a 429
+    /// throttle or a network blip. Valhalla signals this as HTTP 400 with
+    /// `error_code` 442; see `ValhallaProvider.isNoRouteErrorBody`. The
+    /// partial-fetch orchestrator uses this to trigger bisection recovery
+    /// instead of backing off (AlaskaRouter-d0wt).
+    case noRoute(reason: String)
 }
 
 // MARK: - OSRM public router

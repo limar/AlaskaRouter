@@ -749,9 +749,24 @@ struct RootView: View {
                     do {
                         let result = try await provider.snap(waypoints: chunk.waypoints)
                         return .success(chunk: chunk, result: result)
-                    } catch RoutingError.http {
-                        return .rateLimited(chunk: chunk)
+                    } catch RoutingError.noRoute {
+                        // (d0wt) At least one leg in this chunk has no
+                        // drivable path (Valhalla HTTP 400 / error_code 442).
+                        // Permanent until the geometry changes — route it to
+                        // bisection recovery, NOT the rate-limit backoff.
+                        return .noRoute(chunk: chunk)
+                    } catch let RoutingError.http(statusCode) {
+                        // 429 = FOSSGIS token-bucket throttle → back off.
+                        // Any other unexpected 4xx/5xx is a transport blip
+                        // we retry on the next cycle. (Previously ALL .http
+                        // mapped to .rateLimited, which sent permanent 400
+                        // no-routes into the backoff loop forever.)
+                        return statusCode == 429
+                            ? .rateLimited(chunk: chunk)
+                            : .transport(chunk: chunk)
                     } catch RoutingError.server {
+                        // Defensive: an empty `routes` array. Valhalla 400s
+                        // on no-route so this is rare, but treat it the same.
                         return .noRoute(chunk: chunk)
                     } catch {
                         return .transport(chunk: chunk)
@@ -781,12 +796,45 @@ struct RootView: View {
                 writeChunkToCache(result: result, chunk: chunk, cache: cache)
             case .rateLimited:
                 anyRateLimited = true
-            case .noRoute:
-                // Server explicitly said "no route between these points"
-                // (NoRoute / NoMatch). Not a throttle; not a transport
-                // error. Leave the pair as pending — geometry change
-                // (user edits the stop) is the only thing that fixes it.
-                break
+            case let .noRoute(chunk):
+                // (d0wt) A whole-chunk no-route rarely means EVERY leg is
+                // unroutable — usually one waypoint (e.g. an off-road stop)
+                // has no path and poisons the all-or-nothing batch. Bisect
+                // the chunk to salvage the routable legs around the bad
+                // stop; only genuinely unroutable single pairs stay pending.
+                // See SegmentRecovery for the full rationale + the simpler
+                // per-pair alternative.
+                if chunk.pairCount > 1 {
+                    let resolved = await SegmentRecovery.recover(chunk) { sub in
+                        do {
+                            return .ok(try await provider.snap(waypoints: sub.waypoints))
+                        } catch RoutingError.noRoute {
+                            return .noRoute
+                        } catch RoutingError.server {
+                            return .noRoute
+                        } catch {
+                            // 429 / 5xx / network: don't blame the geometry.
+                            return .transient
+                        }
+                    }
+                    for r in resolved {
+                        switch r {
+                        case let .snapped(sub, result):
+                            anySuccess = true
+                            writeChunkToCache(result: result, chunk: sub, cache: cache)
+                        case .unroutable:
+                            // Genuinely no road here — leave pending (dashed).
+                            // Geometry change (user edits the stop) is the
+                            // only thing that fixes it.
+                            break
+                        case .pending:
+                            // Transient failure mid-recovery — retry later.
+                            anyTransport = true
+                        }
+                    }
+                }
+                // chunk.pairCount == 1 → already the smallest unit; the leg
+                // has no path. Leave it pending.
             case .transport:
                 anyTransport = true
             }

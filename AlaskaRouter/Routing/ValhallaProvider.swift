@@ -93,6 +93,21 @@ struct ValhallaProvider: RoutingProvider {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            // (d0wt) Valhalla reports "no drivable path between these
+            // locations" as HTTP 400. Under format=osrm the body mirrors
+            // OSRM: { "code": "NoRoute", "message": "Impossible route
+            // between points" } (verified live). See isNoRouteErrorBody.
+            // We must NOT fold that permanent, geometry-bound verdict into
+            // the generic .http bucket — upstream maps .http(400) the same
+            // as a 429 throttle, which would send a genuinely-unroutable
+            // stop into the rate-limit backoff loop forever. Decode the
+            // body and surface a dedicated .noRoute so the orchestrator can
+            // bisect the run and salvage the routable legs around the bad
+            // stop. Anything else (429 throttle, 5xx, malformed request)
+            // stays .http.
+            if http.statusCode == 400, Self.isNoRouteErrorBody(data) {
+                throw RoutingError.noRoute(reason: "Valhalla 400/442: no path for input")
+            }
             throw RoutingError.http(statusCode: http.statusCode)
         }
         let decoded: ValhallaOSRMResponse
@@ -169,6 +184,53 @@ struct ValhallaProvider: RoutingProvider {
         struct Geometry: Decodable {
             let coordinates: [[Double]]
         }
+    }
+
+    // MARK: - Error-body classification (AlaskaRouter-d0wt)
+
+    /// Valhalla error bodies on a non-2xx status. There are TWO shapes and
+    /// we can receive either, so we decode both sets of keys:
+    ///
+    ///   - OSRM-format (what we actually get): because we ask for
+    ///     `format=osrm`, the server mirrors OSRM's error envelope —
+    ///     `{ "code": "NoRoute", "message": "Impossible route between
+    ///     points" }`. Verified live against valhalla1.openstreetmap.de.
+    ///   - Native Valhalla: `{ "error_code": 442, "error": "No path could
+    ///     be found for input" }`. Kept as a fallback in case a future
+    ///     server build / a non-osrm path surfaces it.
+    fileprivate struct ValhallaErrorBody: Decodable {
+        // Native Valhalla shape.
+        let error_code: Int?
+        let error: String?
+        // OSRM-format shape (the one returned under format=osrm).
+        let code: String?
+        let message: String?
+    }
+
+    /// Native Valhalla "no path" error-code family. 442 = "No path could be
+    /// found for input". Kept as a set so sibling codes can be added.
+    static let noRouteErrorCodes: Set<Int> = [442]
+
+    /// OSRM-format `code` values that mean "no drivable path": `NoRoute`
+    /// (no route connects the points) and `NoSegment` (a coordinate can't
+    /// be snapped to any road — exactly the off-road-waypoint case).
+    static let noRouteOSRMCodes: Set<String> = ["NoRoute", "NoSegment"]
+
+    /// Decide whether a non-2xx response body is Valhalla telling us a leg
+    /// has no drivable path (permanent) vs. some other 400 (malformed
+    /// request, exceeded-max-locations, invalid options) that we'd rather
+    /// retry / surface as a transport error. Pure & static so it's
+    /// unit-testable without the network. Checks both error shapes by code,
+    /// then falls back to the message text as a guard against code drift.
+    static func isNoRouteErrorBody(_ data: Data) -> Bool {
+        guard let err = try? JSONDecoder().decode(ValhallaErrorBody.self, from: data) else {
+            return false
+        }
+        if let code = err.error_code, noRouteErrorCodes.contains(code) { return true }
+        if let osrmCode = err.code, noRouteOSRMCodes.contains(osrmCode) { return true }
+        let text = ((err.error ?? "") + " " + (err.message ?? "")).lowercased()
+        if text.contains("no path") || text.contains("impossible route") { return true }
+        return false
     }
 }
 
