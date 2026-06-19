@@ -76,6 +76,41 @@ final class SegmentPlannerTests: XCTestCase {
         XCTAssertEqual(runs[0].waypoints.count, 5)
     }
 
+    // MARK: - missingRuns with terminal unroutable pairs (2i03)
+
+    func testUnroutablePairIsNotFetchedAndClosesRuns() {
+        // [snapped, unroutable, pending, snapped]: only the pending pair (2)
+        // is a missing run. The unroutable pair (1) must never be fetched.
+        let stops = (0 ... 4).map { coord(0, Double($0)) }
+        let geometries: [PairGeometry] = [
+            .snapped([coord(0, 0), coord(0, 1)]),
+            .unroutable,
+            .pending,
+            .snapped([coord(0, 3), coord(0, 4)]),
+        ]
+        let runs = SegmentPlanner.missingRuns(in: geometries, stops: stops)
+        XCTAssertEqual(runs.count, 1)
+        XCTAssertEqual(runs[0].firstPairIndex, 2)
+        XCTAssertEqual(runs[0].pairCount, 1)
+    }
+
+    func testUnroutablePairSplitsAdjacentPendingIntoSeparateRuns() {
+        // [pending, unroutable, pending]: the terminal pair in the middle
+        // bounds the run, so the two pending pairs become separate fetches
+        // (not one run spanning the dead leg).
+        let stops = (0 ... 3).map { coord(0, Double($0)) }
+        let geometries: [PairGeometry] = [.pending, .unroutable, .pending]
+        let runs = SegmentPlanner.missingRuns(in: geometries, stops: stops)
+        XCTAssertEqual(runs.map(\.firstPairIndex), [0, 2])
+        XCTAssertTrue(runs.allSatisfy { $0.pairCount == 1 })
+    }
+
+    func testAllUnroutableYieldsNoRuns() {
+        let stops = (0 ... 3).map { coord(0, Double($0)) }
+        let geometries: [PairGeometry] = Array(repeating: .unroutable, count: 3)
+        XCTAssertTrue(SegmentPlanner.missingRuns(in: geometries, stops: stops).isEmpty)
+    }
+
     // MARK: - chunk
 
     func testChunkNoOpWhenRunFitsCap() {
@@ -175,6 +210,19 @@ final class SegmentPlannerTests: XCTestCase {
         let stitched = SegmentPlanner.stitchedPolyline(geometries: geometries, stops: stops)
         // 3 from snapped + (2 - 1) from pending straight-line = 4
         XCTAssertEqual(stitched.count, 4)
+        XCTAssertEqual(stitched.last?.longitude, 2.0)
+    }
+
+    func testStitchedPolylineSubstitutesStraightLineForUnroutablePair() {
+        // (2i03) An unroutable leg renders the same straight dashed line as
+        // a pending one — no road geometry, just the stop-to-stop segment.
+        let stops = [coord(0, 0), coord(0, 1), coord(0, 2)]
+        let geometries: [PairGeometry] = [
+            .snapped([coord(0, 0), coord(0, 0.5), coord(0, 1)]),
+            .unroutable,
+        ]
+        let stitched = SegmentPlanner.stitchedPolyline(geometries: geometries, stops: stops)
+        XCTAssertEqual(stitched.count, 4)              // 3 snapped + (2-1) straight
         XCTAssertEqual(stitched.last?.longitude, 2.0)
     }
 

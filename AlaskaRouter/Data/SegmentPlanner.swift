@@ -27,6 +27,13 @@ enum PairGeometry {
     /// dashes a straight line for these legs. Same visual semantics as
     /// the trip-wide pendingSnap state today, but per-leg.
     case pending
+    /// (AlaskaRouter-2i03) Terminal "no drivable path" verdict — the router
+    /// was asked and said this pair can't be routed (e.g. an off-road
+    /// stop). Renders the same dashed straight line as `.pending`, but is
+    /// NOT a missing pair: the planner never puts it in a fetch run, so we
+    /// don't re-attempt it on every recompute. Backed by an `isUnroutable`
+    /// row in the segment cache and preserved across export/import.
+    case unroutable
 }
 
 /// One contiguous run of missing consecutive pairs the planner wants to
@@ -59,7 +66,10 @@ enum SegmentPlanner {
         var runStart: Int? = nil
         for i in geometries.indices {
             switch geometries[i] {
-            case .snapped:
+            case .snapped, .unroutable:
+                // Both are "resolved" pairs that bound a run: `.snapped` has
+                // real geometry, `.unroutable` is a terminal no-route we must
+                // NOT re-fetch (2i03). Either way it closes any open run.
                 if let start = runStart {
                     // Close the run [start, i-1]; needs waypoints
                     // stops[start ... i].
@@ -124,8 +134,9 @@ enum SegmentPlanner {
         for i in geometries.indices {
             let pairCoords: [CLLocationCoordinate2D]
             switch geometries[i] {
-            case let .snapped(coords): pairCoords = coords
-            case .pending:             pairCoords = [stops[i], stops[i + 1]]
+            case let .snapped(coords):   pairCoords = coords
+            // Pending and unroutable both lack road geometry → straight line.
+            case .pending, .unroutable:  pairCoords = [stops[i], stops[i + 1]]
             }
             if pairCoords.isEmpty { continue }
             if i == 0 {

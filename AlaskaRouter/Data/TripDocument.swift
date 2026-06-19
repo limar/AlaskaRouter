@@ -100,6 +100,13 @@ struct SegmentDTO: Codable {
     var distanceMeters: Double
     var durationSeconds: Double
     var computedAt: Date
+    /// (AlaskaRouter-2i03) Terminal "no drivable path" verdict for this
+    /// pair. Optional so files written before 2i03 (and by older builds)
+    /// still decode — a missing value means "routable", and `schemaVersion`
+    /// stays 1 (the field is purely additive). When `true`, `polylineEncoded`
+    /// is empty and the importer restores a negative-cache marker instead of
+    /// geometry, so the leg stays dashed and is never re-fetched.
+    var isUnroutable: Bool?
 }
 
 // MARK: - Errors
@@ -224,13 +231,17 @@ extension TripDocument {
                 let from = stops[i].coordinate
                 let to = stops[i + 1].coordinate
                 guard let seg = cache.lookupFresh(from: from, to: to) else { continue }
+                // (2i03) Unroutable markers are exported too, so an imported
+                // trip inherits the "no path here" verdict and doesn't
+                // re-probe the off-road leg.
                 segments.append(SegmentDTO(
                     fromLat: seg.fromLat, fromLon: seg.fromLon,
                     toLat: seg.toLat, toLon: seg.toLon,
                     polylineEncoded: seg.polylineEncoded,
                     distanceMeters: seg.distanceMeters,
                     durationSeconds: seg.durationSeconds,
-                    computedAt: seg.computedAt
+                    computedAt: seg.computedAt,
+                    isUnroutable: seg.isUnroutable ? true : nil
                 ))
             }
         }
@@ -351,10 +362,19 @@ extension TripDocument {
         // Per-pair segments → global segment cache (coord-keyed, version-stamped).
         let segCache = SegmentCache(context)
         for seg in cache.segments {
+            let from = CLLocationCoordinate2D(latitude: seg.fromLat, longitude: seg.fromLon)
+            let to = CLLocationCoordinate2D(latitude: seg.toLat, longitude: seg.toLon)
+            // (2i03) Terminal no-route marker: restore the verdict (empty
+            // geometry) so the leg stays dashed and isn't re-fetched. Handled
+            // before the decode guard since its polyline is intentionally empty.
+            if seg.isUnroutable == true {
+                segCache.storeUnroutable(from: from, to: to, at: seg.computedAt)
+                continue
+            }
             guard let coords = PolylineCodec.decode(seg.polylineEncoded), coords.count >= 2 else { continue }
             segCache.store(
-                from: CLLocationCoordinate2D(latitude: seg.fromLat, longitude: seg.fromLon),
-                to: CLLocationCoordinate2D(latitude: seg.toLat, longitude: seg.toLon),
+                from: from,
+                to: to,
                 polyline: coords,
                 distanceMeters: seg.distanceMeters,
                 durationSeconds: seg.durationSeconds,

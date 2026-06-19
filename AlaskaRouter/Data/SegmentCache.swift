@@ -69,7 +69,8 @@ struct SegmentCache {
         polyline: [CLLocationCoordinate2D],
         distanceMeters: Double,
         durationSeconds: Double,
-        at now: Date = .now
+        at now: Date = .now,
+        isUnroutable: Bool = false
     ) -> RouteSegment? {
         guard let encoded = PolylineCodec.encode(polyline) else { return nil }
         let k = Self.key(from: from, to: to)
@@ -81,6 +82,9 @@ struct SegmentCache {
             // (y3g3) Re-stamp on every write so an upsert against a
             // stale-version row brings it forward to the current engine.
             existing.routerVersion = RoutingEngineVersion.current
+            // (2i03) Upsert flips the verdict both ways: a pair that used
+            // to be unroutable but now snaps clears the flag, and vice versa.
+            existing.isUnroutable = isUnroutable
             return existing
         }
         let seg = RouteSegment(
@@ -91,10 +95,32 @@ struct SegmentCache {
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,
             computedAt: now,
-            routerVersion: RoutingEngineVersion.current
+            routerVersion: RoutingEngineVersion.current,
+            isUnroutable: isUnroutable
         )
         context.insert(seg)
         return seg
+    }
+
+    /// (2i03) Record a terminal "no drivable path" verdict for a directed
+    /// pair: an empty-geometry row flagged `isUnroutable`. The planner then
+    /// renders a dashed straight line for the leg but never re-fetches it.
+    /// Version-stamped and coord-keyed like any segment, so an engine swap
+    /// or a moved stop re-probes the pair (see `RouteSegment.isUnroutable`).
+    @discardableResult
+    func storeUnroutable(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        at now: Date = .now
+    ) -> RouteSegment? {
+        store(
+            from: from, to: to,
+            polyline: [],
+            distanceMeters: 0,
+            durationSeconds: 0,
+            at: now,
+            isUnroutable: true
+        )
     }
 }
 

@@ -68,6 +68,37 @@ final class SegmentCacheTests: XCTestCase {
         XCTAssertEqual(found.coordinates.count, 3)
     }
 
+    // MARK: - Unroutable markers (2i03)
+
+    func testStoreUnroutableMarkerIsLookupableAndFlagged() throws {
+        let context = try TestFactories.inMemoryContext()
+        let cache = SegmentCache(context)
+        let a = coord(63.34111, -150.73414)   // off-road Denali-centre-ish
+        let b = coord(63.39218, -148.95386)
+        cache.storeUnroutable(from: a, to: b)
+        let found = try XCTUnwrap(cache.lookupFresh(from: a, to: b))
+        XCTAssertTrue(found.isUnroutable)
+        XCTAssertTrue(found.coordinates.isEmpty, "a no-route marker carries no geometry")
+        XCTAssertEqual(found.routerVersion, RoutingEngineVersion.current,
+                       "marker is version-stamped so an engine bump re-probes it")
+    }
+
+    func testUpsertFlipsUnroutableVerdictBothWays() throws {
+        let context = try TestFactories.inMemoryContext()
+        let cache = SegmentCache(context)
+        let a = coord(61, -149)
+        let b = coord(62, -149)
+        // Routable → unroutable (e.g. router data regressed / re-checked).
+        cache.store(from: a, to: b, polyline: [a, b], distanceMeters: 10, durationSeconds: 1)
+        cache.storeUnroutable(from: a, to: b)
+        XCTAssertEqual(try XCTUnwrap(cache.lookup(from: a, to: b)).isUnroutable, true)
+        // Unroutable → routable (e.g. a stop nudged onto a road) clears it.
+        cache.store(from: a, to: b, polyline: [a, b], distanceMeters: 20, durationSeconds: 2)
+        let row = try XCTUnwrap(cache.lookup(from: a, to: b))
+        XCTAssertFalse(row.isUnroutable, "a successful snap must clear the no-route flag")
+        XCTAssertEqual(row.distanceMeters, 20)
+    }
+
     func testLookupAllPairsReturnsNilOnAnyMiss() throws {
         let context = try TestFactories.inMemoryContext()
         let cache = SegmentCache(context)

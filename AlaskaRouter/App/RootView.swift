@@ -633,10 +633,15 @@ struct RootView: View {
 
         let missing = SegmentPlanner.missingRuns(in: geometries, stops: stops)
         if missing.isEmpty {
-            // Full cache hit → also persist the whole-trip blob as a
-            // hydration shortcut for the next cold launch, and clear
-            // pendingSnapKey since nothing is pending.
-            if let stitched = snappedRouteCoords {
+            // Nothing left to fetch. Clear pendingSnapKey — there's no
+            // retryable work (any remaining dashed legs are terminal
+            // unroutables, not pending).
+            // (2i03) Only persist the whole-trip blob when the route is
+            // FULLY snapped. If any leg is unroutable, skip the blob so the
+            // cold-launch short-circuit doesn't redraw it solid; per-pair
+            // planning will re-hydrate the dashes cheaply (all cache hits).
+            let hasUnroutable = geometries.contains { if case .unroutable = $0 { return true } else { return false } }
+            if let stitched = snappedRouteCoords, !hasUnroutable {
                 trip.setSnappedCoords(stitched, geometryKey: effectiveKey)
                 try? modelContext.save()
             }
@@ -662,7 +667,8 @@ struct RootView: View {
     }
 
     /// Build per-pair geometries from the current segment cache.
-    /// Cached pair → `.snapped(coords)`; missing pair → `.pending`.
+    /// Cached pair → `.snapped(coords)`; unroutable marker → `.unroutable`;
+    /// missing pair → `.pending`.
     private func perPairGeometries(stops: [CLLocationCoordinate2D]) -> [PairGeometry] {
         let cache = SegmentCache(modelContext)
         var out: [PairGeometry] = []
@@ -672,7 +678,9 @@ struct RootView: View {
             // (e.g. OSRM rows after the Valhalla swap) is treated as a
             // miss so the planner schedules a re-fetch.
             if let seg = cache.lookupFresh(from: stops[i], to: stops[i + 1]) {
-                out.append(.snapped(seg.coordinates))
+                // (2i03) A terminal no-route verdict stays dashed but is
+                // never re-fetched; everything else is real road geometry.
+                out.append(seg.isUnroutable ? .unroutable : .snapped(seg.coordinates))
             } else {
                 out.append(.pending)
             }
@@ -691,14 +699,25 @@ struct RootView: View {
         persistWholeTrip: Bool
     ) {
         let stitched = SegmentPlanner.stitchedPolyline(geometries: geometries, stops: stops)
-        var pending: Set<Int> = []
+        // (2i03) Two distinct sets that used to be one:
+        //  - `dashed`: legs with NO road line — pending OR unroutable. This
+        //    drives the renderer's per-leg dash flag, so a terminal no-route
+        //    keeps its dashed straight line.
+        //  - We only persist the whole-trip blob when NOTHING is dashed (the
+        //    route is fully snapped). Persisting with unroutable legs present
+        //    would let the cold-launch blob short-circuit clear the dashes
+        //    and draw a bogus solid line over an off-road leg.
+        var dashed: Set<Int> = []
         for (i, g) in geometries.enumerated() {
-            if case .pending = g { pending.insert(i) }
+            switch g {
+            case .pending, .unroutable: dashed.insert(i)
+            case .snapped:              break
+            }
         }
         snappedRouteCoords = stitched.isEmpty ? nil : stitched
         snappedRouteKey = key
-        pendingPairIndices = pending
-        if persistWholeTrip, pending.isEmpty, !stitched.isEmpty, let trip = activeTrip {
+        pendingPairIndices = dashed
+        if persistWholeTrip, dashed.isEmpty, !stitched.isEmpty, let trip = activeTrip {
             trip.setSnappedCoords(stitched, geometryKey: key)
         }
     }
@@ -822,19 +841,27 @@ struct RootView: View {
                         case let .snapped(sub, result):
                             anySuccess = true
                             writeChunkToCache(result: result, chunk: sub, cache: cache)
-                        case .unroutable:
-                            // Genuinely no road here — leave pending (dashed).
-                            // Geometry change (user edits the stop) is the
-                            // only thing that fixes it.
-                            break
+                        case let .unroutable(sub):
+                            // (2i03) Genuinely no road here. Record a terminal
+                            // no-route marker so we render the dashed line but
+                            // never re-fetch this leg. The router answered, so
+                            // the backend is reachable — count it as success
+                            // for retry-policy purposes. A stop edit (new key)
+                            // or engine bump re-probes it. `sub` is one pair.
+                            anySuccess = true
+                            markRunUnroutable(sub, cache: cache)
                         case .pending:
                             // Transient failure mid-recovery — retry later.
                             anyTransport = true
                         }
                     }
+                } else {
+                    // (2i03) Single-pair chunk that itself has no path — the
+                    // smallest unit, already isolated. Record the terminal
+                    // marker so it stops poisoning every recompute.
+                    anySuccess = true
+                    markRunUnroutable(chunk, cache: cache)
                 }
-                // chunk.pairCount == 1 → already the smallest unit; the leg
-                // has no path. Leave it pending.
             case .transport:
                 anyTransport = true
             }
@@ -862,6 +889,16 @@ struct RootView: View {
             pendingSnapKey = pendingNow.isEmpty ? nil : key
         }
         try? modelContext.save()
+    }
+
+    /// (2i03) Record a terminal "no route" marker for every consecutive
+    /// pair in `run` (usually a single pair, post-bisection). The planner
+    /// then dashes the leg but never re-fetches it.
+    private func markRunUnroutable(_ run: MissingRun, cache: SegmentCache) {
+        guard run.waypoints.count >= 2 else { return }
+        for j in 0 ..< run.waypoints.count - 1 {
+            cache.storeUnroutable(from: run.waypoints[j], to: run.waypoints[j + 1])
+        }
     }
 
     /// Decompose a chunk's routing response into per-pair cache rows.

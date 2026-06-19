@@ -270,6 +270,49 @@ final class TripDocumentTests: XCTestCase {
         XCTAssertEqual(try dest.fetchCount(FetchDescriptor<Trip>()), 0)
     }
 
+    // MARK: - Unroutable marker round-trip (2i03)
+
+    @MainActor
+    func testUnroutableMarkerRoundTripsThroughExportImport() throws {
+        let context = try TestFactories.inMemoryContext()
+        let trip = insertedTrip(in: context, stops: [(0, 0, "A"), (0, 1, "B"), (0, 2, "C")])
+        let a = CLLocationCoordinate2D(latitude: 0, longitude: 0)
+        let b = CLLocationCoordinate2D(latitude: 0, longitude: 1)
+        let c = CLLocationCoordinate2D(latitude: 0, longitude: 2)
+        let cache = SegmentCache(context)
+        cache.store(from: a, to: b, polyline: [a, b], distanceMeters: 111_000, durationSeconds: 3600)
+        cache.storeUnroutable(from: b, to: c)         // terminal no-route leg
+        try? context.save()
+
+        let doc = TripDocument.export(trip, context: context)
+        XCTAssertEqual(doc.routingCache?.segments.count, 2)
+        XCTAssertEqual(doc.routingCache?.segments.filter { $0.isUnroutable == true }.count, 1,
+                       "the unroutable leg must be exported with its verdict")
+
+        // Round-trip through bytes so we exercise real JSON coding too.
+        let data = try doc.jsonData()
+        let restored = try TripDocument.decode(from: data)
+        let dest = try TestFactories.inMemoryContext()
+        _ = restored.importTrip(into: dest, mode: .copy)
+
+        let destCache = SegmentCache(dest)
+        XCTAssertEqual(destCache.lookupFresh(from: a, to: b)?.isUnroutable, false)
+        let marker = try XCTUnwrap(destCache.lookupFresh(from: b, to: c))
+        XCTAssertTrue(marker.isUnroutable, "imported trip inherits the no-route verdict, so it won't re-probe")
+    }
+
+    func testSegmentDTODecodesWithoutUnroutableField() throws {
+        // A file written before 2i03 has no `isUnroutable` key. It must still
+        // decode (schemaVersion stays 1) and read as routable (nil).
+        let json = #"""
+        {"fromLat":0,"fromLon":0,"toLat":0,"toLon":1,"polylineEncoded":"[[0,0],[0,1]]","distanceMeters":1,"durationSeconds":1,"computedAt":"2026-06-14T00:00:00Z"}
+        """#.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let dto = try decoder.decode(SegmentDTO.self, from: json)
+        XCTAssertNil(dto.isUnroutable)
+    }
+
     // MARK: - Schema gate
 
     func testDecodeRejectsNewerSchemaVersion() throws {

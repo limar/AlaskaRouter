@@ -148,6 +148,17 @@ final class RouteSegment {
     /// (e.g. OSRM → Valhalla) silently invalidates the prior cache
     /// without a destructive wipe.
     var routerVersion: Int = 0
+    /// (AlaskaRouter-2i03) Terminal "no route" verdict. `true` means the
+    /// router was asked and answered that this directed pair has no
+    /// drivable path (e.g. a stop at the off-road geographic centre of
+    /// Denali Park). The row carries an empty `polylineEncoded` and acts
+    /// as a *negative cache*: the planner renders a dashed straight line
+    /// for it (no road geometry) but never re-fetches it. Because the
+    /// lookup key is coordinate-based, moving either stop yields a new key
+    /// → cache miss → a fresh attempt; and `routerVersion` invalidation
+    /// re-probes the pair after an engine swap. Defaulted so existing
+    /// rows (and SwiftData lightweight migration) read it as `false`.
+    var isUnroutable: Bool = false
 
     init(key: String,
          fromLat: Double, fromLon: Double,
@@ -156,7 +167,8 @@ final class RouteSegment {
          distanceMeters: Double,
          durationSeconds: Double,
          computedAt: Date = .now,
-         routerVersion: Int = RoutingEngineVersion.current)
+         routerVersion: Int = RoutingEngineVersion.current,
+         isUnroutable: Bool = false)
     {
         self.key = key
         self.fromLat = fromLat
@@ -168,6 +180,7 @@ final class RouteSegment {
         self.durationSeconds = durationSeconds
         self.computedAt = computedAt
         self.routerVersion = routerVersion
+        self.isUnroutable = isUnroutable
     }
 
     var coordinates: [CLLocationCoordinate2D] {
