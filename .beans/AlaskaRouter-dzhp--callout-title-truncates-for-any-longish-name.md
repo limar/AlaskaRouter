@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-dzhp
-title: Callout title truncates for any longish name
+title: 'Callout rework: title legibility, then visual balance'
 status: todo
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-27T23:28:04Z
+updated_at: 2026-07-27T23:56:55Z
 parent: AlaskaRouter-36of
 ---
 
@@ -28,3 +28,17 @@ Recommendation to beat: `lineLimit(2)` plus `minimumScaleFactor(0.85)`, and chec
 - [ ] Render the options against the worst real names in the trip
 - [ ] Agree and implement across StopCallout AND PreviewCallout (keep them coherent)
 - [ ] Check the taller callout still sits correctly relative to its pin
+
+## Widened into a full callout rework (2026-07-27)
+
+The user reviewed the shipped AlaskaRouter-pmnd change (Remove demoted to the header "…", "Open in…" promoted to the primary slot) and judged it **"better than it was, but imperfect"** — specifically, the callout *"became a bit boring when it lost the small red paint"*. The ghost-red Remove capsule was carrying visual interest that nothing replaced.
+
+So this bean absorbs the whole callout rather than just the title:
+
+- **Title legibility** — the original scope. Long Alaska names ellipsize constantly.
+- **Bringing some red back.** Possibly the Delete button itself, possibly just an accent. The user explicitly wants to revisit this *after* the title question is settled, since how the title resolves (one line vs two, shrunk vs wrapped) changes how much room and visual weight is left over.
+- **Whether Remove returns to the surface** — it currently lives only in the header menu. If the layout regains room, a small red affordance may earn its place back, without returning to the full-width capsule that dominated the callout.
+
+Sequence matters: settle the title first, then judge the balance, because the title's resolution determines the space available.
+
+Applies to both `StopCallout` and `PreviewCallout` — they must stay coherent.

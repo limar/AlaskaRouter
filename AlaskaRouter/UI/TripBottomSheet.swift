@@ -702,13 +702,9 @@ struct TripBottomSheet: View {
                     if !hasSeparatorBefore(wp) {
                         splitControl(for: wp, accent: accent)
                     }
-                    // Variant 2's rule spans the gap, so it takes the slack
-                    // itself rather than yielding it to a Spacer.
-                    if LaunchArgs.splitVariant != 2 || hasSeparatorBefore(wp) {
-                        Spacer(minLength: 0)
-                    }
+                    Spacer(minLength: 0)
                 }
-                .frame(height: LaunchArgs.splitVariant == 2 ? 26 : 17)
+                .frame(height: 17)
             }
 
             // Step B of 53x1 (AlaskaRouter-0rh9) — swipe-reveal: tap minus
@@ -833,22 +829,6 @@ struct TripBottomSheet: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-
-                    // C — back on the row, where a control column already
-                    // exists and so reads unambiguously as actionable, but
-                    // with an additive glyph rather than a blade. Costs name
-                    // width, which is what sank the round-1 row variant.
-                    if LaunchArgs.splitVariant == 3, hasIncoming, !hasSeparatorBefore(wp) {
-                        Button(action: { splitBlock(before: wp) }) {
-                            Image(systemName: "rectangle.split.1x2")
-                                .font(.system(size: 15, weight: .regular))
-                                .foregroundStyle(SheetPalette.textMuted)
-                                .frame(width: 30, height: 30)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Start a new block at \(wp.label ?? "this stop")")
-                    }
 
                     // Minus button — tap arms the row for confirmation
                     // (Step B of AlaskaRouter-53x1, 0rh9). Tapping again
@@ -1018,84 +998,38 @@ struct TripBottomSheet: View {
 
     // MARK: - Mutations (waypoints + separators)
 
-    /// Round-2 variants of the block-split affordance (AlaskaRouter-ucyl).
-    /// All of them reframe the act as ADDITIVE — you are inserting a day
-    /// boundary, not cutting the route — because round 1's scissors promised
-    /// the wrong outcome, and a blade drawn on the route line reads as
-    /// "sever the line".
-    @ViewBuilder
+    /// The block-split control (AlaskaRouter-ucyl), sitting in the gap between
+    /// two stops — which is what a separator actually is.
+    ///
+    /// Round 1 put a small scissors here and it was rejected on three counts:
+    /// too low-contrast to find, the position read as non-actionable, and
+    /// "cut" is the wrong promise for what is an insert. The likeliest reading
+    /// is that the metaphor caused the position complaint — a blade drawn ON
+    /// the route line looks like it will sever the line. So this is the same
+    /// position with the two real faults fixed: a tinted pill at proper
+    /// contrast that looks like a control, and a "+" that says something is
+    /// being added rather than severed.
     private func splitControl(for wp: Waypoint, accent: Color) -> some View {
-        let label = "Start a new block at \(wp.label ?? "this stop")"
-        switch LaunchArgs.splitVariant {
-        case 1:
-            // A — same place as round 1, but a legible pill: solid tinted fill,
-            // real label, additive glyph. Isolates whether the objection was
-            // really about contrast + metaphor rather than position.
-            Button(action: { splitBlock(before: wp) }) {
-                HStack(spacing: 3) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 8, weight: .bold))
-                    Text("New block")
-                        .font(.sheetSans(9.5, weight: .semibold))
-                        .tracking(0.2)
-                }
-                .foregroundStyle(accent)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2.5)
-                .background(Capsule().fill(accent.opacity(0.14)))
-                .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 0.8))
-                .frame(width: 96, height: 34)
-                .contentShape(Rectangle())
+        Button(action: { splitBlock(before: wp) }) {
+            HStack(spacing: 3) {
+                Image(systemName: "plus")
+                    .font(.system(size: 8, weight: .bold))
+                Text("Split here")
+                    .font(.sheetSans(9.5, weight: .semibold))
+                    .tracking(0.2)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(label)
-
-        case 2:
-            // B — a dashed rule spanning the gap with the chip riding on it.
-            // It previews its own result: this is the shape of the block-header
-            // strip it will create. Most legible; costs vertical rhythm.
-            Button(action: { splitBlock(before: wp) }) {
-                ZStack {
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(height: 1)
-                        .overlay(
-                            Line().stroke(accent.opacity(0.45),
-                                          style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                        )
-                    HStack(spacing: 3) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 8, weight: .bold))
-                        Text("New block")
-                            .font(.sheetSans(9.5, weight: .semibold))
-                            .tracking(0.2)
-                    }
-                    .foregroundStyle(accent)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2.5)
-                    .background(Capsule().fill(SheetPalette.blockHeaderBg))
-                    .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 0.8))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 26)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(label)
-
-        default:
-            EmptyView()
+            .foregroundStyle(accent)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2.5)
+            .background(Capsule().fill(accent.opacity(0.14)))
+            .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 0.8))
+            // Visible size stays small so the resting list is calm; the hit
+            // shape is padded well past it so the target is comfortable.
+            .frame(width: 96, height: 34)
+            .contentShape(Rectangle())
         }
-    }
-
-    /// A single horizontal rule, for the dashed insert line in variant B.
-    private struct Line: Shape {
-        func path(in rect: CGRect) -> Path {
-            var p = Path()
-            p.move(to: CGPoint(x: 0, y: rect.midY))
-            p.addLine(to: CGPoint(x: rect.width, y: rect.midY))
-            return p
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Start a new block at \(wp.label ?? "this stop")")
     }
 
     /// True when a block separator already sits in the gap immediately before

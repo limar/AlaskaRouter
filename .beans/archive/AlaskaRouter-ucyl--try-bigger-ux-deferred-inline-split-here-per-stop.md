@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ucyl
 title: Inline 'split here' per stop row; retire the bottom Add-separator row
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-30T09:08:36Z
-updated_at: 2026-07-27T23:28:40Z
+updated_at: 2026-07-27T23:56:55Z
 parent: AlaskaRouter-36of
 ---
 
@@ -99,6 +99,19 @@ Reframe from "cut" to **"start a new block / day here"** — an additive act, no
 Note: the earlier round measured *noise* and picked the quietest thing that worked. The field says it went too quiet. Round 2 should bias toward legibility and hold noise as the constraint, not the objective.
 
 ## Todo
-- [ ] Render round-2 variants over the real 41-stop trip, biased toward legibility
-- [ ] Agree glyph + wording + placement
-- [ ] Implement; keep splitBlock(before:) as-is
+- [x] Render round-2 variants over the real 41-stop trip, biased toward legibility
+- [x] Agree glyph + wording + placement
+- [x] Implement; keep splitBlock(before:) as-is
+
+## Round 2 — shipped
+
+**Chosen: the labelled pill on the connector, reading "＋ Split here".** Same position as the rejected round-1 scissors, with the two real faults fixed — a tinted pill at proper contrast so it reads as a control, and a `+` saying something is being added rather than severed.
+
+Rejected in round 2:
+- **Dashed insert rule across the gap** — the most legible, and it previews the block-header strip it creates, but it added ~9 pt to every gap and its dashed rules competed visually with the real block headers ("which of these is the actual boundary?").
+- **Split glyph on the stop row** — unambiguously actionable, since it joins the existing control column beside the minus, but `rectangle.split.1x2` is opaque without a label and it eats stop-name width.
+- **Long-press the gap, nothing visible** — quietest possible and consistent with the map's long-press-to-drop-pin, but its only risk is discoverability, which a render cannot settle, so it was not built.
+
+Wording: user chose **"Split here"** over "New block" and "New day". Noted tension, not blocking: "split" is the same verb family as the rejected scissors, so the `+` glyph is carrying the additive framing on its own. Easy to revisit if it reads wrong in the field.
+
+**A process failure worth recording:** rounds 1 and 2's first pass were judged *blind* — the renders were read into the assistant's context but never sent to the user, so the earlier picks were made from prose descriptions alone. That is almost certainly why round 1 shipped something the field immediately rejected. Fixed, and captured as a memory.

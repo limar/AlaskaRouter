@@ -107,17 +107,6 @@ enum LaunchArgs {
     }
 
 
-    /// Design-round-2 A/B switch for the block-split affordance
-    /// (AlaskaRouter-ucyl). Round 1's scissors was rejected: too low contrast,
-    /// and "cut" is the wrong promise for what is actually an insert.
-    /// Throwaway — delete once a variant is chosen.
-    ///   0 = round 1 (small scissors on the connector) — for reference
-    ///   1 = "＋ New block" labelled pill on the connector
-    ///   2 = dashed insert rule across the gap with a centred "＋ New block"
-    ///   3 = "＋" split glyph on the stop row, beside the minus button
-    static var splitVariant: Int {
-        Int(UserDefaults.standard.string(forKey: "splitVariant") ?? "") ?? 0
-    }
 
     /// Force every maps app into the "Open in…" chooser regardless of what is
     /// actually installed. Dev-only: the Simulator has no App Store apps, so
