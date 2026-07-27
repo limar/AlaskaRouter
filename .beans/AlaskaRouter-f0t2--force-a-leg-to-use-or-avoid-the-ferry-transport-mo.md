@@ -1,11 +1,12 @@
 ---
 # AlaskaRouter-f0t2
 title: Force a leg to use or avoid the ferry (→ transport mode per leg)
-status: draft
+status: todo
 type: feature
 priority: high
 created_at: 2026-07-27T22:41:21Z
-updated_at: 2026-07-27T22:41:21Z
+updated_at: 2026-07-27T22:51:08Z
+parent: AlaskaRouter-36of
 ---
 
 From the Alaska field trip, July 2026. **Real incident:** the ferry was closed for bad weather and a land route was needed *immediately*, with no way to tell the app so.

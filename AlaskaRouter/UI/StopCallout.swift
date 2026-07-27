@@ -71,6 +71,23 @@ struct StopCallout: View {
                     }
                 }
                 Spacer(minLength: 4)
+                // Variant 1 (pmnd): Remove demoted into a header overflow
+                // menu, leaving the action row free for things you actually
+                // want to do. Room here for Rename / Move-to-block later.
+                if LaunchArgs.removeVariant == 1 || LaunchArgs.removeVariant == 3 {
+                    Menu {
+                        Button(role: .destructive, action: onRemove) {
+                            Label("Remove from trip", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 26, height: 26)
+                            .background(.thinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .bold))
@@ -89,26 +106,54 @@ struct StopCallout: View {
             // weight of an "Add to trip" pill. RIGHT = Share, identical to the
             // PreviewCallout trailing button.
             HStack(spacing: 8) {
-                Button(action: onRemove) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                        Text("Remove")
-                            .font(.system(size: 14, weight: .semibold))
+                // Variant 0 = today. Variants 1 and 2 both vacate this slot:
+                // 1 moves Remove into the header menu, 2 drops it entirely and
+                // relies on the stop row's own minus button, which already
+                // exists (AlaskaRouter-0rh9) and is where the mock put removal.
+                if LaunchArgs.removeVariant == 0 {
+                    Button(action: onRemove) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                            Text("Remove")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(SheetPalette.destructive)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            Capsule().fill(SheetPalette.destructive.opacity(0.12))
+                        )
+                        .overlay(
+                            Capsule().stroke(SheetPalette.destructive.opacity(0.45), lineWidth: 1)
+                        )
                     }
-                    .foregroundStyle(SheetPalette.destructive)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        Capsule().fill(SheetPalette.destructive.opacity(0.12))
-                    )
-                    .overlay(
-                        Capsule().stroke(SheetPalette.destructive.opacity(0.45), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
+                    ShareCalloutButton(action: onShare)
+                } else if LaunchArgs.removeVariant == 3 {
+                    // Variants 1 and 2 vacate the primary slot and leave the
+                    // action row visibly empty next to a lone Share icon. So
+                    // promote Share into that slot instead: the callout keeps
+                    // its shape, and the button under the thumb is now the
+                    // action you actually want. Remove lives in the header "…".
+                    Button(action: onShare) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Open in…")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity)
+                        .background(.thinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Spacer(minLength: 0)
+                    ShareCalloutButton(action: onShare)
                 }
-                .buttonStyle(.plain)
-
-                ShareCalloutButton(action: onShare)
             }
         }
         .padding(.horizontal, 14)

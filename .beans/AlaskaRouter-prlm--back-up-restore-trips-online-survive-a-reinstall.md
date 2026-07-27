@@ -1,11 +1,12 @@
 ---
 # AlaskaRouter-prlm
 title: Back up & restore trips online (survive a reinstall)
-status: draft
+status: todo
 type: feature
 priority: normal
 created_at: 2026-07-27T22:41:21Z
-updated_at: 2026-07-27T22:41:21Z
+updated_at: 2026-07-27T22:51:08Z
+parent: AlaskaRouter-36of
 ---
 
 From the Alaska field trip, July 2026. Trips live only in the local SwiftData store. Reinstall the app — or lose the phone — and the trips are gone.

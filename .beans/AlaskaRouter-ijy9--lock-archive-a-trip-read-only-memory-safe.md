@@ -1,11 +1,12 @@
 ---
 # AlaskaRouter-ijy9
 title: Lock / archive a trip (read-only, memory-safe)
-status: draft
+status: todo
 type: feature
 priority: normal
 created_at: 2026-07-27T22:41:21Z
-updated_at: 2026-07-27T22:41:21Z
+updated_at: 2026-07-27T22:51:08Z
+parent: AlaskaRouter-36of
 ---
 
 From the Alaska field trip, July 2026. Finished trips are memories. Right now nothing stops an accidental drag, swipe-delete or smart-insert from quietly rewriting one.

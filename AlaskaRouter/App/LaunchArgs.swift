@@ -106,6 +106,25 @@ enum LaunchArgs {
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
 
+    /// Design-round A/B switch for the per-stop "split here" affordance
+    /// (AlaskaRouter-ucyl). Throwaway — delete once a variant is chosen.
+    ///   0 = today (single "Add block separator" row at the bottom)
+    ///   1 = split icon on the stop row, beside the minus button (mock-literal)
+    ///   2 = "Split here" on the connector band *between* two stops
+    ///   3 = split revealed in the same tray as Delete (no resting chrome)
+    static var splitVariant: Int {
+        Int(UserDefaults.standard.string(forKey: "splitVariant") ?? "") ?? 0
+    }
+
+    /// Design-round A/B switch for the stop callout's Remove button
+    /// (AlaskaRouter-pmnd). Throwaway — delete once a variant is chosen.
+    ///   0 = today (big ghost-red "Remove" capsule in the left/primary slot)
+    ///   1 = Remove demoted into a "…" overflow menu in the callout header
+    ///   2 = no Remove in the callout at all (row minus button is the path)
+    static var removeVariant: Int {
+        Int(UserDefaults.standard.string(forKey: "removeVariant") ?? "") ?? 0
+    }
+
     /// Force every maps app into the "Open in…" chooser regardless of what is
     /// actually installed. Dev-only: the Simulator has no App Store apps, so
     /// the sheet normally renders a single Apple Maps tile and the multi-row

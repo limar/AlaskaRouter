@@ -453,10 +453,15 @@ struct TripBottomSheet: View {
             .onDelete(perform: deleteListItems)
 
             if trip.waypoints.count >= 2 {
-                addBlockRow
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 14, trailing: 14))
+                // Variants 1-3 replace this with a per-stop control, which is
+                // the point of ucyl — keep it only for variant 0 so the
+                // screenshots show each option in isolation.
+                if LaunchArgs.splitVariant == 0 {
+                    addBlockRow
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 14, trailing: 14))
+                }
             }
         }
         .listStyle(.plain)
@@ -689,6 +694,33 @@ struct TripBottomSheet: View {
                                 .strokeBorder(accent, lineWidth: 0.8))
                     }
                     .frame(width: railWidth)
+                    // Variant 2 (ucyl): the split control lives in the gap
+                    // BETWEEN two stops — which is literally what a separator
+                    // is. Reuses the existing connector band, so it adds no
+                    // new per-row chrome to all 54 rows.
+                    if LaunchArgs.splitVariant == 2 || LaunchArgs.splitVariant == 4 {
+                        Button(action: { splitBlock(before: wp) }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "scissors")
+                                    .font(.system(size: 8.5, weight: .semibold))
+                                // Variant 4 is the same position, icon only —
+                                // "Split here" spelled out on 40+ legs turned
+                                // out to be its own kind of noise.
+                                if LaunchArgs.splitVariant == 2 {
+                                    Text("Split here")
+                                        .font(.sheetSans(9, weight: .semibold))
+                                        .tracking(0.3)
+                                }
+                            }
+                            .foregroundStyle(SheetPalette.textMuted)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().stroke(SheetPalette.cardBorder,
+                                                         style: StrokeStyle(lineWidth: 0.5, dash: [2.5, 2.5])))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                     Spacer(minLength: 0)
                 }
                 .frame(height: 17)
@@ -697,7 +729,41 @@ struct TripBottomSheet: View {
             // Step B of 53x1 (AlaskaRouter-0rh9) — swipe-reveal: tap minus
             // arms the row, content slides left, red Delete reveals trailing.
             let isArmed = (armedDeleteID == wp.id)
+            // Variant 3 (ucyl): the tray that already reveals Delete also
+            // reveals Split, so the resting list gains no new chrome at all.
+            let trayWidth: CGFloat = LaunchArgs.splitVariant == 3 ? 168 : 84
             ZStack(alignment: .trailing) {
+                if LaunchArgs.splitVariant == 3 {
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Button(action: {
+                            splitBlock(before: wp)
+                            armedDeleteID = nil
+                        }) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(SheetPalette.textMuted)
+                                    .padding(.vertical, 4)
+                                    .padding(.trailing, 4)
+                                VStack(spacing: 2) {
+                                    Image(systemName: "scissors")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Split")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .foregroundStyle(.white)
+                                .fixedSize()
+                            }
+                            .frame(width: isArmed ? 84 : 0)
+                            .frame(maxHeight: .infinity)
+                            .clipped()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .allowsHitTesting(isArmed)
+                        Color.clear.frame(width: isArmed ? 84 : 0)
+                    }
+                }
                 // Trailing-layer red Delete — sits behind the row content,
                 // revealed when content slides left.
                 Button(action: {
@@ -817,6 +883,21 @@ struct TripBottomSheet: View {
                     }
                     .buttonStyle(.plain)
 
+                    // Variant 1 (ucyl): mock-literal — a split icon sitting on
+                    // every stop row next to the minus button. Most
+                    // discoverable, and the noisiest: this is the thing we
+                    // deliberately avoided the first time round.
+                    if LaunchArgs.splitVariant == 1 {
+                        Button(action: { splitBlock(before: wp) }) {
+                            Image(systemName: "scissors")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundStyle(SheetPalette.textMuted)
+                                .frame(width: 30, height: 30)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     // Minus button — tap arms the row for confirmation
                     // (Step B of AlaskaRouter-53x1, 0rh9). Tapping again
                     // while armed dismisses. Apple's native swipe-to-delete
@@ -833,7 +914,7 @@ struct TripBottomSheet: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.vertical, 8)
-                .offset(x: isArmed ? -84 : 0)
+                .offset(x: isArmed ? -trayWidth : 0)
             }
             .animation(.snappy(duration: 0.25), value: armedDeleteID)
         }
@@ -1006,6 +1087,22 @@ struct TripBottomSheet: View {
     }
 
     // MARK: - Mutations (waypoints + separators)
+
+    /// Start a new block AT `wp` — i.e. place the separator immediately before
+    /// it (AlaskaRouter-ucyl). This is the whole point of the change: the user
+    /// says where the day breaks, instead of the separator appearing near the
+    /// end of the trip and being dragged into place.
+    private func splitBlock(before wp: Waypoint) {
+        let stops = trip.orderedWaypoints
+        guard let idx = stops.firstIndex(where: { $0.id == wp.id }), idx >= 1 else { return }
+        let anchor = stops[idx - 1]                     // separator sits AFTER this stop
+        // Don't stack two separators in the same gap.
+        if trip.separators.contains(where: { $0.afterWaypointID == anchor.id }) { return }
+        let sep = BlockSeparator(afterWaypointID: anchor.id)
+        sep.trip = trip
+        modelContext.insert(sep)
+        try? modelContext.save()
+    }
 
     private func addBlockSeparator() {
         // Place the new separator AFTER the second-to-last stop so block 2
