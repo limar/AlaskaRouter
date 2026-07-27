@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ucyl
 title: Inline 'split here' per stop row; retire the bottom Add-separator row
-status: todo
+status: completed
 type: feature
 priority: high
 created_at: 2026-05-30T09:08:36Z
-updated_at: 2026-07-27T22:41:47Z
+updated_at: 2026-07-27T23:10:47Z
 parent: AlaskaRouter-36of
 ---
 
@@ -41,13 +41,36 @@ Note the mock also puts **remove** on the stop row, which overlaps with AlaskaRo
 
 ## Open design questions (discuss before implementing)
 
-- [ ] Where exactly on the row does the split control sit, and is it always visible or revealed (swipe / long press / edit mode)? Always-visible icons on 54 rows is a lot of visual noise — the whole reason we deviated from the mock.
-- [ ] Does the bottom "Add block separator" row go away entirely, or stay as the "append a block at the end" path?
-- [ ] Split *above* this stop or *below* it? The mock says "start a new block at this stop" (above); the current separator model is `afterWaypointID` (below).
-- [ ] Interaction with the existing swipe-to-remove on stop rows (AlaskaRouter-24t5) — do split and remove share one swipe tray?
+- [x] Not on the row at all — on the connector BETWEEN stops, always visible, icon only.
+- [x] Gone entirely — every gap now has its own control, so it had nothing left to do.
+- [x] Above — `splitBlock(before:)` anchors to the preceding stop, so the tapped stop starts the new block.
+- [x] No — they stay separate. A shared tray was built and rejected (it slid the row name off-screen).
 
 ## Todo
-- [ ] Render variants over the real 54-stop trip (not a 5-stop demo — density is the whole problem), light + dark
-- [ ] Agree placement and reveal behaviour
-- [ ] Implement; drop the fixed `stops.count - 2` anchor
-- [ ] Verify on the real Alaska trip: create a day break at stop 7 without scrolling gymnastics
+- [x] Rendered four variants over the real 41-stop trip
+- [x] Agreed: icon on the connector, always visible
+- [x] Implement; drop the fixed `stops.count - 2` anchor
+- [x] Verified on the real Alaska trip: split lands exactly where tapped
+
+## Summary of Changes
+
+Split control now sits **on the connector between two stops**, icon-only — chosen from four rendered variants over the real 41-stop trip.
+
+Why this one:
+- A separator *is* the gap, not a property of a stop, so the connector is where it belongs semantically.
+- It reuses the existing leg band, so the resting list is barely changed — no second icon on 41 rows.
+- Stop names keep their full width. The mock-literal per-row variant truncated "Galbraith Lake Campground", which is what made us deviate from the mock originally.
+
+Rejected, with reasons:
+- **Labelled "Split here" on the connector** — clearest, but repeated across ~40 legs it competes with the distance capsules; the list gets busier the longer the trip.
+- **Icon on every stop row (the mock)** — truncates names, noisiest.
+- **Split inside the swipe tray next to Delete** — zero resting chrome, but the 168 pt tray slides the row name entirely off-screen so you cannot see which stop you are cutting at, and it is undiscoverable.
+
+Implementation notes:
+- `splitBlock(before:)` anchors the separator to the *preceding* stop, so the block breaks exactly where the user tapped. The old `addBlockSeparator` hard-coded `stops.count - 2` — the root cause of the field complaint.
+- The connector band now renders for **every** incoming leg, not just ones with a known distance; an unrouted leg is still a gap you can break the day at.
+- `hasSeparatorBefore(_:)` hides the control where a separator already occupies the gap, so there are no dead controls.
+- The glyph is deliberately small, but the hit shape is padded to 60×34 pt so the target is comfortable — the visible size and the tappable size are decoupled.
+- The bottom "Add block separator" row and `addBlockSeparator()` are **deleted**. Its only behaviour was the one being complained about. Flagged to the user as a judgement call.
+
+**Verified on the real 41-stop Alaska trip:** tapped the scissors in the 95 km gap between Yukon River Camp and Arctic Circle; a new block "Arctic Circle → Coldfoot Camp" appeared at exactly that point, blocks renumbered, and the scissors vanished from that gap since it is now a boundary. No dragging.

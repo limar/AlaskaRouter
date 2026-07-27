@@ -452,17 +452,11 @@ struct TripBottomSheet: View {
             .onMove(perform: reorderListItems)
             .onDelete(perform: deleteListItems)
 
-            if trip.waypoints.count >= 2 {
-                // Variants 1-3 replace this with a per-stop control, which is
-                // the point of ucyl — keep it only for variant 0 so the
-                // screenshots show each option in isolation.
-                if LaunchArgs.splitVariant == 0 {
-                    addBlockRow
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 14, trailing: 14))
-                }
-            }
+            // The bottom "Add block separator" row is gone (AlaskaRouter-ucyl).
+            // Its only behaviour was to insert a separator near the END of the
+            // trip and leave the user dragging it up past 40 rows — the exact
+            // thing the Alaska trip complained about. Every gap now carries its
+            // own split control, so there is nothing left for it to do.
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -674,7 +668,11 @@ struct TripBottomSheet: View {
         return VStack(spacing: 0) {
             // Incoming-leg band — the leg distance sits ON the connector,
             // between the previous pip and this one. Skipped for the first stop.
-            if hasIncoming, let legText {
+            // The connector band carries the leg distance AND the "split here"
+            // control. It renders for every incoming leg now, not only ones
+            // with a known distance — an unrouted leg is still a gap you can
+            // break the day at (AlaskaRouter-ucyl).
+            if hasIncoming {
                 HStack(spacing: 10) {
                     Color.clear.frame(width: dragColWidth)        // mirror dot column
                     Color.clear.frame(width: stopIndentExtra)     // mirror stop indent
@@ -682,44 +680,43 @@ struct TripBottomSheet: View {
                         Rectangle()
                             .fill(railColor)
                             .frame(width: 1.5)
-                        Text(legText)
-                            .font(.sheetSans(10, weight: .bold))
-                            .tracking(0.2)
-                            .foregroundStyle(accent)
-                            .fixedSize()
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(Capsule()
-                                .fill(Color.white)
-                                .strokeBorder(accent, lineWidth: 0.8))
+                        if let legText {
+                            Text(legText)
+                                .font(.sheetSans(10, weight: .bold))
+                                .tracking(0.2)
+                                .foregroundStyle(accent)
+                                .fixedSize()
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Capsule()
+                                    .fill(Color.white)
+                                    .strokeBorder(accent, lineWidth: 0.8))
+                        }
                     }
                     .frame(width: railWidth)
-                    // Variant 2 (ucyl): the split control lives in the gap
-                    // BETWEEN two stops — which is literally what a separator
-                    // is. Reuses the existing connector band, so it adds no
-                    // new per-row chrome to all 54 rows.
-                    if LaunchArgs.splitVariant == 2 || LaunchArgs.splitVariant == 4 {
+                    // Split control sits in the gap BETWEEN two stops, because
+                    // that is literally what a separator is — and it means the
+                    // day breaks exactly where the user tapped, instead of
+                    // appearing near the end of the trip to be dragged up.
+                    // Hidden where a separator already occupies this gap.
+                    if !hasSeparatorBefore(wp) {
                         Button(action: { splitBlock(before: wp) }) {
-                            HStack(spacing: 3) {
-                                Image(systemName: "scissors")
-                                    .font(.system(size: 8.5, weight: .semibold))
-                                // Variant 4 is the same position, icon only —
-                                // "Split here" spelled out on 40+ legs turned
-                                // out to be its own kind of noise.
-                                if LaunchArgs.splitVariant == 2 {
-                                    Text("Split here")
-                                        .font(.sheetSans(9, weight: .semibold))
-                                        .tracking(0.3)
-                                }
-                            }
-                            .foregroundStyle(SheetPalette.textMuted)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1.5)
-                            .background(Capsule().stroke(SheetPalette.cardBorder,
-                                                         style: StrokeStyle(lineWidth: 0.5, dash: [2.5, 2.5])))
-                            .contentShape(Rectangle())
+                            Image(systemName: "scissors")
+                                .font(.system(size: 8.5, weight: .semibold))
+                                .foregroundStyle(SheetPalette.textMuted)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1.5)
+                                .background(Capsule().stroke(SheetPalette.cardBorder,
+                                                             style: StrokeStyle(lineWidth: 0.5, dash: [2.5, 2.5])))
+                                // The glyph is deliberately small so the
+                                // resting list stays quiet, but the tappable
+                                // area must not be: pad the hit shape out to a
+                                // comfortable target without drawing anything.
+                                .frame(width: 60, height: 34)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Start a new block at \(wp.label ?? "this stop")")
                     }
                     Spacer(minLength: 0)
                 }
@@ -729,41 +726,7 @@ struct TripBottomSheet: View {
             // Step B of 53x1 (AlaskaRouter-0rh9) — swipe-reveal: tap minus
             // arms the row, content slides left, red Delete reveals trailing.
             let isArmed = (armedDeleteID == wp.id)
-            // Variant 3 (ucyl): the tray that already reveals Delete also
-            // reveals Split, so the resting list gains no new chrome at all.
-            let trayWidth: CGFloat = LaunchArgs.splitVariant == 3 ? 168 : 84
             ZStack(alignment: .trailing) {
-                if LaunchArgs.splitVariant == 3 {
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        Button(action: {
-                            splitBlock(before: wp)
-                            armedDeleteID = nil
-                        }) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(SheetPalette.textMuted)
-                                    .padding(.vertical, 4)
-                                    .padding(.trailing, 4)
-                                VStack(spacing: 2) {
-                                    Image(systemName: "scissors")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    Text("Split")
-                                        .font(.system(size: 11, weight: .semibold))
-                                }
-                                .foregroundStyle(.white)
-                                .fixedSize()
-                            }
-                            .frame(width: isArmed ? 84 : 0)
-                            .frame(maxHeight: .infinity)
-                            .clipped()
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .allowsHitTesting(isArmed)
-                        Color.clear.frame(width: isArmed ? 84 : 0)
-                    }
-                }
                 // Trailing-layer red Delete — sits behind the row content,
                 // revealed when content slides left.
                 Button(action: {
@@ -883,21 +846,6 @@ struct TripBottomSheet: View {
                     }
                     .buttonStyle(.plain)
 
-                    // Variant 1 (ucyl): mock-literal — a split icon sitting on
-                    // every stop row next to the minus button. Most
-                    // discoverable, and the noisiest: this is the thing we
-                    // deliberately avoided the first time round.
-                    if LaunchArgs.splitVariant == 1 {
-                        Button(action: { splitBlock(before: wp) }) {
-                            Image(systemName: "scissors")
-                                .font(.system(size: 15, weight: .regular))
-                                .foregroundStyle(SheetPalette.textMuted)
-                                .frame(width: 30, height: 30)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-
                     // Minus button — tap arms the row for confirmation
                     // (Step B of AlaskaRouter-53x1, 0rh9). Tapping again
                     // while armed dismisses. Apple's native swipe-to-delete
@@ -914,7 +862,7 @@ struct TripBottomSheet: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.vertical, 8)
-                .offset(x: isArmed ? -trayWidth : 0)
+                .offset(x: isArmed ? -84 : 0)
             }
             .animation(.snappy(duration: 0.25), value: armedDeleteID)
         }
@@ -922,28 +870,6 @@ struct TripBottomSheet: View {
         .padding(.trailing, 14)
     }
 
-    private var addBlockRow: some View {
-        Button(action: addBlockSeparator) {
-            HStack(spacing: 8) {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(SheetPalette.textMuted)
-                Text("Add block separator")
-                    .font(.sheetSans(12, weight: .semibold))
-                    .tracking(0.2)
-                    .foregroundStyle(SheetPalette.textMuted)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(SheetPalette.cardBorder, style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 
     /// Distances in miles (vs km) per the user's tweak setting. Read here so
     /// SwiftUI tracks the dependency and displays update when it toggles.
@@ -1088,6 +1014,16 @@ struct TripBottomSheet: View {
 
     // MARK: - Mutations (waypoints + separators)
 
+    /// True when a block separator already sits in the gap immediately before
+    /// `wp` — i.e. this gap is already a block boundary, so offering to split
+    /// it again would be a dead control.
+    private func hasSeparatorBefore(_ wp: Waypoint) -> Bool {
+        let stops = trip.orderedWaypoints
+        guard let idx = stops.firstIndex(where: { $0.id == wp.id }), idx >= 1 else { return false }
+        let anchorID = stops[idx - 1].id
+        return trip.separators.contains { $0.afterWaypointID == anchorID }
+    }
+
     /// Start a new block AT `wp` — i.e. place the separator immediately before
     /// it (AlaskaRouter-ucyl). This is the whole point of the change: the user
     /// says where the day breaks, instead of the separator appearing near the
@@ -1104,18 +1040,6 @@ struct TripBottomSheet: View {
         try? modelContext.save()
     }
 
-    private func addBlockSeparator() {
-        // Place the new separator AFTER the second-to-last stop so block 2
-        // visibly contains the last stop. Avoids the degenerate "separator
-        // after the last waypoint" position.
-        let stops = trip.orderedWaypoints
-        guard stops.count >= 2 else { return }
-        let anchor = stops[stops.count - 2]
-        let sep = BlockSeparator(afterWaypointID: anchor.id)
-        sep.trip = trip
-        modelContext.insert(sep)
-        try? modelContext.save()
-    }
 
     /// Reorder a unified list of TripListItems. Walks the resulting sequence
     /// and:
