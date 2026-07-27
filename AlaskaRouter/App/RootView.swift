@@ -222,17 +222,20 @@ struct RootView: View {
                 searchResults: searchService.groupResults,
                 onWaypointTap: handleMapWaypointTap,
                 onPlaceTap: handleMapPlaceTap,
-                onEmptyMapTap: handleMapEmptyTap
+                onEmptyMapTap: handleMapEmptyTap,
+                onEmptyMapLongPress: handleMapEmptyLongPress,
+                // (xogw) Feed the scale bar a live resolution so it tracks the
+                // pinch while the fingers are still down. The map owns the
+                // single `.realtime` proxy subscription — see ExpeditionMapView
+                // — because it needs the proxy for long-press hit-testing too,
+                // and two `.onMapViewProxyUpdate` modifiers would fight over
+                // the same environment value. `mapScaleReading` is deliberately
+                // NOT read in this body; see MapScaleReading.
+                onProxyUpdate: { proxy in
+                    mapScaleReading.update(center: proxy.centerCoordinate, zoom: proxy.zoomLevel)
+                }
             )
             .ignoresSafeArea()
-            // (xogw) Feed the scale bar a live resolution so it tracks the
-            // pinch while the fingers are still down. `.realtime` opts into
-            // MapLibreSwiftUI's `regionIsChangingWith` forwarding; the default
-            // `.onFinish` only reports once the gesture ends. `mapScaleReading`
-            // is deliberately NOT read in this body — see MapScaleReading.
-            .onMapViewProxyUpdate(updateMode: .realtime) { proxy in
-                mapScaleReading.update(center: proxy.centerCoordinate, zoom: proxy.zoomLevel)
-            }
 
             // (y7l0) Search-mode scrim. When search is active (field focused
             // OR there's a non-empty query), this transparent layer sits
@@ -1299,21 +1302,30 @@ struct RootView: View {
     /// pin" SearchResult so the existing PreviewCallout renders with
     /// "+ Add to trip" and we reuse the same SmartInsert add path.
     /// Admin area is resolved at runtime via nearest-GNIS-within-30 km.
+    /// Tap on empty terrain: a pure "escape" (AlaskaRouter-dd2u). It clears
+    /// everything at once — open callout AND stop selection — so the gesture
+    /// always does the same thing rather than peeling one layer per tap.
+    /// It no longer drops a pin; that moved to long press, because incidental
+    /// touches while exploring the map were popping "Dropped Pin" callouts
+    /// throughout the Alaska trip.
     private func handleMapEmptyTap(_ coord: CLLocationCoordinate2D) {
-        // Dismiss-first behavior (highest priority each).
         if isSearchActive {
             dismissSearch()
             return
         }
-        if previewedResult != nil {
-            withAnimation(.smooth(duration: 0.2)) { previewedResult = nil }
-            return
+        guard previewedResult != nil || selectedWaypointID != nil else { return }
+        withAnimation(.smooth(duration: 0.2)) {
+            previewedResult = nil
+            selectedWaypointID = nil
         }
-        if selectedWaypointID != nil {
-            withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
-            return
-        }
-        // Truly empty — drop a pin.
+    }
+
+    /// Long press on empty terrain: the deliberate "drop a pin here"
+    /// (AlaskaRouter-dd2u). Unconditional — the user asked for a pin, so it
+    /// replaces whatever was open rather than being swallowed as a dismiss.
+    private func handleMapEmptyLongPress(_ coord: CLLocationCoordinate2D) {
+        if isSearchActive { dismissSearch() }
+        selectedWaypointID = nil
         let admin = AdminAreaLookup.shared.nearestAdmin(for: coord)
         var hasher = Hasher()
         hasher.combine(coord.latitude)

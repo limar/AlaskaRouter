@@ -80,6 +80,17 @@ struct MapPlaceTap: Equatable {
     }
 }
 
+/// Mutable holder for the latest `MapViewProxy` (AlaskaRouter-dd2u).
+///
+/// Deliberately a plain class rather than `@Observable`: under
+/// `proxyUpdateMode: .realtime` this is written on every frame of every pan,
+/// and observing it would re-render the map view continuously. Nothing reads
+/// it during `body` — only the long-press handler, at gesture time.
+@MainActor
+final class MapProxyBox {
+    var proxy: MapViewProxy?
+}
+
 // MARK: - The view
 
 struct ExpeditionMapView: View {
@@ -127,10 +138,29 @@ struct ExpeditionMapView: View {
     var onPlaceTap: ((MapPlaceTap) -> Void)? = nil
 
     /// Map tap on empty terrain (AlaskaRouter-4r8l) — no trip waypoint
-    /// and no places.geojson feature was hit. Parent decides whether
-    /// to dismiss an open overlay first or drop a pin at this coord.
-    /// Replaces the old `onWaypointTap(nil)` empty signal.
+    /// and no places.geojson feature was hit. Parent clears open overlays.
+    /// This used to also drop a pin; it no longer does (AlaskaRouter-dd2u) —
+    /// incidental touches while panning were registering as taps and popping
+    /// "Dropped Pin" callouts all over the Alaska trip.
     var onEmptyMapTap: ((CLLocationCoordinate2D) -> Void)? = nil
+
+    /// Long press on empty terrain (AlaskaRouter-dd2u) — the deliberate
+    /// "drop a pin here" gesture, mirroring Google Maps. A long press that
+    /// lands on a known object dispatches to `onWaypointTap` / `onPlaceTap`
+    /// exactly like a tap, so a pin can never be dropped on top of a named
+    /// place.
+    var onEmptyMapLongPress: ((CLLocationCoordinate2D) -> Void)? = nil
+
+    /// Latest map view proxy. Used by the parent to drive the live scale bar
+    /// (AlaskaRouter-xogw) and, internally, to hit-test long presses — the
+    /// DSL's `onLongPressMapGesture` has no feature-returning variant, so we
+    /// query rendered features ourselves.
+    var onProxyUpdate: ((MapViewProxy) -> Void)? = nil
+
+    /// Holds the most recent proxy for long-press hit-testing. A plain
+    /// reference box, NOT `@Observable`: it is written on every frame of every
+    /// pan under `.realtime`, and must never invalidate a view.
+    @State private var mapProxyBox = MapProxyBox()
 
     /// Tappable layer ids for hit-test. Includes both default + selected
     /// trip-marker layers AND the places-tier-* overlay so the same single
@@ -601,6 +631,39 @@ struct ExpeditionMapView: View {
         style.addLayer(layer)
     }
 
+    /// Shared hit dispatch for tap and long press. Returns true when the
+    /// gesture landed on something we own, so the caller can stop.
+    ///
+    /// Dispatch order (highest priority first):
+    ///   1. Trip waypoint hit  → onWaypointTap(UUID)
+    ///   2. Place feature hit  → onPlaceTap(MapPlaceTap)         (5gmw)
+    /// Trip waypoints win when both are stacked because they're the user's
+    /// own data and the gesture is most likely intended for them.
+    private func dispatchKnownObject(in features: [any MLNFeature]) -> Bool {
+        // 1. Trip waypoint?
+        if let wp = features.first(where: { $0.attribute(forKey: "wpID") != nil }),
+           let raw = wp.attribute(forKey: "wpID") as? String,
+           let id = UUID(uuidString: raw)
+        {
+            onWaypointTap?(id)
+            return true
+        }
+        // 2. Place feature?  (places.geojson features always carry both
+        //    `name` and `category` attributes.)
+        if let place = features.first(where: {
+            $0.attribute(forKey: "name") != nil && $0.attribute(forKey: "category") != nil
+        }) {
+            onPlaceTap?(MapPlaceTap(
+                name:      (place.attribute(forKey: "name") as? String) ?? "",
+                category:  (place.attribute(forKey: "category") as? String) ?? "",
+                coord:     place.coordinate,
+                adminArea: (place.attribute(forKey: "admin_area") as? String) ?? ""
+            ))
+            return true
+        }
+        return false
+    }
+
     var body: some View {
         MapView(styleURL: styleURL, camera: $camera) {
             // ALL trip layers (route + waypoint markers + user-location +
@@ -619,31 +682,30 @@ struct ExpeditionMapView: View {
         // Trip waypoints win when both are stacked because they're the
         // user's own data and the tap is most likely intended for them.
         .onTapMapGesture(on: Self.allTappableLayerIDs) { context, features in
-            // 1. Trip waypoint?
-            if let wp = features.first(where: { $0.attribute(forKey: "wpID") != nil }),
-               let raw = wp.attribute(forKey: "wpID") as? String,
-               let id = UUID(uuidString: raw)
-            {
-                onWaypointTap?(id)
-                return
-            }
-            // 2. Place feature?  (places.geojson features always carry both
-            //    `name` and `category` attributes.)
-            if let place = features.first(where: {
-                $0.attribute(forKey: "name") != nil && $0.attribute(forKey: "category") != nil
-            }) {
-                let tap = MapPlaceTap(
-                    name:      (place.attribute(forKey: "name") as? String) ?? "",
-                    category:  (place.attribute(forKey: "category") as? String) ?? "",
-                    coord:     place.coordinate,
-                    adminArea: (place.attribute(forKey: "admin_area") as? String) ?? ""
-                )
-                onPlaceTap?(tap)
-                return
-            }
-            // 3. Empty — hand the coord to the parent so it can drop a pin
-            //    (or dismiss whatever's currently open).
+            if dispatchKnownObject(in: features) { return }
+            // 3. Empty — dismiss only. Dropping a pin is the long-press
+            //    gesture now (AlaskaRouter-dd2u).
             onEmptyMapTap?(context.coordinate)
+        }
+        // (dd2u) Deliberate "drop a pin here". The DSL's long-press modifier
+        // has no feature-returning variant, so we hit-test the same layer set
+        // ourselves through the proxy — a long press over a waypoint or POI
+        // opens that object rather than burying it under an anonymous pin.
+        .onLongPressMapGesture { context in
+            // The recognizer reports began/changed/ended; act once, on began,
+            // which is also the instant the user feels the press "take".
+            guard context.state == .began else { return }
+            let features = mapProxyBox.proxy?.visibleFeatures(
+                at: context.point,
+                styleLayerIdentifiers: Self.allTappableLayerIDs
+            ) ?? []
+            if dispatchKnownObject(in: features) { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            onEmptyMapLongPress?(context.coordinate)
+        }
+        .onMapViewProxyUpdate(updateMode: .realtime) { proxy in
+            mapProxyBox.proxy = proxy
+            onProxyUpdate?(proxy)
         }
         // Clamp pinch-zoom to the pack's effective max so the user can't
         // pinch past the highest available tile zoom (z=10 today) into ugly
