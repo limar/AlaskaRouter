@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ucyl
 title: Inline 'split here' per stop row; retire the bottom Add-separator row
-status: completed
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-05-30T09:08:36Z
-updated_at: 2026-07-27T23:10:47Z
+updated_at: 2026-07-27T23:28:40Z
 parent: AlaskaRouter-36of
 ---
 
@@ -74,3 +74,31 @@ Implementation notes:
 - The bottom "Add block separator" row and `addBlockSeparator()` are **deleted**. Its only behaviour was the one being complained about. Flagged to the user as a judgement call.
 
 **Verified on the real 41-stop Alaska trip:** tapped the scissors in the 95 km gap between Yukon River Camp and Arctic Circle; a new block "Arctic Circle → Coldfoot Camp" appeared at exactly that point, blocks renumbered, and the scissors vanished from that gap since it is now a boundary. No dragging.
+
+## Reopened — the scissors affordance is rejected (2026-07-27)
+
+User verdict on the shipped connector control, three separate objections:
+
+1. **"Hardly divisable"** — too low-contrast to find. The glyph is 8.5 pt inside a dashed hairline capsule in `textMuted`; it disappears against the sheet.
+2. **"Non-intuitive place"** — the connector position, which I argued was semantically correct, does not read as an actionable place to the user.
+3. **Wrong metaphor** — "the meaning of scissors is reserved to *cut*, not *separate*." Cutting implies severing the route; what actually happens is a day boundary being inserted. The glyph promises the wrong outcome.
+
+Objection 3 is the sharpest and probably explains 2: if the icon reads as "cut the route here", then putting it *on* the route line makes it look like it will sever the line. The placement and the glyph were reinforcing each other's wrong reading.
+
+**What stays:** `splitBlock(before:)` and the removal of the `stops.count - 2` anchor are not in question — the separator landing where the user asks is the actual fix and it works. This is purely about the affordance.
+
+## Directions for round 2
+
+Reframe from "cut" to **"start a new block / day here"** — an additive act, not a destructive one. That suggests `+` over any blade, and a label doing the work rather than a glyph alone.
+
+- **Labelled pill in the gap** — `+ New block`, at real contrast, not a whisper. Fixes 1 and 3; 2 only if the label carries it.
+- **A full-width dashed insert line** across the gap with a centred `+`, echoing the block-header strip it creates. Very literal: "a divider goes here". Most visible; costs vertical rhythm.
+- **Per-row trailing `+` with a block glyph** (e.g. `rectangle.split.1x2`) — back on the row, but additive and unambiguous. Costs the name width that made us reject it the first time.
+- **From the block header** — "split this block" in a header menu, choosing the stop. No per-row chrome at all; least direct.
+
+Note: the earlier round measured *noise* and picked the quietest thing that worked. The field says it went too quiet. Round 2 should bias toward legibility and hold noise as the constraint, not the objective.
+
+## Todo
+- [ ] Render round-2 variants over the real 41-stop trip, biased toward legibility
+- [ ] Agree glyph + wording + placement
+- [ ] Implement; keep splitBlock(before:) as-is
