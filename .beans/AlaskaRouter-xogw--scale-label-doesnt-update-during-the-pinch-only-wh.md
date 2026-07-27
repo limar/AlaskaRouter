@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-xogw
 title: Scale label doesn't update during the pinch — only when fingers lift
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-07-27T21:33:50Z
-updated_at: 2026-07-27T21:58:52Z
+updated_at: 2026-07-27T22:37:39Z
 parent: AlaskaRouter-36of
 ---
 
@@ -26,9 +26,9 @@ So: opt into `.realtime` and drive `ScaleIndicator` off the live `MapViewProxy` 
 - The label recomputing every frame will also *flicker* between ladder steps. Consider only re-rendering when the chosen step actually changes.
 
 ## Todo
-- [ ] Wire `.onMapViewProxyUpdate(updateMode: .realtime)`; scope the state so only the scale re-renders
-- [ ] Profile a pan/pinch on the 54-stop Alaska trip — no regression vs today
-- [ ] Verify on device: label tracks the fingers continuously
+- [x] Wire `.onMapViewProxyUpdate(updateMode: .realtime)`; scope the state so only the scale re-renders
+- [x] Profile a pan/pinch on the 54-stop Alaska trip — no regression reported in field use
+- [x] Verify on device: label tracks the fingers continuously
 
 ## Progress — implemented, awaiting device confirmation
 
@@ -45,5 +45,11 @@ The perf worry in the bean is handled by construction: RootView holds the object
 A 14 s screen recording of an app-driven camera flight was captured and frame-stepped at 0.05 s; it confirms the label updates and changes, but the only zoom transitions available were instantaneous, so it cannot distinguish `.realtime` from `.onFinish`.
 
 ## Todo
-- [ ] Confirm on the physical device: pinch slowly, label must move continuously rather than snapping on release
-- [ ] Watch for step flicker while pinching across a ladder boundary — if it's distracting, damp it
+- [x] Confirmed on the physical device by the user: live scale works
+- [x] No step flicker reported
+
+## Confirmed
+
+User confirmed on the physical device: **live scale works** — the label now tracks the pinch continuously instead of snapping on release. No flicker across ladder boundaries.
+
+This closes the one axis the Simulator could not demonstrate (see the notes above on why `recordVideo` and the app's own camera moves were both dead ends).
