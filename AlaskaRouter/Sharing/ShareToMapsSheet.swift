@@ -37,13 +37,29 @@ struct ShareToMapsSheet: View {
 
     /// Apps actually openable on this device, computed once on appear.
     private var availableApps: [MapApp] {
-        MapApp.allCases.filter { app in
+        // Dev screenshot hook (a44b) — the Simulator has no App Store apps, so
+        // without this the multi-row layout can never be captured there.
+        if LaunchArgs.shareSheetShowsAllApps { return MapApp.allCases }
+        return MapApp.allCases.filter { app in
             guard let probe = app.probeURL else { return true }   // Apple Maps
             return UIApplication.shared.canOpenURL(probe)
         }
     }
 
     private let columns = [GridItem(.adaptive(minimum: 84), spacing: 16)]
+
+    /// Measured content height, which drives the detent (AlaskaRouter-a44b).
+    /// The old hard-coded `.height(220)` fitted exactly one row of tiles: with
+    /// 4 apps installed the adaptive grid wraps to two rows on an iPhone-width
+    /// sheet, the content overflowed, and the header got pushed under the top
+    /// edge. Measuring means it fits 1, 2 or 3 rows without a magic number.
+    /// Seeded at the old value so the first layout pass isn't zero-height.
+    @State private var contentHeight: CGFloat = 220
+
+    /// Clearance under the sheet's top edge for `presentationDragIndicator`,
+    /// which draws *inside* the sheet — `.padding(.top, 4)` was not enough and
+    /// the grabber sat on the title.
+    private let dragIndicatorClearance: CGFloat = 18
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -58,7 +74,7 @@ struct ShareToMapsSheet: View {
                         .lineLimit(1)
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, dragIndicatorClearance)
 
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(availableApps) { app in
@@ -73,7 +89,8 @@ struct ShareToMapsSheet: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .presentationDetents([.height(220)])
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        .presentationDetents([.height(contentHeight)])
         .presentationDragIndicator(.visible)
     }
 

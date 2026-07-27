@@ -106,9 +106,19 @@ enum LaunchArgs {
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
 
+    /// Force every maps app into the "Open in…" chooser regardless of what is
+    /// actually installed. Dev-only: the Simulator has no App Store apps, so
+    /// the sheet normally renders a single Apple Maps tile and the multi-row
+    /// layout — the case that clipped the title in the field (AlaskaRouter-a44b)
+    /// — can't be screenshotted there at all.
+    static var shareSheetShowsAllApps: Bool {
+        UserDefaults.standard.bool(forKey: "shareAllApps")
+    }
+
     /// After prefill query results land, auto-trigger this action for screenshot
     /// capture: `preview:<index>` opens the preview callout; `add:<index>` runs
-    /// the fast-add flow. Index is into the results list.
+    /// the fast-add flow; `share:<index>` opens the "Open in…" chooser for that
+    /// result. Index is into the results list.
     static var debugAutoAction: (kind: String, index: Int)? {
         let raw = UserDefaults.standard.string(forKey: "autoAction") ?? ""
         let parts = raw.split(separator: ":")

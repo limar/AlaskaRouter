@@ -1,15 +1,44 @@
 // Always-visible scale indicator (bottom-left of the map, above attribution).
 //
 // Picks a "nice" rounded distance (e.g. 5 km, 10 mi, 100 m) close to a target
-// pixel width and draws a thin bar of that scaled length. Auto-formats km/mi
-// based on `Locale.current.measurementSystem`.
+// pixel width and draws a thin bar of that scaled length. Units follow the
+// user's "Distances in miles" tweak, same as every other distance in the app.
 
 import SwiftUI
 import MapLibreSwiftUI
 import CoreLocation
 
+/// Live map resolution, published on every frame of a pan/pinch.
+///
+/// This exists so the scale bar can track the gesture *while the fingers are
+/// still down* (AlaskaRouter-xogw). The `MapViewCamera` binding can't do that —
+/// MapLibreSwiftUI only writes it back on `regionDidChange`, i.e. once the
+/// gesture ends, which made the user zoom blind and correct afterwards.
+///
+/// It is a separate `@Observable` object rather than `@State` on RootView on
+/// purpose: RootView never reads `metersPerPixel`, it only hands the object
+/// down, so a realtime update invalidates *this indicator alone* instead of
+/// re-running RootView's body 60×/second with a 54-stop trip in it.
+@Observable
+@MainActor
+final class MapScaleReading {
+    /// Ground meters per screen point at the map's current center and zoom.
+    /// Zero until the style finishes loading and the first proxy arrives.
+    private(set) var metersPerPixel: Double = 0
+
+    func update(center: CLLocationCoordinate2D, zoom: Double) {
+        // Standard slippy-map meters-per-pixel at given latitude/zoom.
+        let value = 156543.03 * cos(center.latitude * .pi / 180) / pow(2, zoom)
+        // A pure horizontal pan doesn't change the resolution. Skip the write
+        // so we don't invalidate the view for an identical result — Observation
+        // notifies on every set, equal or not.
+        guard value != metersPerPixel else { return }
+        metersPerPixel = value
+    }
+}
+
 struct ScaleIndicator: View {
-    let camera: MapViewCamera
+    let reading: MapScaleReading
     /// Target on-screen width for the bar (the chosen "nice" distance gets as
     /// close to this as possible without exceeding it).
     let targetWidth: CGFloat = 92
@@ -42,15 +71,30 @@ struct ScaleIndicator: View {
 
     private struct ScaleInfo { let label: String; let barWidth: CGFloat }
 
+    private static let footInMeters = 0.3048
+    private static let mileInMeters = 1609.344
+
+    /// "Nice" bar lengths, in meters. Both ladders are written in their own
+    /// *display* unit and converted, never the other way round: the previous
+    /// imperial ladder listed foot values (5280, 26400, …) but fed them to the
+    /// meters-per-pixel math, so the bar landed on 3.3 mi / 16 mi / 33 mi
+    /// instead of 1 mi / 5 mi / 10 mi (AlaskaRouter-o962).
+    private static let imperialCandidates: [Double] =
+        [10, 25, 50, 100, 250, 500, 1000, 2000].map { $0 * footInMeters }
+        + [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 6000].map { $0 * mileInMeters }
+
+    private static let metricCandidates: [Double] =
+        [10, 25, 50, 100, 250, 500]
+        + [1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 10000].map { $0 * 1000 }
+
     private func info() -> ScaleInfo? {
-        guard case let .centered(coord, zoom, _, _, _) = camera.state else { return nil }
-        // Standard slippy-map meters-per-pixel at given latitude/zoom.
-        let metersPerPixel = 156543.03 * cos(coord.latitude * .pi / 180) / pow(2, zoom)
+        let metersPerPixel = reading.metersPerPixel
+        guard metersPerPixel > 0 else { return nil }
         let targetMeters = Double(targetWidth) * metersPerPixel
-        let imperial = Locale.current.measurementSystem == .us
-        let candidates: [Double] = imperial
-            ? [10, 25, 50, 100, 250, 500, 1000, 2500, 5280, 26400, 52800, 158400, 528000, 1320000, 5280000]
-            : [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000]
+        // Read through the @Observable store from inside `body`, so flipping
+        // the tweak re-renders the indicator.
+        let imperial = TweaksStore.shared.distanceUnitIsMiles
+        let candidates = imperial ? Self.imperialCandidates : Self.metricCandidates
         let pick = candidates.last(where: { $0 <= targetMeters }) ?? candidates.first ?? 1000
         let barWidth = CGFloat(pick / metersPerPixel)
         let label = formatDistance(meters: pick, imperial: imperial)
@@ -60,9 +104,9 @@ struct ScaleIndicator: View {
     private func formatDistance(meters: Double, imperial: Bool) -> String {
         if imperial {
             // Display in feet under 1 mile, miles above.
-            let feet = meters * 3.28084
+            let feet = meters / Self.footInMeters
             if feet < 5280 { return "\(Int(feet.rounded())) ft" }
-            let miles = meters / 1609.34
+            let miles = meters / Self.mileInMeters
             if miles < 10 { return "\(prettyOneDecimal(miles)) mi" }
             return "\(Int(miles.rounded())) mi"
         } else {

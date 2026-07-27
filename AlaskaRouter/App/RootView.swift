@@ -47,6 +47,10 @@ struct RootView: View {
     @AppStorage("activeTripID") private var activeTripIDObserved: String = ""
 
     @State private var mapCamera: MapViewCamera = RootView.makeInitialCamera()
+    /// Live map resolution for the scale bar (xogw). Held here so it outlives
+    /// body re-renders, but never read in this body — only handed to
+    /// ScaleIndicator, so realtime updates don't invalidate RootView.
+    @State private var mapScaleReading = MapScaleReading()
 
     // Routing layer state — Valhalla via FOSSGIS for ferry support
     // (AlaskaRouter-y3g3). OSRMProvider stays available as an alternate
@@ -221,6 +225,14 @@ struct RootView: View {
                 onEmptyMapTap: handleMapEmptyTap
             )
             .ignoresSafeArea()
+            // (xogw) Feed the scale bar a live resolution so it tracks the
+            // pinch while the fingers are still down. `.realtime` opts into
+            // MapLibreSwiftUI's `regionIsChangingWith` forwarding; the default
+            // `.onFinish` only reports once the gesture ends. `mapScaleReading`
+            // is deliberately NOT read in this body — see MapScaleReading.
+            .onMapViewProxyUpdate(updateMode: .realtime) { proxy in
+                mapScaleReading.update(center: proxy.centerCoordinate, zoom: proxy.zoomLevel)
+            }
 
             // (y7l0) Search-mode scrim. When search is active (field focused
             // OR there's a non-empty query), this transparent layer sits
@@ -266,7 +278,7 @@ struct RootView: View {
                 }
                 Spacer()
                 HStack(alignment: .bottom, spacing: 0) {
-                    ScaleIndicator(camera: mapCamera)
+                    ScaleIndicator(reading: mapScaleReading)
                         .padding(.leading, 12)
                         .padding(.bottom, mapControlsBottomClearance)
                     Spacer()
@@ -464,6 +476,13 @@ struct RootView: View {
                             handlePreviewSelected(searchService.results[idx])
                         case "add" where idx < searchService.results.count:
                             handleFastAdd(searchService.results[idx])
+                        case "share" where idx < searchService.results.count:
+                            // (a44b) Open the "Open in…" chooser directly, so
+                            // the sheet's own layout can be screenshotted.
+                            let r = searchService.results[idx]
+                            sharePresentation = SharePresentation(
+                                place: SharePlace(name: r.name, coordinate: r.coord)
+                            )
                         default:
                             break
                         }
