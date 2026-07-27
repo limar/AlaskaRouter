@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-07-27T21:34:45Z
-updated_at: 2026-07-27T22:46:41Z
+updated_at: 2026-07-27T23:38:29Z
 parent: AlaskaRouter-36of
 ---
 
@@ -76,3 +76,56 @@ Harness: https://claude.ai/code/artifact/8f891634-4a4f-45f2-9768-b279f279e1bf
 - [ ] Implement the winner in `PlaceShareURL`; re-check Apple in the same pass
 - [ ] Update `PlaceShareURLTests` so the chosen format is locked
 - [ ] Field-verify on the real device
+
+## On-device results (2026-07-27, user)
+
+| case | G1 coord+label | G2 coord only | G3 name+center (shipped) | G4 name+borough |
+|---|---|---|---|---|
+| Farthest North Spruce | exact pin, sheet reads "Farthest North Spruce / provided by another app" | exact pin, DMS + decimal coords only | found **"Northernmost Spruce Tree"** — full Google POI, reviews, photos | **North Slope borough** — rich card, but *not the spruce* |
+| North Pole | exact pin mid-town, sheet reads "North Pole / provided by another app" | as above | **(89.9999999, −135.0)** — the actual geographic North Pole | town boundaries selected, "North Pole, Fairbanks North Star, AK" |
+| Coldfoot Camp | as above | as above | as above | as above |
+| Galbraith Lake | as above | as above | as above | as above |
+| dropped pin | — | DMS label + decimal coords | — | — |
+
+**Apple confirmed correct, no change needed.** A1 put a labelled pin mid-town in North Pole with a street address and a Directions button; A2 showed "Farthest North Spruce" on both the pin and the sheet with a Dalton Hwy address. The documented `q`-as-label-when-`ll`-is-present behaviour holds. `PlaceShareURL.swift:98` stays as it is.
+
+### Reading
+
+- **G1 honours the parenthesised label.** This was the open question and the answer is yes. Exact position, our name on the card, in every case tested. Its only shortfall is a plain "provided by another app" card instead of Google's own POI data.
+- **G3 (what we ship) is confirmed dangerous** — "North Pole" resolved to the literal geographic pole, 2,000+ km from the trip stop. Disqualified.
+- **G4 is correct only for administrative entities.** It nailed North Pole (a town Google holds as a boundary) and failed the spruce, landing on North Slope Borough — an area of roughly 245,000 km². Rich card, wrong place. It fails on exactly the remote features a user most needs help locating.
+- G2's coordinate card is as opaque as feared, and G1 strictly dominates it.
+
+### The disagreement worth stating
+
+The user's read was "G4 looks like the only well-working option". By the criterion agreed earlier — position correctness outranks card richness, because a wrong location sends you driving somewhere wrong — **G1 is the only form that is never wrong**, and it also solves the original objection: the pin is *not* anonymous, it carries our name.
+
+G4's failure mode is quiet and severe: a rich, confident, authoritative-looking card for a place hundreds of kilometres from the waypoint.
+
+No coordinate-anchored URL can produce Google's rich POI card without a Places API `place_id`. That is the real trade, and it cannot be bought with URL syntax alone.
+
+## Decision (2026-07-27): go with the Places API
+
+**The offline-first objection was wrong and is withdrawn.** Google Maps is useless without a connection, so at the moment the user taps "Open in Google Maps" they are, by definition, online. Refusing a network lookup to protect an offline case that cannot exist was a bad trade. A `place_id` is the only thing that yields an exact *and* named *and* rich card, and it is reachable.
+
+Fallback if it proves infeasible: **G4**.
+
+Note for the keyless path: whatever the app does with no key configured, my recommendation stays **G1** rather than G4 — G1 is never wrong, and G4 fails silently and severely on remote features (North Slope Borough for the spruce). Worth settling when stage 1 is built.
+
+## Staging
+
+**Stage 1 — keyless default.** The app must work with no key at all. Pick G1 (or G4) as the no-key behaviour, implement it, lock it in `PlaceShareURLTests`. Export stops being broken regardless of what follows.
+
+**Stage 2 — Places lookup when a key exists.** On share, `findplacefromtext` / Places Text Search biased to the waypoint coordinate → take the top result within a sanity radius → hand Google `?api=1&query=<name>&query_place_id=<id>`. Falls back to stage 1 on no key, no network, no match, or a match outside the radius. **The radius check is the safety rail** — it is what stops a confident wrong card, which is exactly how G4 fails.
+
+**Stage 3 — key onboarding worth the name.** "Paste your API key here" is the baseline, not the goal. Options to think through:
+- A guided setup screen: what the key is for, what it costs (Places has a free monthly tier), a direct link to the right Google Cloud console page, then paste — the same act, but hand-held rather than presumed.
+- Store it in the **Keychain**, not `UserDefaults`/`TweaksStore` where every other setting lives. A credential is not a tweak.
+- Make the feature visibly optional: with no key the export still works, so the setup screen is an upgrade prompt, not a wall.
+- Rejected: shipping a key in the app (extractable, abusable, and untenable for an OSS release) and running a proxy (hosting, plus the account/privacy surface we rejected for trip backup).
+
+## Todo
+- [ ] Stage 1: keyless default (settle G1 vs G4) + tests
+- [ ] Stage 2: Places lookup with a coordinate sanity radius; fall back cleanly
+- [ ] Stage 3: key onboarding + Keychain storage
+- [ ] Field-verify each stage on the device
