@@ -5,7 +5,7 @@ status: completed
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-28T00:24:04Z
+updated_at: 2026-07-28T00:44:25Z
 parent: AlaskaRouter-36of
 ---
 
@@ -57,3 +57,21 @@ Lesson for this kind of verification: **assert on the full before/after order, a
 
 ### Note
 The Simulator's seeded "Alaska" trip got shuffled during this testing. Simulator state only; the device copy is untouched.
+
+## Follow-up: could the handle drag start on a *short* press?
+
+Asked after the fix landed — with accidental drags eliminated, the long press is protection against a risk that no longer exists, so it is now pure friction on an intentional action. Investigated and **decided to keep the long press.**
+
+**There is no public API to tune the reorder activation delay.** Searched the iOS 26 SwiftUI interface: nothing for reorder timing or drag activation. `List` + `.onMove` outside edit mode always waits for the system long press.
+
+The only built-in route to an immediate drag is `EditMode`. Probed it directly, and both halves confirmed on device:
+- It **does** drag on touch-down with no hold.
+- It forces the system's own chrome: red delete circles on the leading edge, the `≡` grabber on the trailing edge, our 6-dot handle *and* our minus button both made redundant, and stop names truncating. **Four controls per row** on a design built for two.
+
+Adopting it would mean re-doing the row — dropping the 6-dot handle (AlaskaRouter-zvhr) for the system grabber and the minus button (AlaskaRouter-0rh9) for the system delete circle — a design decision, not a tweak. Probe reverted; tree verified clean.
+
+Rejected alternatives:
+- **A "Reorder" mode toggle** — EditMode only while explicitly on, keeping the resting list clean. Viable, but costs a mode and an extra tap to reorder.
+- **Custom drag on the handle** — immediate, design untouched, but hand-rolls edge autoscroll, drop-target maths and reorder animation. AlaskaRouter-x5ss and AlaskaRouter-io69 were both scrapped fighting exactly that; would need its own bean and spike.
+
+**Verdict:** reordering a stop is a rare, deliberate act — not something done while driving — so half a second of hold is a fair price for leaving a verified fix and a settled row design alone. Revisit only if the row gets reworked for other reasons.
