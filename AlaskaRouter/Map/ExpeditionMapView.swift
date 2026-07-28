@@ -182,6 +182,12 @@ struct ExpeditionMapView: View {
     /// name/category/admin_area attributes like a places.geojson feature.
     private static let searchResultLayerIDs: Set<String> = [
         "search-result-dots",
+        // Invisible, generously-sized circle under each dot (AlaskaRouter-35z7).
+        // The visible dot is 4.5–11 pt so that a whole result set reads as a
+        // density cloud rather than a wall of pins — but that is far under a
+        // comfortable touch target, especially in a moving vehicle. Separating
+        // the hit area from the drawn mark lets both be right.
+        "search-result-hit",
     ]
     private static let allTappableLayerIDs: Set<String> =
         waypointLayerIDs.union(placesLayerIDs).union(searchResultLayerIDs)
@@ -648,7 +654,22 @@ struct ExpeditionMapView: View {
             onWaypointTap?(id)
             return true
         }
-        // 2. Place feature?  (places.geojson features always carry both
+        // 2. A group-search result (AlaskaRouter-35z7). These MUST outrank
+        //    ambient places: the user just searched for them, so they are the
+        //    most likely target. Before this tier existed, both kinds of
+        //    feature carried `name` + `category` and the tie was broken by
+        //    whatever order the hit-test happened to return — which in the
+        //    field meant a nearby POI almost always stole the tap.
+        if let hit = features.first(where: { $0.attribute(forKey: "isSearchResult") != nil }) {
+            onPlaceTap?(MapPlaceTap(
+                name:      (hit.attribute(forKey: "name") as? String) ?? "",
+                category:  (hit.attribute(forKey: "category") as? String) ?? "",
+                coord:     hit.coordinate,
+                adminArea: (hit.attribute(forKey: "admin_area") as? String) ?? ""
+            ))
+            return true
+        }
+        // 3. Place feature?  (places.geojson features always carry both
         //    `name` and `category` attributes.)
         if let place = features.first(where: {
             $0.attribute(forKey: "name") != nil && $0.attribute(forKey: "category") != nil
@@ -793,9 +814,11 @@ struct ExpeditionMapView: View {
     fileprivate static func syncSearchResultLayer(style: MLNStyle, results: [SearchResult]) {
         let sourceID = "search-results"
         let layerID = "search-result-dots"
+        let hitLayerID = "search-result-hit"
 
         if results.isEmpty {
             if let layer = style.layer(withIdentifier: layerID) { style.removeLayer(layer) }
+            if let hit = style.layer(withIdentifier: hitLayerID) { style.removeLayer(hit) }
             if let src = style.source(withIdentifier: sourceID) { style.removeSource(src) }
             return
         }
@@ -814,6 +837,9 @@ struct ExpeditionMapView: View {
                 "name": r.name,
                 "category": r.category,
                 "admin_area": r.adminArea,
+                // Lets the tap dispatch tell a result apart from an ambient
+                // place — both otherwise carry name + category (35z7).
+                "isSearchResult": true,
             ]
             features.append(f)
         }
@@ -831,6 +857,16 @@ struct ExpeditionMapView: View {
 
         let source = MLNShapeSource(identifier: sourceID, shape: shape, options: nil)
         style.addSource(source)
+
+        // Invisible hit target, added FIRST so it sits under the visible dot
+        // (AlaskaRouter-35z7). 22 pt radius ≈ a 44 pt touch target regardless
+        // of zoom, so results can be tapped without pinching in to maximum.
+        // Fully transparent: it enlarges the target without enlarging the mark.
+        let hit = MLNCircleStyleLayer(identifier: hitLayerID, source: source)
+        hit.circleRadius = NSExpression(forConstantValue: 22)
+        hit.circleColor = NSExpression(forConstantValue: UIColor.clear)
+        hit.circleOpacity = NSExpression(forConstantValue: 0)
+        style.addLayer(hit)
 
         let dot = MLNCircleStyleLayer(identifier: layerID, source: source)
         dot.circleColor = NSExpression(forConstantValue: fill)

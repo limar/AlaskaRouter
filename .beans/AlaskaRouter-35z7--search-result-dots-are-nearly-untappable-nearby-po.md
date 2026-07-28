@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-35z7
 title: Search-result dots are nearly untappable — nearby POIs win the hit-test
-status: todo
+status: completed
 type: bug
 priority: high
 created_at: 2026-07-27T22:40:00Z
-updated_at: 2026-07-27T22:40:00Z
+updated_at: 2026-07-28T00:52:13Z
 parent: AlaskaRouter-36of
 ---
 
@@ -26,6 +26,22 @@ Fix direction: give the result features a distinguishing attribute (e.g. `isSear
 Fix direction: a transparent, larger hit circle layer under the visible dot (common MapLibre trick), or simply a bigger marker — which the sibling bean about the puck collision may want anyway.
 
 ## Todo
-- [ ] Add the search-result priority tier to the dispatch
-- [ ] Enlarge the effective touch target (invisible hit layer vs bigger marker — decide with the visual round)
-- [ ] Verify: run a group search in a dense area, tap results without zooming in
+- [x] Add the search-result priority tier to the dispatch
+- [x] Enlarge the effective touch target — invisible hit layer, 22 pt radius
+- [x] Verified: 24-result group search, tapped without zooming in
+
+## Summary of Changes
+
+Both causes fixed.
+
+**1. Priority tier.** Result features now carry an `isSearchResult` attribute, and `dispatchKnownObject` gained a tier for them between trip waypoints and ambient places. Previously both kinds of feature carried only `name` + `category`, so the winner was whichever the hit-test happened to return first — and in the field a nearby POI almost always stole the tap.
+
+**2. Hit target separated from the drawn mark.** A fully transparent `search-result-hit` circle layer (22 pt radius ≈ a 44 pt touch target) is added *under* the visible dot and included in the tappable layer set. The visible dot keeps its 4.5–11 pt zoom-scaled size, so a result set still reads as a density cloud rather than a wall of pins — the mark and the target no longer have to be the same size.
+
+Worth noting: `circleOpacity = 0` does **not** exclude a layer from `visibleFeatures(at:styleLayerIdentifiers:)`, so no visible-but-faint fudge was needed. Verified empirically rather than assumed.
+
+**Verified on a 24-result "campground" group search around Fairbanks:**
+- Tapping **12 px off** a dot's centre still selected it ("Upper Chatanika State Rec…") — that miss distance would previously have failed.
+- Tapping inside the dense Fairbanks label cluster, where Chena / Fairbanks / Chickaloon POIs compete, selected the result ("Moose Loop RV Campgro…") rather than a POI.
+
+Neither test needed any zooming in, which was the field workaround.
