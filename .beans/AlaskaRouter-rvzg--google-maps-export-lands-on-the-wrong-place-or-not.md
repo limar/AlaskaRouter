@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: high
 created_at: 2026-07-27T21:34:45Z
-updated_at: 2026-07-27T23:38:29Z
+updated_at: 2026-07-28T00:04:19Z
 parent: AlaskaRouter-36of
 ---
 
@@ -126,6 +126,24 @@ Note for the keyless path: whatever the app does with no key configured, my reco
 
 ## Todo
 - [ ] Stage 1: keyless default (settle G1 vs G4) + tests
+- [ ] Stage 2: Places lookup with a coordinate sanity radius; fall back cleanly
+- [ ] Stage 3: key onboarding + Keychain storage
+- [ ] Field-verify each stage on the device
+
+## Stage 1 shipped — G1 as the keyless default
+
+`comgooglemaps://?q=<lat>,<lon>(<name>)` for a named place; unnamed dropped pins keep the existing coordinate-query form.
+
+User chose **G1** over G4 for the keyless path. It is never wrong about position, and the on-device test confirmed the parenthesised label is honoured ("Farthest North Spruce / provided by another app"). What it does not get is Google's rich POI card — that needs a `place_id`, which is stage 2.
+
+Also: `()` added to the encoded set in `placeQueryValue`, so a stop name containing a paren cannot close its own label early and leak the remainder into the URL as structure. Harmless for the other apps, which decode it back.
+
+Tests updated (`PlaceShareURLTests`, 12 passing) — including a regression guard asserting the coordinate always leads the query, which is the specific thing that sent "North Pole" to the geographic pole.
+
+Apple, Waze and Maps.me are unchanged; Apple was confirmed correct on-device.
+
+## Todo
+- [x] Stage 1: keyless default (G1) + tests
 - [ ] Stage 2: Places lookup with a coordinate sanity radius; fall back cleanly
 - [ ] Stage 3: key onboarding + Keychain storage
 - [ ] Field-verify each stage on the device

@@ -100,11 +100,22 @@ enum PlaceShareURL {
             return make("https://maps.apple.com/?ll=\(lat),\(lon)")
 
         case .googleMaps:
-            // q=name + center biases Google's search to the area. For a pin we
-            // pass coords as the query so it drops a marker rather than
-            // searching text.
+            // Coordinate as the query, our name as a parenthesised label
+            // (AlaskaRouter-rvzg). The previous form — q=name + center — was
+            // measured on-device and is dangerous: `center` is only a viewport
+            // hint, NOT a search constraint, so "North Pole" resolved to the
+            // literal geographic pole, 2,000 km from the trip stop. Passing
+            // the coordinate as the query pins the marker exactly, and the
+            // (label) form is honoured: the card reads e.g. "Farthest North
+            // Spruce / provided by another app".
+            //
+            // What this deliberately does NOT get is Google's own rich POI
+            // card (reviews, hours, photos) — that hangs off a Places API
+            // place_id and cannot be had from URL syntax. This is the keyless
+            // path; the Places lookup is stage 2 of rvzg and upgrades it when
+            // a key is configured.
             if let name {
-                return make("comgooglemaps://?q=\(enc(name))&center=\(lat),\(lon)&zoom=14")
+                return make("comgooglemaps://?q=\(lat),\(lon)(\(enc(name)))")
             }
             return make("comgooglemaps://?q=\(lat),\(lon)&center=\(lat),\(lon)&zoom=15")
 
@@ -151,7 +162,10 @@ private extension CharacterSet {
     /// become %20, "&" / "+" / "=" / "?" / "#" / "/" get encoded).
     static let placeQueryValue: CharacterSet = {
         var set = CharacterSet.urlQueryAllowed
-        set.remove(charactersIn: "+&=?#/;,")
+        // Parens are structure in Google's `q=lat,lon(label)` form, so a name
+        // containing one would truncate its own label. Encoding them is
+        // harmless for the other apps, which just decode them back.
+        set.remove(charactersIn: "+&=?#/;,()")
         return set
     }()
 }

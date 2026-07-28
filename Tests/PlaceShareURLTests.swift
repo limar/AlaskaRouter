@@ -29,10 +29,30 @@ final class PlaceShareURLTests: XCTestCase {
 
     // MARK: - Google Maps (native scheme + center bias)
 
-    func testGoogleNamed() {
+    /// AlaskaRouter-rvzg: the coordinate is the query and the name rides along
+    /// as a parenthesised label. The old `q=name&center=…` form was measured
+    /// on-device sending "North Pole" to the literal geographic pole, because
+    /// `center` is a viewport hint and not a search constraint.
+    func testGoogleNamedIsCoordinateAnchored() {
         let url = PlaceShareURL.url(for: .googleMaps, place: named("Finger Mountain Wayside"))
         XCTAssertEqual(url.absoluteString,
-            "comgooglemaps://?q=Finger%20Mountain%20Wayside&center=63.731234,-148.912345&zoom=14")
+            "comgooglemaps://?q=63.731234,-148.912345(Finger%20Mountain%20Wayside)")
+    }
+
+    /// A name is never allowed to reach Google unencoded as a *search* term —
+    /// the coordinate must always lead. Guards the regression directly.
+    func testGoogleNamedNeverPutsTheNameFirst() {
+        let url = PlaceShareURL.url(for: .googleMaps, place: named("North Pole"))
+        XCTAssertTrue(url.absoluteString.hasPrefix("comgooglemaps://?q=63.731234,-148.912345"),
+                      "coordinate must be the query; got \(url.absoluteString)")
+    }
+
+    /// Parens inside a name would otherwise close the label early and leak the
+    /// remainder into the URL as structure.
+    func testGoogleNamedEncodesParensInTheName() {
+        let url = PlaceShareURL.url(for: .googleMaps, place: named("Camp (old)"))
+        XCTAssertEqual(url.absoluteString,
+            "comgooglemaps://?q=63.731234,-148.912345(Camp%20%28old%29)")
     }
 
     func testGooglePin() {
