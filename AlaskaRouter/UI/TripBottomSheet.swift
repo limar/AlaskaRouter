@@ -598,6 +598,10 @@ struct TripBottomSheet: View {
                         .tracking(0.4)
                         .foregroundStyle(SheetPalette.textMuted)
                 }
+                // Separators are draggable too (they move a block boundary),
+                // so the header body carries the same restriction as a stop
+                // row — its own 6-dot handle stays the only grab point.
+                .excludedFromReorderGrab()
 
                 Spacer(minLength: 0)
 
@@ -829,6 +833,10 @@ struct TripBottomSheet: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    // The name/kind area is where the finger lands when
+                    // scrolling, so it must not be able to start a drag. The
+                    // 6-dot handle is deliberately left uncovered.
+                    .excludedFromReorderGrab()
 
                     // Minus button — tap arms the row for confirmation
                     // (Step B of AlaskaRouter-53x1, 0rh9). Tapping again
@@ -1235,5 +1243,27 @@ struct TripBottomSheet: View {
         case .overview: return .full
         case .full: return .full
         }
+    }
+}
+
+private extension View {
+    /// Stops this area from being able to start a reorder drag
+    /// (AlaskaRouter-5430).
+    ///
+    /// `List` + `.onMove` makes the ENTIRE row draggable on a long press, and
+    /// SwiftUI exposes no way to restrict the grab to a subview — so scrolling
+    /// a 41-stop trip kept picking up a waypoint and silently rewriting the
+    /// itinerary. Attaching a no-op long press here starves List's reorder
+    /// recognizer of the gesture it waits for; the 6-dot handle is left
+    /// uncovered and so becomes the only place a drag can begin, which is what
+    /// the handle looked like it meant all along.
+    ///
+    /// Verified on the 41-stop trip: body drag does nothing, handle drag
+    /// reorders, tap still selects, and drag-scrolling is unaffected.
+    func excludedFromReorderGrab() -> some View {
+        // highPriorityGesture, not onLongPressGesture: a plain long press only
+        // *competes* with List's internal reorder recognizer and loses. This
+        // claims the gesture ahead of it.
+        highPriorityGesture(LongPressGesture(minimumDuration: 0.25))
     }
 }

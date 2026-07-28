@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-5430
 title: Accidental waypoint dragging when scrolling the stop list
-status: todo
+status: completed
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-27T23:28:04Z
+updated_at: 2026-07-28T00:24:04Z
 parent: AlaskaRouter-36of
 ---
 
@@ -27,6 +27,33 @@ Note AlaskaRouter-x5ss / AlaskaRouter-io69 were scrapped after fighting `List`'s
 Also relevant: an accidental reorder is currently silent and unlimited-undo-less. Whatever path is chosen, consider whether reorder should be undoable.
 
 ## Todo
-- [ ] Spike: can the grab be restricted to the handle without hand-rolling the whole reorder?
-- [ ] Decide between custom drag and an explicit reorder mode
-- [ ] Implement; verify by scrolling the 41-stop list aggressively without a single accidental move
+- [x] Spike: yes — a high-priority long press on the row body does it
+- [x] Neither was needed — see below
+- [x] Implemented and verified on the 41-stop list
+
+## Spike result — no custom drag, no edit mode needed
+
+`.highPriorityGesture(LongPressGesture(minimumDuration: 0.25))` on the row **body** starves `List`'s internal reorder recognizer of the long press it waits for. The 6-dot handle is left uncovered, so it becomes the only place a drag can start — which is what the handle looked like it meant all along (it had been purely decorative since AlaskaRouter-zvhr).
+
+Applied to both stop rows and block-header rows (separators are draggable too, and carry the same accidental-move risk).
+
+**`highPriorityGesture` is load-bearing.** A plain `.onLongPressGesture` only *competes* with List's recognizer and loses — see the correction below. `List` + `.onMove` and the `.moveDisabled` calls stay exactly as they were, so all of List's reorder animation and drop-index maths is still doing the work. No hand-rolled drag, no `EditMode`.
+
+`EditMode` was the other candidate — the only *native* mechanism that restricts dragging to a grabber — and was never needed. It would have imposed the system's own trailing grabber and leading delete circles on rows carefully designed not to have them.
+
+### Verified on the 41-stop trip (injected input)
+| behaviour | result |
+|---|---|
+| long-press-drag the row body | no reorder; order byte-identical before/after |
+| long-press-drag the handle | reorders correctly |
+| tap the row | still selects; map flies to the stop |
+| drag-scroll the list | scrolls stops 1-6 → 7-13, no reorder |
+
+### Correction — a false negative I initially reported as success
+
+The first attempt used a plain `.onLongPressGesture`, and I reported it working. It was not. The test dragged the only stop in a single-stop block, so the drop resolved back to the same index and nothing appeared to move. Re-testing on a multi-stop block showed the row being picked up from the body exactly as before.
+
+Lesson for this kind of verification: **assert on the full before/after order, and never drag the only element in its group** — a no-op drop is indistinguishable from a blocked drag.
+
+### Note
+The Simulator's seeded "Alaska" trip got shuffled during this testing. Simulator state only; the device copy is untouched.
