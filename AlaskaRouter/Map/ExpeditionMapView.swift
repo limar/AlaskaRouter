@@ -641,32 +641,46 @@ struct ExpeditionMapView: View {
     /// gesture landed on something we own, so the caller can stop.
     ///
     /// Dispatch order (highest priority first):
-    ///   1. Trip waypoint hit  → onWaypointTap(UUID)
+    ///   1. Trip waypoint / group-search result — resolved by proximity, see below
     ///   2. Place feature hit  → onPlaceTap(MapPlaceTap)         (5gmw)
-    /// Trip waypoints win when both are stacked because they're the user's
-    /// own data and the gesture is most likely intended for them.
-    private func dispatchKnownObject(in features: [any MLNFeature]) -> Bool {
-        // 1. Trip waypoint?
-        if let wp = features.first(where: { $0.attribute(forKey: "wpID") != nil }),
-           let raw = wp.attribute(forKey: "wpID") as? String,
-           let id = UUID(uuidString: raw)
-        {
-            onWaypointTap?(id)
+    /// Ambient places always lose to both: the user's own stops and the set
+    /// they just searched for are far likelier targets than passing scenery.
+    private func dispatchKnownObject(
+        in features: [any MLNFeature],
+        at tap: CLLocationCoordinate2D
+    ) -> Bool {
+        let waypoint = features.first(where: { $0.attribute(forKey: "wpID") != nil })
+        let result   = features.first(where: { $0.attribute(forKey: "isSearchResult") != nil })
+
+        // When a stop and a search result are both under the finger, the nearer
+        // one wins — and on a tie the RESULT wins (AlaskaRouter-4tba).
+        //
+        // The tie is a real case, not a hypothetical: 8 campgrounds in the pack
+        // carry a settlement's exact coordinates (AlaskaRouter-u4px), so e.g. "Palmer/Anchorage N.
+        // KOA" sits precisely on the Palmer stop. Trip waypoints used to win
+        // outright, which made such a result reachable from nothing at all —
+        // whereas a stop is still reachable from the bottom sheet, and from the
+        // map once the search is cleared. Losing the reachable thing beats
+        // losing the unreachable one.
+        //
+        // Proximity rather than a flat swap because the result's touch target
+        // is a deliberately generous 22 pt (35z7) — much larger than a stop
+        // marker — so a flat "results always win" would let a distant result
+        // steal taps aimed at a stop, badly at low zoom where 22 pt is
+        // kilometres.
+        if let waypoint, let result {
+            let toWaypoint = distance(from: tap, to: waypoint.coordinate)
+            let toResult   = distance(from: tap, to: result.coordinate)
+            if toResult <= toWaypoint {
+                dispatchSearchResult(result)
+            } else {
+                dispatchWaypoint(waypoint)
+            }
             return true
         }
-        // 2. A group-search result (AlaskaRouter-35z7). These MUST outrank
-        //    ambient places: the user just searched for them, so they are the
-        //    most likely target. Before this tier existed, both kinds of
-        //    feature carried `name` + `category` and the tie was broken by
-        //    whatever order the hit-test happened to return — which in the
-        //    field meant a nearby POI almost always stole the tap.
-        if let hit = features.first(where: { $0.attribute(forKey: "isSearchResult") != nil }) {
-            onPlaceTap?(MapPlaceTap(
-                name:      (hit.attribute(forKey: "name") as? String) ?? "",
-                category:  (hit.attribute(forKey: "category") as? String) ?? "",
-                coord:     hit.coordinate,
-                adminArea: (hit.attribute(forKey: "admin_area") as? String) ?? ""
-            ))
+        if let waypoint, dispatchWaypoint(waypoint) { return true }
+        if let result {
+            dispatchSearchResult(result)
             return true
         }
         // 3. Place feature?  (places.geojson features always carry both
@@ -683,6 +697,31 @@ struct ExpeditionMapView: View {
             return true
         }
         return false
+    }
+
+    @discardableResult
+    private func dispatchWaypoint(_ feature: any MLNFeature) -> Bool {
+        guard let raw = feature.attribute(forKey: "wpID") as? String,
+              let id = UUID(uuidString: raw) else { return false }
+        onWaypointTap?(id)
+        return true
+    }
+
+    private func dispatchSearchResult(_ feature: any MLNFeature) {
+        onPlaceTap?(MapPlaceTap(
+            name:      (feature.attribute(forKey: "name") as? String) ?? "",
+            category:  (feature.attribute(forKey: "category") as? String) ?? "",
+            coord:     feature.coordinate,
+            adminArea: (feature.attribute(forKey: "admin_area") as? String) ?? ""
+        ))
+    }
+
+    private func distance(
+        from a: CLLocationCoordinate2D,
+        to b: CLLocationCoordinate2D
+    ) -> CLLocationDistance {
+        CLLocation(latitude: a.latitude, longitude: a.longitude)
+            .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
     }
 
     var body: some View {
@@ -703,7 +742,7 @@ struct ExpeditionMapView: View {
         // Trip waypoints win when both are stacked because they're the
         // user's own data and the tap is most likely intended for them.
         .onTapMapGesture(on: Self.allTappableLayerIDs) { context, features in
-            if dispatchKnownObject(in: features) { return }
+            if dispatchKnownObject(in: features, at: context.coordinate) { return }
             // 3. Empty — dismiss only. Dropping a pin is the long-press
             //    gesture now (AlaskaRouter-dd2u).
             onEmptyMapTap?(context.coordinate)
@@ -720,7 +759,7 @@ struct ExpeditionMapView: View {
                 at: context.point,
                 styleLayerIdentifiers: Self.allTappableLayerIDs
             ) ?? []
-            if dispatchKnownObject(in: features) { return }
+            if dispatchKnownObject(in: features, at: context.coordinate) { return }
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             onEmptyMapLongPress?(context.coordinate)
         }
