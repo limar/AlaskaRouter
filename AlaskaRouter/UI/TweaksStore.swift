@@ -258,7 +258,13 @@ final class TweaksStore {
         static let distanceUnitIsMiles: Bool      = false  // km by default
         static let placeMarkerStyle: Int          = 3      // vyfe iteration 6 winner: translucent + halo
         static let labelSizeMultiplier: Double    = 1.25    // unchanged from style defaults
-        static let searchResultColor: Int         = 0      // unir — strong electric blue (palette[0])
+        // 8w9l: violet, NOT palette[0] "Electric blue" — that blue is the
+        // exact RGB of the My Location puck's core, and both draw as a disc
+        // with a white ring, so "you" and "a search result" were literally
+        // the same marker. Violet was chosen from on-map comparison against
+        // the puck; the white stroke keeps it separable from the purple
+        // route ribbon. Still live-tunable from the Tweaks panel.
+        static let searchResultColor: Int         = 4      // palette[4] "Violet"
         // y7l0 spike — initial recommendations:
         //   style: 1 (filled chip) — preserves visual weight when swapping out AK
         //   color: 0 (slate blue)  — cool counterpart to warm AK/+ palette
