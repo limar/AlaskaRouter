@@ -20,9 +20,17 @@ Output: data/source-acoa.jsonl. Idempotent (skips if present; --force).
 
 NOTE: this is a best-effort tertiary source. The member-list is an Elementor
 text blob, so name/address extraction is heuristic; a couple of entries whose
-NAME contains a comma may parse imperfectly. Coordinates are geocoded, so
-treat positions as approximate (street-level where the address is clean, town-
-level where it is a "Mile NN highway" address).
+NAME contains a comma may parse imperfectly.
+
+POSITIONS ARE STREET-LEVEL OR THE RECORD IS DROPPED (AlaskaRouter-u4px).
+This used to fall back to geocoding the TOWN when a street address wouldn't
+resolve — rural Alaska addresses are routinely "Mile 96.5 Parks Highway" or a
+PO box — which shipped 8 campgrounds at the centre of their nearest town, up to
+148 km from the real site and indistinguishable from good data in the app. One
+of them landed on Palmer's exact coordinates and was found on the trip. There
+is no "approximate" tier: hand-verified coordinates go in
+sources/manual_coords.json, and anything still unresolved is dropped with a
+loud line so it can be researched.
 """
 
 from __future__ import annotations
@@ -95,6 +103,22 @@ def parse_entries(html: str) -> list[tuple[str, str]]:
     return out
 
 
+MANUAL_COORDS = Path(__file__).with_name("manual_coords.json")
+
+
+def load_manual_coords() -> dict[str, dict]:
+    """Hand-verified address -> {lat, lon, ...} overrides (AlaskaRouter-u4px).
+
+    Consulted BEFORE geocoding, because these are addresses no geocoder can
+    resolve ("Mile 96.5 Parks Highway", PO boxes). Keys starting with "_" are
+    documentation, not data.
+    """
+    if not MANUAL_COORDS.exists():
+        return {}
+    raw = json.loads(MANUAL_COORDS.read_text(encoding="utf-8"))
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
+
+
 def main(argv: list[str]) -> int:
     force = "--force" in argv[1:]
     if OUT.exists() and OUT.stat().st_size > 0 and not force:
@@ -112,21 +136,40 @@ def main(argv: list[str]) -> int:
     print(f"[acoa] parsed {len(entries)} name+address entries")
 
     geo = Geocoder()
+    manual = load_manual_coords()
     records: list[SourceRecord] = []
     seen: set[str] = set()
     no_geo = 0
+    manual_used = 0
     for name, addr in entries:
         if name in seen:
             continue
         seen.add(name)
-        coord = geo.geocode(addr)
-        if not coord:
-            # fall back to "City, AK ZIP" (town-level) before giving up
-            city_q = addr.split(",", 1)[1].strip() if "," in addr else addr
-            coord = geo.geocode(city_q)
+        # Hand-verified coordinates win outright (AlaskaRouter-u4px). These
+        # exist because rural addresses like "Mile 96.5 Parks Highway" don't
+        # geocode at all; see sources/manual_coords.json for provenance.
+        if (m := manual.get(addr)):
+            coord = (m["lat"], m["lon"])
+            manual_used += 1
+        else:
+            coord = geo.geocode(addr)
+            if not coord:
+                # Retry without the leading component — rural addresses often
+                # start with an unresolvable "Mile 96.5" / "HC 1 Box 340".
+                # What is left may still be street-level ("Alaska Hwy, Tok, AK
+                # 99780"), which is fine, or it may have decayed to a bare town
+                # ("Willow, AK 99688"), which is NOT: that is what put 8
+                # campgrounds at the centre of their nearest town, up to 148 km
+                # out and indistinguishable from good data in the app.
+                #
+                # A bare town reads "City, AK ZIP" — one comma. Anything that
+                # still names a road keeps two or more. Cheap, exact separator.
+                tail = addr.split(",", 1)[1].strip() if "," in addr else addr
+                if tail.count(",") >= 2:
+                    coord = geo.geocode(tail)
         if not coord:
             no_geo += 1
-            print(f"[acoa]   no geocode: {name} ({addr})")
+            print(f"[acoa]   UNRESOLVED, dropped: {name} ({addr})")
             continue
         records.append(SourceRecord(
             source=SOURCE, source_key=name, name=name,
@@ -135,7 +178,8 @@ def main(argv: list[str]) -> int:
         ))
     n = write_jsonl(records, OUT)
     print(f"[acoa] geocoder live calls: {geo.live_calls}")
-    print(f"[acoa] wrote {n:,} records -> {OUT}  (no_geo={no_geo})")
+    print(f"[acoa] manual coords used: {manual_used}")
+    print(f"[acoa] wrote {n:,} records -> {OUT}  (unresolved/dropped={no_geo})")
     return 0
 
 

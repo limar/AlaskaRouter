@@ -1,0 +1,75 @@
+{
+  "_README": [
+    "Hand-verified coordinates for scraped-directory entries whose street address",
+    "does not geocode (AlaskaRouter-u4px).",
+    "",
+    "WHY THIS EXISTS: rural Alaska addresses are often 'Mile 96.5 Parks Highway' or",
+    "a PO box, which Nominatim cannot resolve. scrape_acoa.py used to silently fall",
+    "back to geocoding the TOWN, storing e.g. Montana Creek Campground at the centre",
+    "of Willow -- 39.6 km from the campground. Eight records shipped that way and one",
+    "of them (Palmer/Anchorage N. KOA, on Palmer's exact coordinates) was found in the",
+    "field. There is no 'approximate' concept in this app: a place is either where it",
+    "says it is, or it does not ship.",
+    "",
+    "Keys are the exact address string the scraper builds, so a lookup here happens",
+    "BEFORE any geocoding. Every entry must carry a `source` that a reviewer can check.",
+    "",
+    "If an address resolves to nothing here and nothing at street level, the record is",
+    "DROPPED rather than degraded to its town. Producing a machine-readable list of",
+    "such drops is v2.0 pipeline work."
+  ],
+  "Mile 96.5 Parks Highway HC 89 Box 543, Willow, AK 99688": {
+    "lat": 62.10354,
+    "lon": -150.05846,
+    "name": "Montana Creek Campground",
+    "source": "OSM tourism=camp_site 'Montana Creek Campground'; Mile 96.5 Parks Hwy matches"
+  },
+  "HC 1 Box 340, Gakona, AK 99586": {
+    "lat": 62.713447,
+    "lon": -144.19842,
+    "name": "Grizzly Lake Campground",
+    "source": "OSM/Nominatim tourism=caravan_site on the Tok Cutoff; 'Gakona' is only the mailing town"
+  },
+  "3425 Sterling Hwy Mile 169, Homer, AK 99603": {
+    "lat": 59.657508,
+    "lon": -151.641184,
+    "name": "Homer Baycrest KOA",
+    "source": "Nominatim exact match on 3425 Sterling Highway -> OSM 'Homer/Baycrest KOA Holiday'"
+  },
+  "Mile 59.2 McCarthy Road End of the Road, McCarthy, AK 99588": {
+    "lat": 61.434013,
+    "lon": -142.943997,
+    "name": "Base Camp Kennicott",
+    "source": "basecampkennicott.com/directions + camping.org; Mile 59.4 McCarthy Rd by the footbridge"
+  },
+  "2010 S Church St, Palmer, AK 99645": {
+    "lat": 61.56125,
+    "lon": -149.29221,
+    "name": "Palmer/Anchorage N. KOA",
+    "source": "goodsam.com and yelp.com agree; 10 km SW of Palmer, consistent with 'Anchorage North'"
+  },
+  "13760 Leslie Pl, Seward, AK 99664": {
+    "lat": 60.18048,
+    "lon": -149.37906,
+    "name": "Stoney Creek RV Park",
+    "source": "goodsam.com; four independent directories agree within ~200 m"
+  },
+  "29354 N Cohoe Loop Rd, Kasilof, AK 99610": {
+    "lat": 60.301485,
+    "lon": -151.284861,
+    "name": "Birchwood Campground",
+    "source": "Google Maps (user-verified); confirmed within 500 m of OSM 'North Cohoe Loop Road'. NB: a second Birchwood Campground exists at Sandy Cir, Soldotna -- different site, not in the ACOA list"
+  },
+  "Mile Marker, 173 Glenn Hwy, Glennallen, AK 99588": {
+    "lat": 62.10238,
+    "lon": -145.96829,
+    "name": "Ranch House Lodge & RV Camping Resort",
+    "source": "OSM 'Ranch House Lodge - RV Park'; Glenn Hwy MP173 vs Glennallen MP187 checks out"
+  },
+  "33508 Lincoln Ave, Seward, AK 99664": {
+    "lat": 60.184619,
+    "lon": -149.372589,
+    "name": "Bear Creek RV Park",
+    "source": "camping.org / AAA; 33508 Lincoln Ave. Only ACOA entry with no OSM equivalent, so dropping it would lose the campground entirely"
+  }
+}
