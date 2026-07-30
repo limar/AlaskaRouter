@@ -43,7 +43,7 @@ struct StopCallout: View {
                             .tracking(1.2)
                     }
                     HStack(spacing: 6) {
-                        Image(systemName: iconForCategory(waypoint.category))
+                        Image(systemName: CategorySymbol.name(for: waypoint.category))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
                         Text(waypoint.label ?? "Untitled stop")
@@ -148,36 +148,5 @@ struct StopCallout: View {
         // their own lines beneath this one so the distance pair reads as a
         // group (AlaskaRouter-wrso).
         CategoryLabel.display(waypoint.category)
-    }
-
-    private func iconForCategory(_ category: String?) -> String {
-        switch category {
-        case "fuel":              return "fuelpump.fill"
-        case "camping":           return "tent.fill"
-        case "visitor_center":    return "info.circle.fill"
-        case "ranger_station":    return "shield.lefthalf.filled"
-        case "lodging":           return "bed.double.fill"
-        case "settlement",
-             "settlement_major": return "house.fill"
-        case "peak":              return "mountain.2.fill"
-        case "glacier":           return "snowflake"
-        case "river_crossing":    return "water.waves"
-        case "viewpoint":         return "binoculars.fill"
-        case "airfield":          return "airplane"
-        case "food":              return "fork.knife"
-        case "store":             return "cart.fill"
-        case "medical":           return "cross.case.fill"
-        case "spring":            return "drop.fill"
-        case "waterfall":         return "drop.triangle.fill"
-        case "hut":               return "house"
-        case "volcano":           return "flame.fill"
-        case "lighthouse":        return "lightbulb.fill"
-        case "historic":          return "building.columns.fill"
-        case "post":              return "envelope.fill"
-        case "bank":              return "creditcard.fill"
-        case "pharmacy":          return "pills.fill"
-        case "parking":           return "parkingsign.circle.fill"
-        default:                  return "mappin.circle.fill"
-        }
     }
 }

@@ -93,40 +93,9 @@ struct PreviewCallout: View {
 
     @ViewBuilder
     private var categoryIcon: some View {
-        Image(systemName: sfSymbol(for: result.category))
+        Image(systemName: CategorySymbol.name(for: result.category))
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(Color(red: 0.20, green: 0.40, blue: 0.65))
             .frame(width: 22, height: 22)
-    }
-
-    private func sfSymbol(for category: String) -> String {
-        switch category {
-        case "fuel":              return "fuelpump.fill"
-        case "camping":           return "tent.fill"
-        case "visitor_center":    return "info.circle.fill"
-        case "ranger_station":    return "shield.lefthalf.filled"
-        case "lodging":           return "bed.double.fill"
-        case "settlement",
-             "settlement_major":  return "house.fill"
-        case "peak":              return "mountain.2.fill"
-        case "glacier":           return "snowflake"
-        case "river_crossing":    return "water.waves"
-        case "viewpoint":         return "binoculars.fill"
-        case "airfield":          return "airplane"
-        case "food":              return "fork.knife"
-        case "store":             return "cart.fill"
-        case "medical":           return "cross.case.fill"
-        case "spring":            return "drop.fill"
-        case "waterfall":         return "drop.triangle.fill"
-        case "hut":               return "house"
-        case "volcano":           return "flame.fill"
-        case "lighthouse":        return "lightbulb.fill"
-        case "historic":          return "building.columns.fill"
-        case "post":              return "envelope.fill"
-        case "bank":              return "creditcard.fill"
-        case "pharmacy":          return "pills.fill"
-        case "parking":           return "parkingsign.circle.fill"
-        default:                  return "mappin.circle.fill"
-        }
     }
 }

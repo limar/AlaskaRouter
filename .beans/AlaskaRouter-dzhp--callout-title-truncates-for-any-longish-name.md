@@ -5,7 +5,7 @@ status: todo
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-30T21:50:45Z
+updated_at: 2026-07-30T22:08:28Z
 parent: AlaskaRouter-36of
 ---
 
@@ -62,4 +62,14 @@ Verified — and it is three differences, not one:
 ## Todo
 - [ ] Decide: match the existing slate blue, or introduce per-category colour for both
 - [ ] Align icon size and placement between the two callouts
-- [ ] Extract the duplicated category -> SF Symbol map
+- [x] Extract the duplicated category -> SF Symbol map
+
+## Icon map extracted (2026-07-30)
+
+It was **three** copies, not two: `StopCallout`, `PreviewCallout` and `SearchResultsView` each carried the same 24-case switch. Verified byte-identical by diffing the extracted key/symbol token streams (50 tokens each, all three match), so the extraction is provably behaviour-neutral.
+
+Now `CategorySymbol.name(for:)` in `AlaskaRouter/Search/CategorySymbol.swift`, beside `CategoryLabel` which already centralises the human-readable name for the same keys.
+
+`PlaceIcons` deliberately keeps its own separate mapping — it drives the *map markers*, needs a filled/outline pair per category for the visual-variant harness, and makes different cartographic choices on purpose (peak → triangle, settlement → hollow circle). Merging it would change what the map draws.
+
+Still open, all needing design discussion: title legibility, the red accent, and the icon colour/size/placement alignment.

@@ -51,7 +51,7 @@ struct SearchResultsView: View {
             // Tappable body — opens preview.
             Button { onPreview(result) } label: {
                 HStack(spacing: 12) {
-                    iconForCategory(result.category)
+                    Image(systemName: CategorySymbol.name(for: result.category))
                         .foregroundStyle(.secondary)
                         .frame(width: 22, height: 22)
                     VStack(alignment: .leading, spacing: 2) {
@@ -119,37 +119,5 @@ struct SearchResultsView: View {
     private func locationLine(for r: SearchResult) -> String {
         if r.adminArea.isEmpty { return "AK, USA" }
         return "\(r.adminArea), AK, USA"
-    }
-
-    @ViewBuilder
-    private func iconForCategory(_ category: String) -> some View {
-        switch category {
-        case "fuel":              Image(systemName: "fuelpump.fill")
-        case "camping":           Image(systemName: "tent.fill")
-        case "visitor_center":    Image(systemName: "info.circle.fill")
-        case "ranger_station":    Image(systemName: "shield.lefthalf.filled")
-        case "lodging":           Image(systemName: "bed.double.fill")
-        case "settlement",
-             "settlement_major":  Image(systemName: "house.fill")
-        case "peak":              Image(systemName: "mountain.2.fill")
-        case "glacier":           Image(systemName: "snowflake")
-        case "river_crossing":    Image(systemName: "water.waves")
-        case "viewpoint":         Image(systemName: "binoculars.fill")
-        case "airfield":          Image(systemName: "airplane")
-        case "food":              Image(systemName: "fork.knife")
-        case "store":             Image(systemName: "cart.fill")
-        case "medical":           Image(systemName: "cross.case.fill")
-        case "spring":            Image(systemName: "drop.fill")
-        case "waterfall":         Image(systemName: "drop.triangle.fill")
-        case "hut":               Image(systemName: "house")
-        case "volcano":           Image(systemName: "flame.fill")
-        case "lighthouse":        Image(systemName: "lightbulb.fill")
-        case "historic":          Image(systemName: "building.columns.fill")
-        case "post":              Image(systemName: "envelope.fill")
-        case "bank":              Image(systemName: "creditcard.fill")
-        case "pharmacy":          Image(systemName: "pills.fill")
-        case "parking":           Image(systemName: "parkingsign.circle.fill")
-        default:                  Image(systemName: "mappin.circle.fill")
-        }
     }
 }
