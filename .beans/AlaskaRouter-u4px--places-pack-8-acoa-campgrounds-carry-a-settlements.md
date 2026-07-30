@@ -5,7 +5,7 @@ status: completed
 type: bug
 priority: normal
 created_at: 2026-07-30T17:42:55Z
-updated_at: 2026-07-30T19:00:36Z
+updated_at: 2026-07-30T21:50:45Z
 parent: AlaskaRouter-36of
 ---
 
@@ -71,3 +71,36 @@ Several of these existed in the pack **twice**: a correct OSM row plus a phantom
 - 133 tests green; verified in the app — no dot sits on Palmer any more.
 
 Not done here, still v2.0: emitting the unresolved list as a build product, and the generic build-time collision guard.
+
+## Summary of Changes — fixed, pack rebuilt and shipped
+
+**Root cause was a deliberate fallback, not a geocoding accident.** `scrape_acoa.py` retried with the address's tail when the street address wouldn't resolve. Sometimes that tail still named a road ("Alaska Hwy, Tok, AK 99780") — fine. Sometimes it decayed to a bare town ("Willow, AK 99688") — and the campground was stored at the town's centre, silently.
+
+### The fix
+- **`sources/manual_coords.json`** (new): hand-verified `address -> {lat, lon}` overrides, each carrying a `source` a reviewer can check. Consulted *before* geocoding, so a pipeline re-run can't undo the work.
+- **Town-level fallback killed, road-level kept.** A bare town reads `"City, AK ZIP"` — one comma; anything still naming a road keeps two or more. The retry now requires `>= 2` commas. Exact separator, no geocoder API change.
+- Unresolved records are **dropped with a loud line**, never degraded to their town. No "approximate" tier exists.
+- Module docstring corrected — it previously *documented* town-level positions as acceptable.
+
+### The nine coordinates
+| campground | source of truth |
+|---|---|
+| Montana Creek Campground | OSM `camp_site`; Mile 96.5 Parks Hwy checks out |
+| Grizzly Lake Campground | OSM/Nominatim on the Tok Cutoff; "Gakona" was only the mailing town |
+| Ranch House Lodge & RV | OSM; Glenn Hwy MP173 vs Glennallen MP187 |
+| Homer Baycrest KOA | Nominatim exact match on 3425 Sterling Highway |
+| Base Camp Kennicott | basecampkennicott.com + camping.org; Mile 59.4, by the footbridge |
+| Palmer/Anchorage N. KOA | goodsam.com + yelp.com agree |
+| Stoney Creek RV Park | goodsam.com; 4 directories within ~200 m |
+| Birchwood Campground | Google Maps (user); verified within 500 m of OSM "North Cohoe Loop Road" |
+| Bear Creek RV Park | camping.org/AAA (user) — the only drop with no OSM equivalent |
+
+### Results
+- **No campground sits on a settlement any more.** The 5 exact collisions left in the pack are legitimate: OSM/GNIS pairs like "Kalla" / "Kalla (historical)" — the same place under current and historical names. A future build guard must whitelist that pattern.
+- **The dedup finally works for these.** Four ACOA rows merged into their OSM twins (they had failed to cluster only because `NAME_CLUSTER_KM = 5.0` and they were 5–73 km apart); five stand alone with corrected positions. The phantom duplicates at town centres are gone.
+- **Nothing lost, net gain.** The ACOA member list has grown since the June scrape: 22 shipped rows -> 38 records, net **+15 campgrounds**. The 5 still-unresolved (3 Denali-area, Kenny Lake, Seward KOA) all exist in the pack from OSM.
+- Pack rebuilt in 23 s: 33,978 places. `alaska-places.sqlite` and `places.geojson` refreshed in Resources.
+- **Verified in-app:** searching "Anchorage N. KOA" now centres on a street-level position between the Glenn Highway and Rabbit Slough, by Valley Country Store — not Palmer's centre. The dot that used to sit on the "Palmer" label is gone.
+
+### Deferred to v2.0 (per user)
+Machine-readable unresolved-list as a build product, and the build-time collision guard. The `UNRESOLVED, dropped:` lines are the interim human-readable version.

@@ -5,7 +5,7 @@ status: todo
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-27T23:56:55Z
+updated_at: 2026-07-30T21:50:45Z
 parent: AlaskaRouter-36of
 ---
 
@@ -42,3 +42,24 @@ So this bean absorbs the whole callout rather than just the title:
 Sequence matters: settle the title first, then judge the balance, because the title's resolution determines the space available.
 
 Applies to both `StopCallout` and `PreviewCallout` — they must stay coherent.
+
+## Also in scope: the category icon differs between the two callouts (2026-07-30)
+
+Field report: tapping a city / airport / peak gives a coloured icon in the callout's top-left, but tapping a **waystop** gives a grey one. Should be coloured everywhere.
+
+Verified — and it is three differences, not one:
+
+| | `StopCallout` (a trip stop) | `PreviewCallout` (a place/POI) |
+|---|---|---|
+| colour | `.secondary` — grey | `Color(red: 0.20, green: 0.40, blue: 0.65)` — slate blue |
+| size | 12 pt | 18 pt |
+| placement | inline, just before the title | 22x22 leading element, its own column |
+
+**Check the expectation before implementing:** the POI icon is not actually multi-coloured — it is a *single* slate blue for every category. So "colourful everywhere" is satisfied by matching that blue; but if what is meant is *per-category* colour (tent green, fuel orange, peak grey-brown), that is a bigger change and should apply to both callouts. `PlaceIcons` already carries per-category colour for the map markers, so there is a palette to borrow rather than invent.
+
+**Cleanup to fold in:** both files carry their own ~24-case `category -> SF Symbol` switch, byte-identical today (checked). Two copies that must agree is how they stop agreeing. Extract one shared mapping — natural home is beside `CategoryLabel`, which already centralises the human-readable name.
+
+## Todo
+- [ ] Decide: match the existing slate blue, or introduce per-category colour for both
+- [ ] Align icon size and placement between the two callouts
+- [ ] Extract the duplicated category -> SF Symbol map
