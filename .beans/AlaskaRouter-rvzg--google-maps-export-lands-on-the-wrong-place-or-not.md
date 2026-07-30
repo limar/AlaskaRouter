@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-rvzg
 title: Google Maps export lands on the wrong place (or nothing)
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-07-27T21:34:45Z
-updated_at: 2026-07-28T00:04:19Z
+updated_at: 2026-07-30T22:17:55Z
 parent: AlaskaRouter-36of
 ---
 
@@ -147,3 +147,9 @@ Apple, Waze and Maps.me are unchanged; Apple was confirmed correct on-device.
 - [ ] Stage 2: Places lookup with a coordinate sanity radius; fall back cleanly
 - [ ] Stage 3: key onboarding + Keychain storage
 - [ ] Field-verify each stage on the device
+
+## Stages 2 & 3 deferred past v2.0 (2026-07-30, user)
+
+**Stage 1 shipped and closes the original bug** — export no longer lands on the wrong place. This bean is done for v1.1.
+
+The Places API work (stage 2 lookup + stage 3 key onboarding) is **out of v1.1 scope and probably lands after 2.0**. Split out as its own bean. When picked up: ask the user for a valid Google API key (they say it is easy to obtain), and **check for an existing Swift SDK/framework for Google Places first** rather than hand-rolling the REST calls.
