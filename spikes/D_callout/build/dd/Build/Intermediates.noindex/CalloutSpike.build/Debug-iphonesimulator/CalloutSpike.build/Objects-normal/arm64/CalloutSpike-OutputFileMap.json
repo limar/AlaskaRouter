@@ -1,0 +1,49 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpike-primary.dia",
+    "emit-module-dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpike-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpike-primary-emit-module.dia",
+    "pch" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpike-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpike-primary.swiftdeps"
+  },
+  "/Users/mlifshits/work/AlaskaRouter/AlaskaRouter/Search/CategoryLabel.swift" : {
+    "const-values" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel.swiftconstvalues",
+    "dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel.d",
+    "diagnostics" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel.dia",
+    "index-unit-output-path" : "/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel.o",
+    "llvm-bc" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel.bc",
+    "object" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel.o",
+    "swift-dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel.swiftdeps",
+    "swiftmodule" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategoryLabel~partial.swiftmodule"
+  },
+  "/Users/mlifshits/work/AlaskaRouter/AlaskaRouter/Search/CategorySymbol.swift" : {
+    "const-values" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol.swiftconstvalues",
+    "dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol.d",
+    "diagnostics" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol.dia",
+    "index-unit-output-path" : "/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol.o",
+    "llvm-bc" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol.bc",
+    "object" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol.o",
+    "swift-dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol.swiftdeps",
+    "swiftmodule" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CategorySymbol~partial.swiftmodule"
+  },
+  "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/Sources/CalloutSpikeApp.swift" : {
+    "const-values" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp.swiftconstvalues",
+    "dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp.d",
+    "diagnostics" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp.dia",
+    "index-unit-output-path" : "/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp.o",
+    "llvm-bc" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp.bc",
+    "object" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp.o",
+    "swift-dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp.swiftdeps",
+    "swiftmodule" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/CalloutSpikeApp~partial.swiftmodule"
+  },
+  "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/mlifshits/work/AlaskaRouter/spikes/D_callout/build/dd/Build/Intermediates.noindex/CalloutSpike.build/Debug-iphonesimulator/CalloutSpike.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

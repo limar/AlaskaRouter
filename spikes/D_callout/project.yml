@@ -1,0 +1,28 @@
+name: CalloutSpike
+options:
+  bundleIdPrefix: dev.alaskarouter
+  developmentLanguage: en
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+targets:
+  CalloutSpike:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      # Real app sources, referenced not copied, so the spike renders the
+      # actual category label / icon tables rather than a drifting duplicate.
+      - path: ../../AlaskaRouter/Search/CategoryLabel.swift
+      - path: ../../AlaskaRouter/Search/CategorySymbol.swift
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alaskarouter.CalloutSpike
+        GENERATE_INFOPLIST_FILE: "YES"
