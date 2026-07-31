@@ -5,7 +5,7 @@ status: todo
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-31T17:22:17Z
+updated_at: 2026-07-31T21:42:05Z
 parent: AlaskaRouter-36of
 ---
 
@@ -27,7 +27,7 @@ Recommendation to beat: `lineLimit(2)` plus `minimumScaleFactor(0.85)`, and chec
 ## Todo
 - [ ] Render the options against the worst real names in the trip
 - [ ] Agree and implement across StopCallout AND PreviewCallout (keep them coherent)
-- [ ] Check the taller callout still sits correctly relative to its pin
+- [x] Check the taller callout still sits correctly relative to its pin
 
 ## Widened into a full callout rework (2026-07-27)
 
@@ -60,8 +60,8 @@ Verified — and it is three differences, not one:
 **Cleanup to fold in:** both files carry their own ~24-case `category -> SF Symbol` switch, byte-identical today (checked). Two copies that must agree is how they stop agreeing. Extract one shared mapping — natural home is beside `CategoryLabel`, which already centralises the human-readable name.
 
 ## Todo
-- [ ] Decide: match the existing slate blue, or introduce per-category colour for both
-- [ ] Align icon size and placement between the two callouts
+- [x] Decide: match the existing slate blue, or introduce per-category colour for both
+- [x] Align icon size and placement between the two callouts — measured, deliberately NOT aligned
 - [x] Extract the duplicated category -> SF Symbol map
 
 ## Icon map extracted (2026-07-30)
@@ -91,3 +91,17 @@ Explored because the '…'/'✕' column costs the title 72pt of 272pt. Moving th
 
 ### Follow-up noticed while verifying
 In PreviewCallout the fallback lands at 12pt (16 × 0.75), which is exactly the size of the `Park` / category line beneath it — the two differ only by weight. It reads acceptably because of the bold + primary colour, but the title is no longer dominant by size. Worth a look during the red-accent / visual-balance pass.
+
+## Icon: settled (2026-07-31)
+
+**Colour — slate blue in both.** `CalloutIcon` in `AlaskaRouter/UI/CalloutIcon.swift`. This closes the field report (grey on a stop, coloured on a POI).
+
+**Per-category colour was built and rejected on rendered evidence.** The obvious move — borrow `PlaceIcons.color(for:)`, which already tints the map markers — does not transfer. Those values assume the cream paper basemap; the callout is `.thinMaterial` and picks up the map colour beneath it, so warm browns go muddy on a green-tinted card and nearly vanish on a warm one. It fails worst on the commonest case: `settlement_major` is #3A2A18, near-ink by design so towns top the paper map's label hierarchy, which in a callout reads as *no colour at all* — the very complaint that opened this bean. `PlaceIcons.color` is back to private with that finding recorded in place, so the next person doesn't retry it. Per-category is still possible, but needs a callout-specific palette (brighter, saturated, a real hue for settlements), not this one.
+
+**Size and placement — deliberately NOT aligned.** Both alternatives were built and measured:
+- Leading column in StopCallout costs 32pt (22pt icon + 10pt spacing) of 272pt content width. The title goes 2 lines → 3, and the distance line truncates again ("132 km from Higher Groun…") — reintroducing the failure this bean exists to remove.
+- Inline in PreviewCallout drops the icon 18pt → 12pt, where it reads as a bullet rather than the subject of the card. PreviewCallout is 320pt with a 16pt title and only a ✕ (no "…"), so it can afford the column that StopCallout cannot.
+
+The mismatch is each callout fitting its own width budget, and the two are never on screen together. User's call: leave as-is. The A/B harness (`calloutIconLayout`) has been removed now that both halves are decided.
+
+**Pin clearance (the old unchecked todo).** Both callouts are positioned proportionally (`Spacer`/callout/`Spacer`/`Spacer`, upper third), not by a fixed offset from the pin, so there is no hardcoded height to break. Measured on the real 2-line callout: **~11pt of clearance** to the pin. Each extra title line adds ~7.6pt downward, so a 3-line title leaves ~3pt and a 4-line title would overlap the pin. Not reachable with real data (the longest real name is 44 chars → 2 lines) but it is the bound on `CalloutTitle`'s 4-line allowance. Worth revisiting only if a name that long ever appears.

@@ -45,13 +45,8 @@ struct StopCallout: View {
                     // firstTextBaseline, not centre: once CalloutTitle wraps a
                     // long name, a centred icon slides to the vertical middle
                     // of the block and stops reading as attached to it.
-                    HStack(alignment: .firstTextBaseline, spacing: usesIconColumn ? 10 : 6) {
-                        CalloutIcon(
-                            category: waypoint.category,
-                            size: usesIconColumn ? 18 : 12
-                        )
-                        .frame(width: usesIconColumn ? 22 : nil,
-                               height: usesIconColumn ? 22 : nil)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        CalloutIcon(category: waypoint.category, size: 12)
                         CalloutTitle(
                             text: waypoint.label ?? "Untitled stop",
                             size: 17,
@@ -60,26 +55,21 @@ struct StopCallout: View {
                     }
                     // Category on its own line; distances grouped beneath as
                     // a visual pair (AlaskaRouter-wrso option 1).
-                    // In icon-column layout these indent to clear the column,
-                    // the way PreviewCallout's admin line already does.
                     Text(detailLine)
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .padding(.leading, detailIndent)
                     if let prevLine = distanceFromPrevText {
                         Text(prevLine)
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .padding(.leading, detailIndent)
                     }
                     if let nextLine = distanceToNextText {
                         Text(nextLine)
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .padding(.leading, detailIndent)
                     }
                 }
                 Spacer(minLength: 4)
@@ -146,16 +136,6 @@ struct StopCallout: View {
         )
         .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
     }
-
-    /// AlaskaRouter-dzhp A/B: layout 2 gives the icon its own leading column,
-    /// matching PreviewCallout. Layouts 0 and 1 keep it inline at 12pt.
-    private var usesIconColumn: Bool {
-        TweaksStore.shared.calloutIconLayout == 2
-    }
-
-    /// Indent for the lines under the title, so they clear the icon column.
-    /// 22pt column + 10pt spacing.
-    private var detailIndent: CGFloat { usesIconColumn ? 32 : 0 }
 
     /// "ALSO STOP 9 · 12" (or "ALSO STOP 9" for a single revisit). Nil when
     /// the coord is only visited once.

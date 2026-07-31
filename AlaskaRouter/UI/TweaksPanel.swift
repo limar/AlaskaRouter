@@ -111,14 +111,6 @@ struct TweaksPanel: View {
                             range: 0.70...1.50, step: 0.05,
                             format: "%.2f ×"
                         )
-                        // dzhp — colour is settled (slate blue in both);
-                        // this A/Bs the remaining size/placement mismatch.
-                        Picker("Callout icon", selection: $tweaks.calloutIconLayout) {
-                            Text("0 — As shipped (12pt vs 18pt column)").tag(0)
-                            Text("1 — Inline in both").tag(1)
-                            Text("2 — Leading column in both").tag(2)
-                        }
-                        .pickerStyle(.inline)
                     }
                 } header: {
                     sectionHeader("Map labels & markers", isExpanded: $isMapLabelsTweaksExpanded)
