@@ -72,19 +72,6 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(placeMarkerStyle, forKey: K.placeMarkerStyle) }
     }
 
-    /// StopCallout accent A/B (AlaskaRouter-dzhp). The callout "became a bit
-    /// boring when it lost the small red paint" (the ghost-red Remove capsule
-    /// that AlaskaRouter-pmnd demoted). PreviewCallout still has its warm
-    /// "Add to trip"; StopCallout has nothing. Values:
-    ///   0 — as shipped: neutral capsule, slate blue icon
-    ///   1 — "Open in…" filled accentWarm, mirroring "Add to trip"
-    ///   2 — "STOP n OF m" in accentWarm, capsule left neutral
-    ///   3 — icon AND "STOP n OF m" in accentWarm, echoing this stop's own
-    ///       map pin (committed pins are accentWarm; slate blue is the
-    ///       *preview* pin's colour)
-    var calloutAccent: Int {
-        didSet { UserDefaults.standard.set(calloutAccent, forKey: K.calloutAccent) }
-    }
 
 
     /// Multiplier applied to every map-label `text-size` interpolation
@@ -197,7 +184,6 @@ final class TweaksStore {
         useLooseMatcher        = Defaults.useLooseMatcher
         distanceUnitIsMiles    = Defaults.distanceUnitIsMiles
         placeMarkerStyle       = Defaults.placeMarkerStyle
-        calloutAccent          = Defaults.calloutAccent
         labelSizeMultiplier    = Defaults.labelSizeMultiplier
         searchResultColor      = Defaults.searchResultColor
         cancelButtonStyle      = Defaults.cancelButtonStyle
@@ -224,7 +210,6 @@ final class TweaksStore {
         useLooseMatcher        = (d.object(forKey: K.useLooseMatcher)        as? Bool)   ?? Defaults.useLooseMatcher
         distanceUnitIsMiles    = (d.object(forKey: K.distanceUnitIsMiles)    as? Bool)   ?? Defaults.distanceUnitIsMiles
         placeMarkerStyle       = (d.object(forKey: K.placeMarkerStyle)       as? Int)    ?? Defaults.placeMarkerStyle
-        calloutAccent          = (d.object(forKey: K.calloutAccent)          as? Int)    ?? Defaults.calloutAccent
         labelSizeMultiplier    = (d.object(forKey: K.labelSizeMultiplier)    as? Double) ?? Defaults.labelSizeMultiplier
         searchResultColor      = (d.object(forKey: K.searchResultColor)      as? Int)    ?? Defaults.searchResultColor
         cancelButtonStyle      = (d.object(forKey: K.cancelButtonStyle)      as? Int)    ?? Defaults.cancelButtonStyle
@@ -248,7 +233,6 @@ final class TweaksStore {
         static let useLooseMatcher        = "tweak.search.useLooseMatcher"
         static let distanceUnitIsMiles    = "tweak.units.distanceIsMiles"
         static let placeMarkerStyle       = "tweak.places.markerStyle"
-        static let calloutAccent          = "tweak.callout.accent"
         static let labelSizeMultiplier    = "tweak.places.labelSizeMultiplier"
         static let searchResultColor      = "tweak.searchResult.color"
         static let cancelButtonStyle      = "tweak.cancel.style"
@@ -275,7 +259,6 @@ final class TweaksStore {
         static let useLooseMatcher: Bool          = true   // milestone 2 on by default; flip OFF to A/B
         static let distanceUnitIsMiles: Bool      = false  // km by default
         static let placeMarkerStyle: Int          = 3      // vyfe iteration 6 winner: translucent + halo
-        static let calloutAccent: Int             = 0      // dzhp: 0 = as shipped, pending the A/B verdict
         static let labelSizeMultiplier: Double    = 1.25    // unchanged from style defaults
         // 8w9l: violet, NOT palette[0] "Electric blue" — that blue is the
         // exact RGB of the My Location puck's core, and both draw as a disc

@@ -30,7 +30,7 @@ struct StopCallout: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(positionLabel)
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(positionLabelColor)
+                        .foregroundStyle(.secondary)
                         .tracking(1.2)
                     if let alsoLabel = alsoPassesLabel {
                         // Multi-pass disclosure: the same coord is revisited
@@ -46,7 +46,7 @@ struct StopCallout: View {
                     // long name, a centred icon slides to the vertical middle
                     // of the block and stops reading as attached to it.
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        CalloutIcon(category: waypoint.category, size: 12, tint: iconTint)
+                        CalloutIcon(category: waypoint.category, size: 12)
                         CalloutTitle(
                             text: waypoint.label ?? "Untitled stop",
                             size: 17,
@@ -114,18 +114,13 @@ struct StopCallout: View {
                     Text("Open in…")
                         .font(.system(size: 14, weight: .semibold))
                 }
-                .foregroundStyle(shareFilled ? Color.white : Color.primary)
+                .foregroundStyle(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .frame(maxWidth: .infinity)
-                .background {
-                    if shareFilled {
-                        Capsule().fill(SheetPalette.accentWarm)
-                    } else {
-                        Capsule().fill(.thinMaterial)
-                            .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5))
-                    }
-                }
+                // Same warm fill and shape as PreviewCallout's "Add to trip",
+                // so the two callouts carry one matching primary action.
+                .background(SheetPalette.accentWarm, in: Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -141,26 +136,6 @@ struct StopCallout: View {
                 .stroke(.white.opacity(0.10), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
-    }
-
-    // MARK: - Accent A/B (AlaskaRouter-dzhp)
-
-    private var accent: Int { TweaksStore.shared.calloutAccent }
-
-    /// Variant 1 fills the primary action, mirroring PreviewCallout's
-    /// "Add to trip" so both callouts carry one warm action.
-    private var shareFilled: Bool { accent == 1 }
-
-    /// Variants 2 and 3 warm the "STOP n OF m" label.
-    private var positionLabelColor: Color {
-        accent >= 2 ? SheetPalette.accentWarm : Color.secondary
-    }
-
-    /// Variant 3 also warms the category icon, so the callout echoes its own
-    /// map pin — committed stop pins are accentWarm; slate blue belongs to
-    /// the preview pin.
-    private var iconTint: Color? {
-        accent == 3 ? SheetPalette.accentWarm : nil
     }
 
     /// "ALSO STOP 9 · 12" (or "ALSO STOP 9" for a single revisit). Nil when
