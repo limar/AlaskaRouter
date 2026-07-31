@@ -37,6 +37,10 @@ struct CalloutIcon: View {
     let size: CGFloat
     /// Weight of the symbol, again the caller's existing value.
     var weight: Font.Weight = .semibold
+    /// Override for the slate-blue default. AlaskaRouter-dzhp accent A/B:
+    /// a committed stop's map pin is accentWarm, not slate blue, so the
+    /// stop callout may want to echo its own pin instead.
+    var tint: Color? = nil
 
     /// The one callout icon colour. Cool and saturated enough to hold contrast
     /// whether the material underneath picks up green tundra or warm tundra.
@@ -45,6 +49,6 @@ struct CalloutIcon: View {
     var body: some View {
         Image(systemName: CategorySymbol.name(for: category))
             .font(.system(size: size, weight: weight))
-            .foregroundStyle(Self.slateBlue)
+            .foregroundStyle(tint ?? Self.slateBlue)
     }
 }
