@@ -72,17 +72,15 @@ final class TweaksStore {
         didSet { UserDefaults.standard.set(placeMarkerStyle, forKey: K.placeMarkerStyle) }
     }
 
-    /// Category-icon treatment inside the two map callouts (AlaskaRouter-dzhp).
-    /// Field report: a trip stop shows a grey icon while a POI shows a coloured
-    /// one. A/B harness so the fix can be judged on the map rather than argued
-    /// about. Values:
-    ///   0 — as shipped: StopCallout grey 12pt inline, PreviewCallout slate
-    ///       blue 18pt in its own column (i.e. the inconsistency itself)
-    ///   1 — slate blue in both, matching what PreviewCallout already does
-    ///   2 — per-category colour in both, borrowing the PlaceIcons palette
-    ///       that already tints the map markers
-    var calloutIconStyle: Int {
-        didSet { UserDefaults.standard.set(calloutIconStyle, forKey: K.calloutIconStyle) }
+    /// Category-icon layout inside the two map callouts (AlaskaRouter-dzhp).
+    /// Colour is settled (slate blue in both); size and placement still
+    /// disagree, so this A/Bs the remaining half on the map. Values:
+    ///   0 — as shipped: StopCallout 12pt inline before the title,
+    ///       PreviewCallout 18pt in its own 22x22 leading column
+    ///   1 — inline in both, at StopCallout's size
+    ///   2 — leading column in both, at PreviewCallout's size
+    var calloutIconLayout: Int {
+        didSet { UserDefaults.standard.set(calloutIconLayout, forKey: K.calloutIconLayout) }
     }
 
     /// Multiplier applied to every map-label `text-size` interpolation
@@ -195,7 +193,7 @@ final class TweaksStore {
         useLooseMatcher        = Defaults.useLooseMatcher
         distanceUnitIsMiles    = Defaults.distanceUnitIsMiles
         placeMarkerStyle       = Defaults.placeMarkerStyle
-        calloutIconStyle       = Defaults.calloutIconStyle
+        calloutIconLayout      = Defaults.calloutIconLayout
         labelSizeMultiplier    = Defaults.labelSizeMultiplier
         searchResultColor      = Defaults.searchResultColor
         cancelButtonStyle      = Defaults.cancelButtonStyle
@@ -222,7 +220,7 @@ final class TweaksStore {
         useLooseMatcher        = (d.object(forKey: K.useLooseMatcher)        as? Bool)   ?? Defaults.useLooseMatcher
         distanceUnitIsMiles    = (d.object(forKey: K.distanceUnitIsMiles)    as? Bool)   ?? Defaults.distanceUnitIsMiles
         placeMarkerStyle       = (d.object(forKey: K.placeMarkerStyle)       as? Int)    ?? Defaults.placeMarkerStyle
-        calloutIconStyle       = (d.object(forKey: K.calloutIconStyle)       as? Int)    ?? Defaults.calloutIconStyle
+        calloutIconLayout      = (d.object(forKey: K.calloutIconLayout)      as? Int)    ?? Defaults.calloutIconLayout
         labelSizeMultiplier    = (d.object(forKey: K.labelSizeMultiplier)    as? Double) ?? Defaults.labelSizeMultiplier
         searchResultColor      = (d.object(forKey: K.searchResultColor)      as? Int)    ?? Defaults.searchResultColor
         cancelButtonStyle      = (d.object(forKey: K.cancelButtonStyle)      as? Int)    ?? Defaults.cancelButtonStyle
@@ -246,7 +244,7 @@ final class TweaksStore {
         static let useLooseMatcher        = "tweak.search.useLooseMatcher"
         static let distanceUnitIsMiles    = "tweak.units.distanceIsMiles"
         static let placeMarkerStyle       = "tweak.places.markerStyle"
-        static let calloutIconStyle       = "tweak.callout.iconStyle"
+        static let calloutIconLayout      = "tweak.callout.iconLayout"
         static let labelSizeMultiplier    = "tweak.places.labelSizeMultiplier"
         static let searchResultColor      = "tweak.searchResult.color"
         static let cancelButtonStyle      = "tweak.cancel.style"
@@ -273,7 +271,7 @@ final class TweaksStore {
         static let useLooseMatcher: Bool          = true   // milestone 2 on by default; flip OFF to A/B
         static let distanceUnitIsMiles: Bool      = false  // km by default
         static let placeMarkerStyle: Int          = 3      // vyfe iteration 6 winner: translucent + halo
-        static let calloutIconStyle: Int          = 0      // dzhp: 0 = as shipped, pending the A/B verdict
+        static let calloutIconLayout: Int         = 0      // dzhp: 0 = as shipped, pending the A/B verdict
         static let labelSizeMultiplier: Double    = 1.25    // unchanged from style defaults
         // 8w9l: violet, NOT palette[0] "Electric blue" — that blue is the
         // exact RGB of the My Location puck's core, and both draw as a disc

@@ -19,10 +19,19 @@ struct PreviewCallout: View {
             // firstTextBaseline so the category icon and the ✕ stay level with
             // the first line of the name rather than drifting to the middle
             // of a wrapped title (AlaskaRouter-dzhp).
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                categoryIcon
+            HStack(alignment: .firstTextBaseline, spacing: usesIconColumn ? 10 : 6) {
+                if usesIconColumn { categoryIcon }
                 VStack(alignment: .leading, spacing: 1) {
-                    CalloutTitle(text: result.name, size: 16, weight: .bold)
+                    // Inline layout puts the icon on the title's own line at
+                    // StopCallout's 12pt instead of in a leading column.
+                    if usesIconColumn {
+                        CalloutTitle(text: result.name, size: 16, weight: .bold)
+                    } else {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            CalloutIcon(category: result.category, size: 12)
+                            CalloutTitle(text: result.name, size: 16, weight: .bold)
+                        }
+                    }
                     // Friendly category label; lat/long dropped as useless —
                     // the admin-area line below gives location context
                     // (AlaskaRouter-tluk).
@@ -47,13 +56,13 @@ struct PreviewCallout: View {
             Text(result.adminArea.isEmpty ? "AK, USA" : "\(result.adminArea), AK, USA")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-                .padding(.leading, 32)
+                .padding(.leading, detailIndent)
 
             if let d = distanceFromTripText {
                 Text(d)
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(.secondary)
-                    .padding(.leading, 32)
+                    .padding(.leading, detailIndent)
             }
 
             // Action row. LEFT slot = trip-membership action (Add to trip);
@@ -91,13 +100,18 @@ struct PreviewCallout: View {
         .shadow(color: .black.opacity(0.18), radius: 14, y: 4)
     }
 
+    /// AlaskaRouter-dzhp A/B: layouts 0 and 2 keep PreviewCallout's leading
+    /// icon column; layout 1 moves the icon inline, matching StopCallout.
+    private var usesIconColumn: Bool {
+        TweaksStore.shared.calloutIconLayout != 1
+    }
+
+    /// Lines under the title indent to clear the column when there is one.
+    private var detailIndent: CGFloat { usesIconColumn ? 32 : 0 }
+
     @ViewBuilder
     private var categoryIcon: some View {
-        CalloutIcon(
-            category: result.category,
-            size: 18,
-            shippedColor: CalloutIcon.slateBlue
-        )
-        .frame(width: 22, height: 22)
+        CalloutIcon(category: result.category, size: 18)
+            .frame(width: 22, height: 22)
     }
 }
