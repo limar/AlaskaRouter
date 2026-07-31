@@ -101,6 +101,9 @@ let allVariants: [Variant] = [
     Variant(id: "K", label: "K — 1 line @100%, else up to 4 lines, shrink only if needed",
             layout: .besideButtons,
             strategy: .preferOneLineSoft(minScale: 0.75, fallbackLines: 4)),
+    Variant(id: "L", label: "L — 1 line @100%, else 85% (14.5pt) + up to 4 lines",
+            layout: .besideButtons,
+            strategy: .preferOneLine(fallbackScale: 0.85, fallbackLines: 4)),
 ]
 
 /// Page 0 isolates "more lines / more shrink" at today's width.
@@ -110,6 +113,9 @@ let pages: [[String]] = [
     ["A", "G", "H"],
     ["A", "E", "F"],
     ["A", "J", "K"],
+    // Page 3: the fallback size is the whole remaining question — 75% vs 85%
+    // vs "keep 17pt and just take another line".
+    ["J", "L", "K"],
 ]
 
 // MARK: - Spike screen

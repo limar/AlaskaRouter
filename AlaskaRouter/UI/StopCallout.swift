@@ -42,14 +42,18 @@ struct StopCallout: View {
                             .foregroundStyle(.secondary)
                             .tracking(1.2)
                     }
-                    HStack(spacing: 6) {
+                    // firstTextBaseline, not centre: once CalloutTitle wraps a
+                    // long name, a centred icon slides to the vertical middle
+                    // of the block and stops reading as attached to it.
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Image(systemName: CategorySymbol.name(for: waypoint.category))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
-                        Text(waypoint.label ?? "Untitled stop")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
+                        CalloutTitle(
+                            text: waypoint.label ?? "Untitled stop",
+                            size: 17,
+                            weight: .semibold
+                        )
                     }
                     // Category on its own line; distances grouped beneath as
                     // a visual pair (AlaskaRouter-wrso option 1).

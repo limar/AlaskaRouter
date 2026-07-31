@@ -5,7 +5,7 @@ status: todo
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-30T22:08:28Z
+updated_at: 2026-07-31T17:22:17Z
 parent: AlaskaRouter-36of
 ---
 
@@ -73,3 +73,21 @@ Now `CategorySymbol.name(for:)` in `AlaskaRouter/Search/CategorySymbol.swift`, b
 `PlaceIcons` deliberately keeps its own separate mapping — it drives the *map markers*, needs a filled/outline pair per category for the visual-variant harness, and makes different cartographic choices on purpose (peak → triangle, settlement → hollow circle). Merging it would change what the map draws.
 
 Still open, all needing design discussion: title legibility, the red accent, and the icon colour/size/placement alignment.
+
+## Title legibility: shipped (2026-07-31)
+
+Rule (user's choice, from rendered evidence in `spikes/D_callout`): **one line at full size whenever the name fits; otherwise drop to 75% and wrap up to 4 lines, ellipsizing the last.** Implemented as `CalloutTitle` in `AlaskaRouter/UI/CalloutTitle.swift`, used by both StopCallout (17pt semibold) and PreviewCallout (16pt bold).
+
+Verified in the real app, not the spike: `Chena River Lakes Project and Recreation Area` (44 chars) now reads in full in StopCallout; short names are untouched at full size.
+
+### Findings that reading the code would not have produced
+- **`lineLimit(n)` alone silently no-ops in this layout.** Any wrapping needs `fixedSize(horizontal: false, vertical: true)`. The first spike build had the 'fixed' variant rendering pixel-identical to the bug.
+- **`fixedSize()` on the single-line ViewThatFits candidate is what makes the heuristic work at all** — it forces the candidate's ideal width to the whole string, which is how ViewThatFits knows to reject it.
+- **A wrapped title needs `.firstTextBaseline`** or the category icon drifts to the vertical middle and detaches from the name.
+- **85% is a dominated option.** Measured: it takes the same number of lines as no shrink at all, so it costs type size and buys no vertical space. 75% vs 'keep full size' is a genuine either/or; 85% is neither.
+
+### Rejected: title full-width below the button column
+Explored because the '…'/'✕' column costs the title 72pt of 272pt. Moving the title to its own row below them bought ~46% more width and fit even a 45-char control name in 2 lines at full 17pt. Rendered well, but the user chose to keep the title beside the buttons at this stage. Spike variants E/F remain in `spikes/D_callout` if we revisit.
+
+### Follow-up noticed while verifying
+In PreviewCallout the fallback lands at 12pt (16 × 0.75), which is exactly the size of the `Park` / category line beneath it — the two differ only by weight. It reads acceptably because of the bold + primary colour, but the title is no longer dominant by size. Worth a look during the red-accent / visual-balance pass.

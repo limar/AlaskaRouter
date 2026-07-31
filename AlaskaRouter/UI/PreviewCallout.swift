@@ -16,13 +16,13 @@ struct PreviewCallout: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+            // firstTextBaseline so the category icon and the ✕ stay level with
+            // the first line of the name rather than drifting to the middle
+            // of a wrapped title (AlaskaRouter-dzhp).
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 categoryIcon
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(result.name)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    CalloutTitle(text: result.name, size: 16, weight: .bold)
                     // Friendly category label; lat/long dropped as useless —
                     // the admin-area line below gives location context
                     // (AlaskaRouter-tluk).
