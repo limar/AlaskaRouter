@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-pq9g
 title: 'Export preview snapshot flakily fails: ''Error parsing PMTiles directory'''
-status: todo
+status: completed
 type: bug
 priority: normal
 created_at: 2026-07-31T18:05:27Z
-updated_at: 2026-07-31T19:35:07Z
+updated_at: 2026-07-31T19:48:27Z
 ---
 
 `MLNMapSnapshotter` intermittently fails to read the bundled PMTiles archive while the live `MapView` is reading the same file. The completion handler returns:
@@ -41,11 +41,11 @@ xcrun simctl launch --console-pty booted dev.alaskarouter.AlaskaRouter -seedDemo
 This is why `TripPreviewRenderer` is still a completion-handler API rather than `async`: an async shape forces the call sites into a `Task`, which is the 1/12 timing. See the NOTE ON SHAPE comment at the top of AlaskaRouter/Sharing/TripPreviewRenderer.swift. Fixing this unblocks that cleanup.
 
 ## Todo
-- [ ] Find the actual contention — MapLibre's PMTiles directory cache (`map::at`) shared between the MapView's file source and the snapshotter's
-- [ ] Check whether a newer maplibre-gl-native has a fix (we pin swiftui-dsl @ main)
-- [ ] Decide the app-side shape: separate archive/file-source for the snapshotter, or serialize snapshot against map load
-- [ ] Re-measure: 12/12 launches OK, plus a mid-session regenerate (rename trip → preview updates)
-- [ ] Then revisit making TripPreviewRenderer async
+- [x] Found it: the contention is snapshotter-vs-snapshotter, not map-vs-snapshotter
+- [x] Checked — the cache logic is identical in `main` and in our pinned ios-v6.26.0; no upstream fix exists yet
+- [x] Decided: serialize renders (depth-1 newest-wins queue). Aliased archive URLs measured 0/12 and were rejected.
+- [x] Re-measured: 44/44 serialized across the three harshest conditions; 12/12 on the shipping build in the original configuration
+- [x] Revisited — serialization removes the timing constraint, so the async shape is now viable; kept the completion handler by choice (see AlaskaRouter-wq1q)
 
 ## Root cause (upstream: maplibre-native `pmtiles_file_source.cpp`)
 
@@ -154,3 +154,11 @@ Overlap is the whole variable, and failure scales with it: 1 renderer = never, 2
 | Idle/delay gating | Works (12/12) but only as a proxy for "don't overlap"; strictly weaker than serializing, and no help mid-session. Skip if we serialize. |
 | Upstream patch + PR to maplibre-native | Still the real fix, still worth sending. Independent of what we ship; the app-side gate stops us depending on the release cycle. |
 | Own PMTiles reader for previews | Unnecessary now — serialization is ~20 lines against a much larger rewrite. |
+
+## Summary of Changes
+
+`TripPreviewRenderer` now renders one snapshot at a time behind a depth-1, newest-wins queue (`active` + `queued`), replacing the `inFlight` dictionary that existed specifically to allow concurrent renders. Completions are called exactly once — with nil on failure, and with nil when a newer request supersedes one that never ran.
+
+Shipping build, original two-consumer configuration: **12/12** (was 10/12; 1/12 when the renders were staggered).
+
+Follow-ups: AlaskaRouter-ydjf (upstream PR — the actual fix), AlaskaRouter-wq1q (async shape, now unblocked).
