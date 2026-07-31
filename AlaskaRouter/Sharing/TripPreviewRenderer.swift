@@ -16,8 +16,8 @@
 // renders, 44/44 once serialized). The live MapView is not a participant; a
 // lone snapshotter never failed in 24 runs.
 //
-// A depth-1 queue is also just the right shape here: if a newer preview has
-// been requested, the one waiting behind it is already superseded.
+// PreviewRenderSlot owns those rules; everything MapLibre-shaped lives in the
+// `start` closure below.
 
 // MapLibre is a pre-concurrency Objective-C module: none of its types carry
 // Sendable annotations, so `@preconcurrency` is what lets us hold an
@@ -47,47 +47,15 @@ enum TripPreviewRenderer {
         }
     }
 
-    private struct Request {
-        let center: CLLocationCoordinate2D
-        let zoom: Double
-        let size: CGSize
-        let completion: @MainActor (UIImage?) -> Void
-    }
-
-    /// The snapshot currently rendering. Doubles as the gate: only one
-    /// snapshotter may read the archive at a time (AlaskaRouter-pq9g).
-    private static var active: MLNMapSnapshotter?
-    /// A request that arrived mid-render. Depth 1 on purpose — if two previews
-    /// are waiting, the older one is already superseded.
-    private static var queued: Request?
-
-    /// Raw offline basemap snapshot (no overlay). Every completion is called
-    /// exactly once, on the main thread — with nil if the snapshot failed, and
-    /// also with nil if a newer request superseded this one before it ran.
-    static func snapshot(
-        center: CLLocationCoordinate2D,
-        zoom: Double = 8.5,
-        size: CGSize = CGSize(width: 600, height: 600),
-        completion: @escaping @MainActor (UIImage?) -> Void
-    ) {
-        let request = Request(center: center, zoom: zoom, size: size, completion: completion)
-        guard active != nil else {
-            start(request)
-            return
-        }
-        queued?.completion(nil)   // superseded before it ever ran
-        queued = request
-    }
-
-    /// Render `request` now, then pick up whatever queued behind it.
-    private static func start(_ request: Request) {
+    /// Serializes renders: one at a time, and a newer request cancels the one
+    /// running rather than waiting behind it.
+    private static let slot = PreviewRenderSlot { job, finished in
         let camera = MLNMapCamera()
-        camera.centerCoordinate = request.center
-        let options = MLNMapSnapshotOptions(styleURL: styleURL, camera: camera, size: request.size)
-        options.zoomLevel = request.zoom
+        camera.centerCoordinate = job.center
+        let options = MLNMapSnapshotOptions(styleURL: styleURL, camera: camera, size: job.size)
+        options.zoomLevel = job.zoom
 
         let snapshotter = MLNMapSnapshotter(options: options)
-        active = snapshotter
         snapshotter.start { snapshot, error in
             let image = snapshot?.image
             // `startWithCompletionHandler:` is documented to run the handler on
@@ -96,17 +64,28 @@ enum TripPreviewRenderer {
             // the framework already guarantees; hopping instead would push the
             // callback into a later turn for no reason.
             MainActor.assumeIsolated {
-                active = nil
                 if let error {
                     print("[TripPreviewRenderer] snapshot error: \(error)")
                 }
-                request.completion(image)
-                if let next = queued {
-                    queued = nil
-                    start(next)
-                }
+                finished(image)
             }
         }
+        return { snapshotter.cancel() }
+    }
+
+    /// Raw offline basemap snapshot (no overlay). Every completion is called
+    /// exactly once, on the main thread — with nil if the snapshot failed, and
+    /// also with nil if a newer request superseded this one.
+    static func snapshot(
+        center: CLLocationCoordinate2D,
+        zoom: Double = 8.5,
+        size: CGSize = CGSize(width: 600, height: 600),
+        completion: @escaping @MainActor (UIImage?) -> Void
+    ) {
+        slot.submit(
+            PreviewRenderSlot.Job(center: center, zoom: zoom, size: size),
+            completion: completion
+        )
     }
 
     /// Draw a centered waypoint marker and an optional name pill over the map.

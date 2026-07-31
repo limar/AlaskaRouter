@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-ydjf
 title: Send the PMTiles directory-cache fix upstream to maplibre-native
-status: todo
+status: scrapped
 type: task
 priority: low
 created_at: 2026-07-31T19:47:54Z
-updated_at: 2026-07-31T19:47:54Z
+updated_at: 2026-07-31T19:51:29Z
 ---
 
 We diagnosed a real upstream bug while fixing AlaskaRouter-pq9g and worked around it app-side. The fix itself is small and belongs upstream.
@@ -34,3 +34,11 @@ Second, smaller issue in the same file: `getDirectory` calls `directory_cache_co
 - [ ] Open the issue with the analysis from AlaskaRouter-pq9g
 - [ ] PR the fix
 - [ ] When it lands, bump the pin and re-measure — the app-side serialization can stay regardless (it is the right shape anyway)
+
+## Reasons for Scrapping
+
+Out of scope. Landing a change in maplibre-native means writing an upstream-shaped repro, opening an issue, and then shepherding a PR through someone else's review and release cycle — an open-ended commitment to persuading maintainers, for a project whose only stake here is one preview thumbnail.
+
+We already have the outcome we needed: renders are serialized app-side and measured 44/44, and that gate is the right shape regardless of what upstream ever does. If maplibre-native fixes the duplicate-append in `storeDirectory` on its own, we lose nothing and keep the queue.
+
+The analysis is preserved in AlaskaRouter-pq9g if this is ever worth revisiting.
