@@ -7,13 +7,17 @@
 // so it renders from the bundled PMTiles with no network — then composite a
 // waypoint marker + name pill on top.
 //
-// NOTE ON SHAPE: this is a completion-handler API, not `async`, on purpose.
-// Wrapping the snapshot in a continuation forces the call sites into a `Task`,
-// which starts the snapshot one main-thread turn later — and a snapshot started
-// after the live MapView has begun reading the same archive usually fails with
-// "Error parsing PMTiles directory" (measured: 10/12 launches OK when started
-// in the caller's turn, 1/12 when deferred — AlaskaRouter-pq9g). Until that
-// race is fixed, the render must be kicked off synchronously.
+// RENDERS ARE SERIALIZED — one snapshotter at a time, newest request wins.
+// Two MLNMapSnapshotters with equal ResourceOptions are handed the *same*
+// PMTilesFileSource by MapLibre's FileSourceManager, and concurrent first-time
+// reads corrupt its shared directory cache: the render fails with "Error
+// parsing PMTiles directory" and the share sheet silently falls back to the app
+// icon (AlaskaRouter-pq9g — measured 1/12 launches OK with two overlapping
+// renders, 44/44 once serialized). The live MapView is not a participant; a
+// lone snapshotter never failed in 24 runs.
+//
+// A depth-1 queue is also just the right shape here: if a newer preview has
+// been requested, the one waiting behind it is already superseded.
 
 // MapLibre is a pre-concurrency Objective-C module: none of its types carry
 // Sendable annotations, so `@preconcurrency` is what lets us hold an
@@ -26,11 +30,6 @@ import UIKit
 
 @MainActor
 enum TripPreviewRenderer {
-    /// Snapshotters must stay alive for the duration of the async render.
-    /// Keyed by a token rather than held by identity so the completion handler
-    /// only has to capture the (Sendable) key, never the snapshotter itself.
-    private static var inFlight: [UUID: MLNMapSnapshotter] = [:]
-
     /// Render a square offline map snapshot centered on `center` and composite
     /// a waypoint marker (+ optional name pill) over it. Calls back on the main
     /// thread with the finished preview image (or nil on failure).
@@ -48,21 +47,47 @@ enum TripPreviewRenderer {
         }
     }
 
-    /// Raw offline basemap snapshot (no overlay).
+    private struct Request {
+        let center: CLLocationCoordinate2D
+        let zoom: Double
+        let size: CGSize
+        let completion: @MainActor (UIImage?) -> Void
+    }
+
+    /// The snapshot currently rendering. Doubles as the gate: only one
+    /// snapshotter may read the archive at a time (AlaskaRouter-pq9g).
+    private static var active: MLNMapSnapshotter?
+    /// A request that arrived mid-render. Depth 1 on purpose — if two previews
+    /// are waiting, the older one is already superseded.
+    private static var queued: Request?
+
+    /// Raw offline basemap snapshot (no overlay). Every completion is called
+    /// exactly once, on the main thread — with nil if the snapshot failed, and
+    /// also with nil if a newer request superseded this one before it ran.
     static func snapshot(
         center: CLLocationCoordinate2D,
         zoom: Double = 8.5,
         size: CGSize = CGSize(width: 600, height: 600),
         completion: @escaping @MainActor (UIImage?) -> Void
     ) {
-        let camera = MLNMapCamera()
-        camera.centerCoordinate = center
-        let options = MLNMapSnapshotOptions(styleURL: styleURL, camera: camera, size: size)
-        options.zoomLevel = zoom
+        let request = Request(center: center, zoom: zoom, size: size, completion: completion)
+        guard active != nil else {
+            start(request)
+            return
+        }
+        queued?.completion(nil)   // superseded before it ever ran
+        queued = request
+    }
 
-        let token = UUID()
+    /// Render `request` now, then pick up whatever queued behind it.
+    private static func start(_ request: Request) {
+        let camera = MLNMapCamera()
+        camera.centerCoordinate = request.center
+        let options = MLNMapSnapshotOptions(styleURL: styleURL, camera: camera, size: request.size)
+        options.zoomLevel = request.zoom
+
         let snapshotter = MLNMapSnapshotter(options: options)
-        inFlight[token] = snapshotter
+        active = snapshotter
         snapshotter.start { snapshot, error in
             let image = snapshot?.image
             // `startWithCompletionHandler:` is documented to run the handler on
@@ -71,11 +96,15 @@ enum TripPreviewRenderer {
             // the framework already guarantees; hopping instead would push the
             // callback into a later turn for no reason.
             MainActor.assumeIsolated {
-                inFlight[token] = nil
+                active = nil
                 if let error {
                     print("[TripPreviewRenderer] snapshot error: \(error)")
                 }
-                completion(image)
+                request.completion(image)
+                if let next = queued {
+                    queued = nil
+                    start(next)
+                }
             }
         }
     }
