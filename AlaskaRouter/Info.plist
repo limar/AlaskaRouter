@@ -50,6 +50,17 @@
 			</dict>
 		</dict>
 	</array>
+	<!--
+	  We can read a `.akrtrip` at its original location — TripFileImport wraps
+	  the read in a start/stopAccessingSecurityScopedResource bracket and
+	  materializes a *copy of the trip* in SwiftData, never writing back to the
+	  file. So we declare in-place support: iOS hands us the original URL
+	  instead of dropping a duplicate into Documents/Inbox on every open (which
+	  nothing would ever clean up). Without this key the linker warns that the
+	  app opens files but doesn't say how.
+	-->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

@@ -6,16 +6,30 @@
 // MLNMapSnapshotter with the SAME offline style (`styleURL`) the live map uses —
 // so it renders from the bundled PMTiles with no network — then composite a
 // waypoint marker + name pill on top.
+//
+// NOTE ON SHAPE: this is a completion-handler API, not `async`, on purpose.
+// Wrapping the snapshot in a continuation forces the call sites into a `Task`,
+// which starts the snapshot one main-thread turn later — and a snapshot started
+// after the live MapView has begun reading the same archive usually fails with
+// "Error parsing PMTiles directory" (measured: 10/12 launches OK when started
+// in the caller's turn, 1/12 when deferred — AlaskaRouter-pq9g). Until that
+// race is fixed, the render must be kicked off synchronously.
 
+// MapLibre is a pre-concurrency Objective-C module: none of its types carry
+// Sendable annotations, so `@preconcurrency` is what lets us hold an
+// MLNMapSnapshotter across its own callback without the compiler speculating
+// about isolation the framework never declared.
+@preconcurrency import MapLibre
 import Foundation
 import CoreLocation
-import MapLibre
 import UIKit
 
 @MainActor
 enum TripPreviewRenderer {
     /// Snapshotters must stay alive for the duration of the async render.
-    private static var inFlight: [MLNMapSnapshotter] = []
+    /// Keyed by a token rather than held by identity so the completion handler
+    /// only has to capture the (Sendable) key, never the snapshotter itself.
+    private static var inFlight: [UUID: MLNMapSnapshotter] = [:]
 
     /// Render a square offline map snapshot centered on `center` and composite
     /// a waypoint marker (+ optional name pill) over it. Calls back on the main
@@ -26,7 +40,7 @@ enum TripPreviewRenderer {
         markerColor: UIColor,
         zoom: Double = 8.5,
         size: CGSize = CGSize(width: 600, height: 600),
-        completion: @escaping (UIImage?) -> Void
+        completion: @escaping @MainActor (UIImage?) -> Void
     ) {
         snapshot(center: center, zoom: zoom, size: size) { image in
             guard let image else { completion(nil); return }
@@ -39,21 +53,30 @@ enum TripPreviewRenderer {
         center: CLLocationCoordinate2D,
         zoom: Double = 8.5,
         size: CGSize = CGSize(width: 600, height: 600),
-        completion: @escaping (UIImage?) -> Void
+        completion: @escaping @MainActor (UIImage?) -> Void
     ) {
         let camera = MLNMapCamera()
         camera.centerCoordinate = center
         let options = MLNMapSnapshotOptions(styleURL: styleURL, camera: camera, size: size)
         options.zoomLevel = zoom
 
+        let token = UUID()
         let snapshotter = MLNMapSnapshotter(options: options)
-        inFlight.append(snapshotter)
+        inFlight[token] = snapshotter
         snapshotter.start { snapshot, error in
-            inFlight.removeAll { $0 === snapshotter }
-            if let error {
-                print("[TripPreviewRenderer] snapshot error: \(error)")
+            let image = snapshot?.image
+            // `startWithCompletionHandler:` is documented to run the handler on
+            // the main queue, but MapLibre predates Swift concurrency so the
+            // block imports as non-isolated. assumeIsolated states the contract
+            // the framework already guarantees; hopping instead would push the
+            // callback into a later turn for no reason.
+            MainActor.assumeIsolated {
+                inFlight[token] = nil
+                if let error {
+                    print("[TripPreviewRenderer] snapshot error: \(error)")
+                }
+                completion(image)
             }
-            completion(snapshot?.image)
         }
     }
 
