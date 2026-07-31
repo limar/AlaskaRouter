@@ -59,17 +59,30 @@ struct StopCallout: View {
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    // These name the *neighbouring* stops, so they inherit the
+                    // long-Alaska-name problem regardless of how short this
+                    // stop's own name is ("132 km to Chena River Lakes Pr…").
+                    // They wrap instead of truncating (AlaskaRouter-svr0).
+                    //
+                    // No shrink, unlike CalloutTitle: this is already the small
+                    // secondary size, and 75% of 12pt is not readable in the
+                    // field. And no lineLimit — the line count is whatever the
+                    // neighbour's name needs.
+                    //
+                    // `fixedSize` is mandatory. Without it the text silently
+                    // stays on one line in this layout and clips, exactly as it
+                    // did with lineLimit(1) (measured in AlaskaRouter-dzhp).
                     if let prevLine = distanceFromPrevText {
                         Text(prevLine)
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if let nextLine = distanceToNextText {
                         Text(nextLine)
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 4)
