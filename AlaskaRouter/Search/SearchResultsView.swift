@@ -12,6 +12,10 @@ struct SearchResultsView: View {
     let parsed: StructuredQuery
     let onPreview: (SearchResult) -> Void
     let onFastAdd: (SearchResult) -> Void
+    /// The active trip is read-only (AlaskaRouter-ijy9). The fast-add "+"
+    /// greys out — same treatment as PreviewCallout's "Add to trip", so both
+    /// add paths say no the same way.
+    var tripIsLocked: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,14 +101,18 @@ struct SearchResultsView: View {
             // explicit WHITE layer, not a cutout — otherwise in dark mode
             // it shows the dark sheet through the cutout and looks empty.
             Button { onFastAdd(result) } label: {
-                Image(systemName: "plus.circle.fill")
+                Image(systemName: tripIsLocked ? "lock.circle.fill" : "plus.circle.fill")
                     .font(.system(size: 22, weight: .regular))
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, SheetPalette.accentWarm)
+                    .foregroundStyle(
+                        .white,
+                        SheetPalette.accentWarm.opacity(tripIsLocked ? 0.35 : 1.0)
+                    )
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(tripIsLocked)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

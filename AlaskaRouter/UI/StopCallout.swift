@@ -17,6 +17,9 @@ struct StopCallout: View {
     let onShare: () -> Void
     let onClose: () -> Void
     let onRemove: () -> Void
+    /// The trip is read-only (AlaskaRouter-ijy9) — "Remove from trip" stays in
+    /// the menu but greys out, so the reason it cannot be tapped is visible.
+    var tripIsLocked: Bool = false
     // NB: Prev/Next browsing was removed (AlaskaRouter-55pn) — the map *is* the
     // browser; people drag and follow the route ribbon rather than tap chevrons.
     // The action row is now LEFT = Remove (trip-membership slot), RIGHT = Share,
@@ -100,6 +103,7 @@ struct StopCallout: View {
                     Button(role: .destructive, action: onRemove) {
                         Label("Remove from trip", systemImage: "trash")
                     }
+                    .disabled(tripIsLocked)
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 13, weight: .bold))

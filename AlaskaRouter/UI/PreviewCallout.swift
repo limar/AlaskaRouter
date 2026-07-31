@@ -13,6 +13,11 @@ struct PreviewCallout: View {
     let onAdd: () -> Void
     let onShare: () -> Void
     let onDismiss: () -> Void
+    /// The active trip is read-only (AlaskaRouter-ijy9). "Add to trip" greys
+    /// out rather than disappearing: the button vanishing would read as a bug,
+    /// whereas a dimmed one says "not right now, and here is the button that
+    /// would do it".
+    var tripIsLocked: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -64,7 +69,7 @@ struct PreviewCallout: View {
             HStack(spacing: 8) {
                 Button(action: onAdd) {
                     HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: tripIsLocked ? "lock.fill" : "plus.circle.fill")
                         Text("Add to trip")
                             .font(.system(size: 14, weight: .semibold))
                     }
@@ -72,9 +77,14 @@ struct PreviewCallout: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .frame(maxWidth: .infinity)
-                    .background(SheetPalette.accentWarm, in: Capsule())
+                    .background(
+                        SheetPalette.accentWarm.opacity(tripIsLocked ? 0.35 : 1.0),
+                        in: Capsule()
+                    )
                 }
                 .buttonStyle(.plain)
+                .disabled(tripIsLocked)
+                .accessibilityHint(tripIsLocked ? "This trip is locked" : "")
 
                 ShareCalloutButton(action: onShare)
             }

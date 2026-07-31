@@ -335,7 +335,8 @@ struct RootView: View {
                                     results: searchService.results,
                                     parsed: searchService.parsed,
                                     onPreview: handlePreviewSelected,
-                                    onFastAdd: handleFastAdd
+                                    onFastAdd: handleFastAdd,
+                                    tripIsLocked: activeTrip?.isLocked ?? false
                                 )
                             }
                             .scrollDismissesKeyboard(.interactively)
@@ -349,51 +350,8 @@ struct RootView: View {
             // VStack from the bottom when the keyboard appears. The bar
             // (top of VStack) stays visible since the top is unaffected.
 
-            // Preview callout (floating just above the previewed pin).
-            if let preview = previewedResult {
-                CalloutSlot(pinHalfHeight: 22) {
-                    PreviewCallout(
-                        result: preview,
-                        distanceFromTripText: distanceLineFromTrip(to: preview.coord),
-                        onAdd: { handleAddPreviewed(preview) },
-                        onShare: {
-                            sharePresentation = SharePresentation(
-                                place: SharePlace(name: preview.name, coordinate: preview.coord))
-                        },
-                        onDismiss: { dismissPreview() }
-                    )
-                }
-                .allowsHitTesting(true)
-                .transition(.scale(scale: 0.94).combined(with: .opacity))
-            }
-
-            // Stop callout — shown when a trip waypoint is selected, the user
-            // isn't previewing a search result, and search isn't active.
-            if previewedResult == nil, !isSearchActive,
-               let trip = activeTrip,
-               let selectedID = selectedWaypointID,
-               let wp = trip.orderedWaypoints.first(where: { $0.id == selectedID })
-            {
-                let ordered = trip.orderedWaypoints
-                let idx = ordered.firstIndex { $0.id == selectedID } ?? 0
-                CalloutSlot(pinHalfHeight: 30) {
-                    StopCallout(
-                        waypoint: wp,
-                        positionLabel: "STOP \(idx + 1) OF \(ordered.count)",
-                        additionalPassNumbers: additionalPassNumbers(for: wp, in: ordered),
-                        distanceFromPrevText: distanceFromPrevText(idx: idx, in: ordered),
-                        distanceToNextText: distanceToNextText(idx: idx, in: ordered),
-                        onShare: {
-                            sharePresentation = SharePresentation(
-                                place: SharePlace(name: wp.label, coordinate: wp.coordinate))
-                        },
-                        onClose: { handleStopCalloutClose() },
-                        onRemove: { handleStopCalloutRemove(wp) }
-                    )
-                }
-                .allowsHitTesting(true)
-                .transition(.scale(scale: 0.96).combined(with: .opacity))
-            }
+            previewCalloutLayer
+            stopCalloutLayer
 
             if let trip = activeTrip, !isSearchActive {
                 TripBottomSheet(
@@ -527,6 +485,15 @@ struct RootView: View {
                         guard $0.count >= 2 else { return nil }
                         return CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0])
                     }
+                }
+            }
+            if LaunchArgs.lockActiveTrip {
+                // Same deferral as preselectStopIndex below — activeTrip may
+                // not have propagated from @Query yet on a fresh install.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    guard let trip = activeTrip else { return }
+                    TripStore.setLocked(trip, true, in: modelContext)
                 }
             }
             if let idx = LaunchArgs.preselectStopIndex {
@@ -1085,6 +1052,11 @@ struct RootView: View {
     }
 
     private func handleAddPreviewed(_ result: SearchResult) {
+        // Backstop for the read-only marker (AlaskaRouter-ijy9). The buttons
+        // that reach here are already disabled on a locked trip; this is the
+        // single place that guarantees a path we missed cannot rewrite a
+        // finished trip, rather than trusting every affordance to remember.
+        guard activeTrip?.isLocked != true else { return }
         guard let trip = activeTrip else { return }
         let new = SmartInsert.insertSmart(
             coordinate: result.coord,
@@ -1119,6 +1091,11 @@ struct RootView: View {
     // MARK: - Actions: fast add ("+" button)
 
     private func handleFastAdd(_ result: SearchResult) {
+        // Backstop for the read-only marker (AlaskaRouter-ijy9). The buttons
+        // that reach here are already disabled on a locked trip; this is the
+        // single place that guarantees a path we missed cannot rewrite a
+        // finished trip, rather than trusting every affordance to remember.
+        guard activeTrip?.isLocked != true else { return }
         guard let trip = activeTrip else { return }
         // 65hf: fast-add appends to the end; the user is enumerating stops in
         // the order they'll drive them. Preview-add (handleAddPreviewed) keeps
@@ -1380,6 +1357,65 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Callout layers
+    //
+    // Extracted from `body` (AlaskaRouter-ijy9): adding the locked flag tipped
+    // the main ZStack past the Swift type-checker's budget. These are plain
+    // @ViewBuilder properties, not a behaviour change.
+
+    @ViewBuilder
+    private var previewCalloutLayer: some View {
+        if let preview = previewedResult {
+            CalloutSlot(pinHalfHeight: 22) {
+                PreviewCallout(
+                    result: preview,
+                    distanceFromTripText: distanceLineFromTrip(to: preview.coord),
+                    onAdd: { handleAddPreviewed(preview) },
+                    onShare: {
+                        sharePresentation = SharePresentation(
+                            place: SharePlace(name: preview.name, coordinate: preview.coord))
+                    },
+                    onDismiss: { dismissPreview() },
+                    tripIsLocked: activeTrip?.isLocked ?? false
+                )
+            }
+            .allowsHitTesting(true)
+            .transition(.scale(scale: 0.94).combined(with: .opacity))
+        }
+    }
+
+    /// Shown when a trip waypoint is selected, the user isn't previewing a
+    /// search result, and search isn't active.
+    @ViewBuilder
+    private var stopCalloutLayer: some View {
+        if previewedResult == nil, !isSearchActive,
+           let trip = activeTrip,
+           let selectedID = selectedWaypointID,
+           let wp = trip.orderedWaypoints.first(where: { $0.id == selectedID })
+        {
+            let ordered = trip.orderedWaypoints
+            let idx = ordered.firstIndex { $0.id == selectedID } ?? 0
+            CalloutSlot(pinHalfHeight: 30) {
+                StopCallout(
+                    waypoint: wp,
+                    positionLabel: "STOP \(idx + 1) OF \(ordered.count)",
+                    additionalPassNumbers: additionalPassNumbers(for: wp, in: ordered),
+                    distanceFromPrevText: distanceFromPrevText(idx: idx, in: ordered),
+                    distanceToNextText: distanceToNextText(idx: idx, in: ordered),
+                    onShare: {
+                        sharePresentation = SharePresentation(
+                            place: SharePlace(name: wp.label, coordinate: wp.coordinate))
+                    },
+                    onClose: { handleStopCalloutClose() },
+                    onRemove: { handleStopCalloutRemove(wp) },
+                    tripIsLocked: trip.isLocked
+                )
+            }
+            .allowsHitTesting(true)
+            .transition(.scale(scale: 0.96).combined(with: .opacity))
+        }
+    }
+
     private func handleStopCalloutClose() {
         withAnimation(.smooth(duration: 0.2)) { selectedWaypointID = nil }
     }
@@ -1388,6 +1424,11 @@ struct RootView: View {
     /// delete, no Undo toast, no confirmation alert. (Different from the
     /// sheet trash, which DOES get an Undo toast.)
     private func handleStopCalloutRemove(_ wp: Waypoint) {
+        // Backstop for the read-only marker (AlaskaRouter-ijy9). The buttons
+        // that reach here are already disabled on a locked trip; this is the
+        // single place that guarantees a path we missed cannot rewrite a
+        // finished trip, rather than trusting every affordance to remember.
+        guard activeTrip?.isLocked != true else { return }
         let id = wp.id
         modelContext.delete(wp)
         // Renumber remaining stops to keep .order contiguous.

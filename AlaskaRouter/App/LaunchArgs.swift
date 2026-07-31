@@ -96,6 +96,13 @@ enum LaunchArgs {
         UserDefaults.standard.bool(forKey: "seedDemoTrip")
     }
 
+    /// Lock the active trip on launch (AlaskaRouter-ijy9). Dev-only: locking
+    /// is a two-tap journey through the "…" menu, which is tedious to drive
+    /// for every screenshot of the read-only state.
+    static var lockActiveTrip: Bool {
+        UserDefaults.standard.bool(forKey: "lockActiveTrip")
+    }
+
     /// AlaskaRouter-56kj spike — render an offline map snapshot at "lat,lon" on
     /// launch and write it to Documents/preview-spike.png, to prove the
     /// MLNMapSnapshotter resolves our pmtiles:// scheme. Dev-only.

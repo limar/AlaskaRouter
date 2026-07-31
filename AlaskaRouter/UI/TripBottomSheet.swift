@@ -69,6 +69,9 @@ struct TripBottomSheet: View {
     // jump-and-rebound the user reported.
     @State private var dragOffset: CGFloat = 0
 
+    /// AlaskaRouter-ijy9 — confirmation before a locked trip becomes editable.
+    @State private var unlockConfirmShown = false
+
     // Rename alert
     @State private var renameAlertShown = false
     @State private var renameDraft = ""
@@ -155,6 +158,16 @@ struct TripBottomSheet: View {
             .animation(.smooth(duration: 0.25), value: detent)
             .animation(.smooth(duration: 0.2), value: mode)
         }
+        // .alert, not .confirmationDialog: the dialog variant rendered the
+        // title, the message and "Unlock" but no visible Cancel, leaving the
+        // only way out a tap on the dimmed background. It also matches the
+        // rename alert directly below (AlaskaRouter-ijy9).
+        .alert("Unlock this trip?", isPresented: $unlockConfirmShown) {
+            Button("Cancel", role: .cancel) { }
+            Button("Unlock") { TripStore.setLocked(trip, false, in: modelContext) }
+        } message: {
+            Text("Its stops can be reordered, removed and added again.")
+        }
         .alert("Rename trip", isPresented: $renameAlertShown) {
             TextField("Trip name", text: $renameDraft)
                 .autocorrectionDisabled()
@@ -226,37 +239,50 @@ struct TripBottomSheet: View {
     private var summary: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 10) {
-                Button(action: toggleMode) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        // Eyebrow — small uppercase label
-                        Text(mode == .stops ? "Active Trip" : "Trips")
-                            .font(.sheetSans(11, weight: .semibold))
-                            .tracking(1.2)
-                            .textCase(.uppercase)
-                            .foregroundStyle(SheetPalette.textEyebrow)
+                // The lock badge is a sibling of the mode-toggle button, NOT
+                // inside its label. SwiftUI does not deliver taps to a button
+                // nested in another button's label, so the badge looked right
+                // and did nothing (AlaskaRouter-ijy9).
+                VStack(alignment: .leading, spacing: 2) {
+                    Button(action: toggleMode) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            // Eyebrow — small uppercase label
+                            Text(mode == .stops ? "Active Trip" : "Trips")
+                                .font(.sheetSans(11, weight: .semibold))
+                                .tracking(1.2)
+                                .textCase(.uppercase)
+                                .foregroundStyle(SheetPalette.textEyebrow)
 
-                        // Trip name (serif) + chevron
-                        HStack(spacing: 6) {
-                            Text(mode == .stops ? trip.name : "All trips")
-                                .font(.sheetSerif(20, weight: .semibold))
-                                .foregroundStyle(SheetPalette.textStrong)
-                                .lineLimit(1)
-                            Image(systemName: mode == .stops ? "chevron.down" : "chevron.up")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(SheetPalette.textMuted)
-                        }
+                            // Trip name (serif) + chevron
+                            HStack(spacing: 6) {
+                                Text(mode == .stops ? trip.name : "All trips")
+                                    .font(.sheetSerif(20, weight: .semibold))
+                                    .foregroundStyle(SheetPalette.textStrong)
+                                    .lineLimit(1)
+                                Image(systemName: mode == .stops ? "chevron.down" : "chevron.up")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(SheetPalette.textMuted)
+                            }
 
-                        // Subline — at .collapsed this is the only place stats
-                        // show; at .overview/.full the strip below replaces this.
-                        if detent == .collapsed {
-                            Text(mode == .stops ? summaryLine : tripsSubtitle)
-                                .font(.sheetSans(12, weight: .regular))
-                                .foregroundStyle(SheetPalette.textMuted)
-                                .padding(.top, 1)
+                            // Subline — at .collapsed this is the only place stats
+                            // show; at .overview/.full the strip below replaces this.
+                            if detent == .collapsed {
+                                Text(mode == .stops ? summaryLine : tripsSubtitle)
+                                    .font(.sheetSans(12, weight: .regular))
+                                    .foregroundStyle(SheetPalette.textMuted)
+                                    .padding(.top, 1)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
+
+                    // Sits with the trip name because it is a fact about this
+                    // trip, not a control among the others. Tapping it asks
+                    // before unlocking — see `unlockConfirmShown`.
+                    if mode == .stops && trip.isLocked {
+                        lockBadge
+                    }
                 }
-                .buttonStyle(.plain)
 
                 Spacer(minLength: 0)
 
@@ -280,10 +306,48 @@ struct TripBottomSheet: View {
     /// AirDrop / Files), and import one (AlaskaRouter-h113). The `ShareLink`
     /// builds the document lazily when the menu opens, so the segment-cache
     /// lookups in `TripDocument.export` only run on demand.
+    /// Tappable "Locked" badge. Deliberately looks like a small status pill
+    /// rather than a button: the trip being locked is the message, and
+    /// unlocking is the secondary affordance. The confirmation is what keeps a
+    /// stray tap on the sheet header from undoing the protection.
+    private var lockBadge: some View {
+        Button { unlockConfirmShown = true } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9, weight: .bold))
+                Text("Locked")
+                    .font(.sheetSans(10, weight: .semibold))
+                    .tracking(0.6)
+                    .textCase(.uppercase)
+            }
+            .foregroundStyle(SheetPalette.textMuted)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2.5)
+            .background(Capsule().fill(SheetPalette.textMuted.opacity(0.12)))
+            .overlay(Capsule().stroke(SheetPalette.textMuted.opacity(0.35), lineWidth: 0.8))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 2)
+        .accessibilityLabel("Trip is locked. Tap to unlock.")
+    }
+
     private var tripActionsMenu: some View {
         Menu {
             Button(action: openRename) {
                 Label("Rename", systemImage: "pencil")
+            }
+            // Locking is here rather than on the sheet surface: it is a rare,
+            // deliberate act. Unlocking has its own badge because a locked trip
+            // needs to advertise why its controls are missing.
+            if trip.isLocked {
+                Button { unlockConfirmShown = true } label: {
+                    Label("Unlock trip", systemImage: "lock.open")
+                }
+            } else {
+                Button { TripStore.setLocked(trip, true, in: modelContext) } label: {
+                    Label("Lock trip", systemImage: "lock")
+                }
             }
             ShareLink(
                 item: ExportedTripFile(
@@ -449,8 +513,12 @@ struct TripBottomSheet: View {
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
             }
-            .onMove(perform: reorderListItems)
-            .onDelete(perform: deleteListItems)
+            // Both of these are nil when locked, which is what removes the
+            // swipe-to-delete gesture and the long-press reorder outright —
+            // not merely blocks them after the gesture has started
+            // (AlaskaRouter-ijy9).
+            .onMove(perform: reorderAction)
+            .onDelete(perform: deleteAction)
 
             // The bottom "Add block separator" row is gone (AlaskaRouter-ucyl).
             // Its only behaviour was to insert a separator near the END of the
@@ -555,7 +623,10 @@ struct TripBottomSheet: View {
                 // leading edge aligned with stop rows so the column reads as
                 // one grip rail down the list (AlaskaRouter-exf0).
                 Group {
-                    if isSynthetic || isCollapsed {
+                    // Locked trips join the "reserve the column, draw nothing"
+                    // case, same as a synthetic or collapsed block header
+                    // (AlaskaRouter-ijy9).
+                    if isSynthetic || isCollapsed || trip.isLocked {
                         Color.clear
                     } else {
                         HStack(spacing: 2) {
@@ -760,20 +831,26 @@ struct TripBottomSheet: View {
                     // Mock-faithful tight grid: 2pt circles, 2pt gaps
                     // (4pt center-to-center) so the cluster reads as one compact
                     // glyph rather than a sparse halftone pattern.
+                    // Locked: the dots go, the COLUMN stays. Dropping the
+                    // column too would shift the timeline rail sideways, and
+                    // the leg band above reserves the same width to keep the
+                    // rail's x continuous (AlaskaRouter-ijy9).
                     HStack(spacing: 2) {
-                        ForEach(0 ..< 2, id: \.self) { _ in
-                            VStack(spacing: 2) {
-                                ForEach(0 ..< 3, id: \.self) { _ in
-                                    Circle()
-                                        // 45% textStrong (darker base than the
-                                        // mock's 32% textMuted) — compensates for
-                                        // the translucent-sheet contrast issue
-                                        // tracked in AlaskaRouter-1ag5. Diameter
-                                        // pulled back to 2pt now that the pip
-                                        // shrank (3lr9) so dots/pip stay
-                                        // proportional.
-                                        .fill(SheetPalette.textStrong.opacity(0.45))
-                                        .frame(width: 2, height: 2)
+                        if !trip.isLocked {
+                            ForEach(0 ..< 2, id: \.self) { _ in
+                                VStack(spacing: 2) {
+                                    ForEach(0 ..< 3, id: \.self) { _ in
+                                        Circle()
+                                            // 45% textStrong (darker base than the
+                                            // mock's 32% textMuted) — compensates for
+                                            // the translucent-sheet contrast issue
+                                            // tracked in AlaskaRouter-1ag5. Diameter
+                                            // pulled back to 2pt now that the pip
+                                            // shrank (3lr9) so dots/pip stay
+                                            // proportional.
+                                            .fill(SheetPalette.textStrong.opacity(0.45))
+                                            .frame(width: 2, height: 2)
+                                    }
                                 }
                             }
                         }
@@ -842,16 +919,19 @@ struct TripBottomSheet: View {
                     // (Step B of AlaskaRouter-53x1, 0rh9). Tapping again
                     // while armed dismisses. Apple's native swipe-to-delete
                     // remains an alternative path via List's .onDelete.
-                    Button(action: {
-                        armedDeleteID = isArmed ? nil : wp.id
-                    }) {
-                        Image(systemName: "minus.circle")
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(SheetPalette.textMuted)
-                            .frame(width: 30, height: 30)
-                            .contentShape(Rectangle())
+                    // Gone entirely on a locked trip (AlaskaRouter-ijy9).
+                    if !trip.isLocked {
+                        Button(action: {
+                            armedDeleteID = isArmed ? nil : wp.id
+                        }) {
+                            Image(systemName: "minus.circle")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(SheetPalette.textMuted)
+                                .frame(width: 30, height: 30)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.vertical, 8)
                 .offset(x: isArmed ? -84 : 0)
@@ -1017,7 +1097,14 @@ struct TripBottomSheet: View {
     /// position with the two real faults fixed: a tinted pill at proper
     /// contrast that looks like a control, and a "+" that says something is
     /// being added rather than severed.
+    @ViewBuilder
     private func splitControl(for wp: Waypoint, accent: Color) -> some View {
+        // No block editing on a locked trip (AlaskaRouter-ijy9). The gap
+        // simply has no control in it, which is also what makes the locked
+        // list read as a finished itinerary rather than an editor.
+        if trip.isLocked {
+            EmptyView()
+        } else {
         Button(action: { splitBlock(before: wp) }) {
             HStack(spacing: 3) {
                 Image(systemName: "plus")
@@ -1038,6 +1125,7 @@ struct TripBottomSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Start a new block at \(wp.label ?? "this stop")")
+        }
     }
 
     /// True when a block separator already sits in the gap immediately before
@@ -1073,6 +1161,25 @@ struct TripBottomSheet: View {
     ///   - sets each separator's afterWaypointID to the id of the waypoint
     ///     immediately preceding it (or deletes the separator if no waypoint
     ///     precedes it, which makes the separator degenerate)
+    /// Nil on a locked trip, which is what makes `List` drop the reorder and
+    /// swipe-to-delete gestures altogether rather than accepting them and then
+    /// refusing (AlaskaRouter-ijy9). Written as explicitly-typed properties
+    /// because a `cond ? nil : method` ternary inline in the modifier leaves
+    /// the optional closure type ambiguous.
+    private var reorderAction: ((IndexSet, Int) -> Void)? {
+        guard !trip.isLocked else { return nil }
+        return { source, destination in
+            reorderListItems(from: source, to: destination)
+        }
+    }
+
+    private var deleteAction: ((IndexSet) -> Void)? {
+        guard !trip.isLocked else { return nil }
+        return { offsets in
+            deleteListItems(at: offsets)
+        }
+    }
+
     private func reorderListItems(from source: IndexSet, to destination: Int) {
         // `.onMove` hands back offsets into the VISIBLE (collapse-filtered)
         // list. Translate them to offsets in the full `trip.listItems` before

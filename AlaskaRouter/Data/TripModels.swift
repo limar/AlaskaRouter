@@ -17,6 +17,22 @@ final class Trip {
     var createdAt: Date = Date()
     var notes: String = ""
 
+    /// Read-only marker (AlaskaRouter-ijy9). A finished trip is a memory, and
+    /// nothing used to stop a stray drag or swipe from quietly rewriting one.
+    ///
+    /// Locked freezes the *itinerary* — stops, their order, and block
+    /// separators. It deliberately does NOT freeze the drawn route: a leg that
+    /// fell back to a straight dashed line offline still refreshes to a real
+    /// road when the network returns. That changes how the trip is drawn, not
+    /// what the trip is, and a locked trip stuck with dashed legs forever is a
+    /// poor memento.
+    ///
+    /// Defaulted, like every other property here, so SwiftData can migrate an
+    /// existing store without a versioned migration step. See
+    /// AlaskaRouter-tpoo for the one
+    /// migration that has bitten this schema before.
+    var isLocked: Bool = false
+
     @Relationship(deleteRule: .cascade, inverse: \Waypoint.trip)
     var waypoints: [Waypoint] = []
 

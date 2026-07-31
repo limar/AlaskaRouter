@@ -121,4 +121,16 @@ enum TripStore {
         trip.name = trimmed
         try? context.save()
     }
+
+    /// Locks or unlocks a trip (AlaskaRouter-ijy9).
+    ///
+    /// Renaming is deliberately still allowed on a locked trip — it does not
+    /// touch the itinerary, and being unable to fix a typo in a trip's title
+    /// would be annoying without protecting anything.
+    @MainActor
+    static func setLocked(_ trip: Trip, _ locked: Bool, in context: ModelContext) {
+        guard trip.isLocked != locked else { return }
+        trip.isLocked = locked
+        try? context.save()
+    }
 }
