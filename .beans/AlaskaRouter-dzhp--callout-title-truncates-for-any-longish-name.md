@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-dzhp
 title: 'Callout rework: title legibility, then visual balance'
-status: todo
+status: completed
 type: bug
 priority: high
 created_at: 2026-07-27T23:28:04Z
-updated_at: 2026-07-31T21:42:05Z
+updated_at: 2026-07-31T22:01:21Z
 parent: AlaskaRouter-36of
 ---
 
@@ -105,3 +105,23 @@ In PreviewCallout the fallback lands at 12pt (16 × 0.75), which is exactly the 
 The mismatch is each callout fitting its own width budget, and the two are never on screen together. User's call: leave as-is. The A/B harness (`calloutIconLayout`) has been removed now that both halves are decided.
 
 **Pin clearance (the old unchecked todo).** Both callouts are positioned proportionally (`Spacer`/callout/`Spacer`/`Spacer`, upper third), not by a fixed offset from the pin, so there is no hardcoded height to break. Measured on the real 2-line callout: **~11pt of clearance** to the pin. Each extra title line adds ~7.6pt downward, so a 3-line title leaves ~3pt and a 4-line title would overlap the pin. Not reachable with real data (the longest real name is 44 chars → 2 lines) but it is the bound on `CalloutTitle`'s 4-line allowance. Worth revisiting only if a name that long ever appears.
+
+## Accent: shipped, bean complete (2026-07-31)
+
+**"Open in…" now takes `SheetPalette.accentWarm` with white text**, the same fill and capsule shape as PreviewCallout's "Add to trip". Both callouts now carry one matching warm primary action, which is what restores the "small red paint" the callout lost when AlaskaRouter-pmnd demoted the ghost-red Remove capsule.
+
+Chosen from four rendered candidates on the real app. Rejected: warming the "STOP n OF m" label, and warming the label plus the category icon. User: leave the label and the icon alone.
+
+**Recorded for the record, not as an objection:** this reinstates a full-width coloured capsule — the shape pmnd removed for dominating the callout — now carrying a constructive action rather than a destructive one. If it ever reads as too dominant in the field, the lighter variants are in this bean's history and take minutes to restore.
+
+**Also found while doing this.** The palette already encodes a colour grammar nobody had written down: the committed waypoint pin draws at (0.78, 0.32, 0.20), which is *exactly* `SheetPalette.accentWarm`, and the preview pin at (0.20, 0.40, 0.65), which is *exactly* `CalloutIcon.slateBlue`. Warm = a committed stop, blue = a preview. Worth knowing before anyone picks a new colour for either callout.
+
+## Summary of Changes
+
+1. **Shared category → SF Symbol map extracted** to `CategorySymbol` — it was three byte-identical copies (StopCallout, PreviewCallout, SearchResultsView), verified identical before extracting.
+2. **Title legibility fixed** via `CalloutTitle`: one line at full size when the name fits, else 75% across up to four lines. Long Alaska names read in full for the first time.
+3. **Icon colour unified** to slate blue in both callouts, closing the field report. Per-category was built and rejected on evidence.
+4. **Icon size/placement deliberately left per-callout**, with the measurements showing why aligning them regresses one side or the other.
+5. **Warm "Open in…"** restores the accent.
+
+All A/B harnesses added along the way (`calloutIconStyle`, `calloutIconLayout`, `calloutAccent`) have been removed now the decisions are made. Spike lives on at `spikes/D_callout`.
