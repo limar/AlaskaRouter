@@ -349,10 +349,9 @@ struct RootView: View {
             // VStack from the bottom when the keyboard appears. The bar
             // (top of VStack) stays visible since the top is unaffected.
 
-            // Preview callout (floating mid-screen near the previewed pin).
+            // Preview callout (floating just above the previewed pin).
             if let preview = previewedResult {
-                VStack {
-                    Spacer()
+                CalloutSlot(pinHalfHeight: 22) {
                     PreviewCallout(
                         result: preview,
                         distanceFromTripText: distanceLineFromTrip(to: preview.coord),
@@ -363,9 +362,6 @@ struct RootView: View {
                         },
                         onDismiss: { dismissPreview() }
                     )
-                    .padding(.horizontal, 18)
-                    Spacer()
-                    Spacer()        // keep callout in upper 1/3 area
                 }
                 .allowsHitTesting(true)
                 .transition(.scale(scale: 0.94).combined(with: .opacity))
@@ -380,8 +376,7 @@ struct RootView: View {
             {
                 let ordered = trip.orderedWaypoints
                 let idx = ordered.firstIndex { $0.id == selectedID } ?? 0
-                VStack {
-                    Spacer()
+                CalloutSlot(pinHalfHeight: 30) {
                     StopCallout(
                         waypoint: wp,
                         positionLabel: "STOP \(idx + 1) OF \(ordered.count)",
@@ -395,9 +390,6 @@ struct RootView: View {
                         onClose: { handleStopCalloutClose() },
                         onRemove: { handleStopCalloutRemove(wp) }
                     )
-                    .padding(.horizontal, 18)
-                    Spacer()
-                    Spacer()
                 }
                 .allowsHitTesting(true)
                 .transition(.scale(scale: 0.96).combined(with: .opacity))

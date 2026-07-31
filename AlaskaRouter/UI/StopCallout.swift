@@ -66,8 +66,13 @@ struct StopCallout: View {
                     //
                     // No shrink, unlike CalloutTitle: this is already the small
                     // secondary size, and 75% of 12pt is not readable in the
-                    // field. And no lineLimit — the line count is whatever the
-                    // neighbour's name needs.
+                    // field.
+                    //
+                    // Capped at two lines. Two covers every real neighbour name
+                    // (the worst, "132 km to Chena River Lakes Project and
+                    // Recreation Area", needs exactly two); the cap is there so
+                    // a deliberately absurd POI name cannot grow the card without
+                    // limit and push it down over its own pin.
                     //
                     // `fixedSize` is mandatory. Without it the text silently
                     // stays on one line in this layout and clips, exactly as it
@@ -76,12 +81,14 @@ struct StopCallout: View {
                         Text(prevLine)
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if let nextLine = distanceToNextText {
                         Text(nextLine)
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

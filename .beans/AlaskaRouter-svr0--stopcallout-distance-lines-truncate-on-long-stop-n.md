@@ -1,11 +1,11 @@
 ---
 # AlaskaRouter-svr0
 title: StopCallout distance lines truncate on long stop names
-status: in-progress
+status: completed
 type: bug
 priority: normal
 created_at: 2026-07-31T22:12:24Z
-updated_at: 2026-07-31T22:15:37Z
+updated_at: 2026-07-31T22:36:07Z
 ---
 
 Split out of AlaskaRouter-dzhp (callout rework) on 2026-07-31, where it was spotted while verifying the title fix.
@@ -46,3 +46,17 @@ The cause is structural. Both callouts are positioned `Spacer` / callout / `Spac
 **A stop with a long title AND two long neighbour names would overlap the pin.** Three extra lines ≈ 45pt of growth ≈ 22pt downward, against 1-2pt of clearance. Not present in the current trip, but reachable.
 
 The fix, if wanted, is to stop growing symmetrically: anchor the callout's *bottom* a fixed distance above screen centre so growth goes upward, away from the pin. That is a change to how both callouts are positioned, so it wants a decision rather than a silent edit — raised with the user 2026-07-31.
+
+## Two-line cap + the gap fixed (2026-07-31)
+
+**Cap.** The distance lines are `lineLimit(2)`. Two covers every real neighbour name (the worst, "132 km to Chena River Lakes Project and Recreation Area", needs exactly two). The cap is a guard: user's point was that a deliberately absurd POI name should not be able to grow the card without limit.
+
+**Gap.** New `CalloutSlot` in `AlaskaRouter/UI/CalloutSlot.swift`, used by both callouts.
+
+The old placement was `Spacer` / callout / `Spacer` / `Spacer` — the card *centred* on the upper third, so every extra line pushed it half up and half **down**, toward the pin. That is why the clearance kept shrinking as the card learned to wrap.
+
+Now the card's **bottom edge** is anchored a fixed distance above the pin, and extra lines grow upward into empty map. Verified on all three cases (short card, tall 2-line-title card, preview callout): the gap is now constant at roughly 22-35pt instead of collapsing to 1-2pt on the tall ones.
+
+## Summary of Changes
+1. Distance lines wrap instead of truncating, at the same 12pt, capped at two lines.
+2. `CalloutSlot` anchors both callouts by their bottom edge, so card height no longer eats the pin clearance.
