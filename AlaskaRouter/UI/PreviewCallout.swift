@@ -93,9 +93,11 @@ struct PreviewCallout: View {
 
     @ViewBuilder
     private var categoryIcon: some View {
-        Image(systemName: CategorySymbol.name(for: result.category))
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(Color(red: 0.20, green: 0.40, blue: 0.65))
-            .frame(width: 22, height: 22)
+        CalloutIcon(
+            category: result.category,
+            size: 18,
+            shippedColor: CalloutIcon.slateBlue
+        )
+        .frame(width: 22, height: 22)
     }
 }

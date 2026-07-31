@@ -46,9 +46,11 @@ struct StopCallout: View {
                     // long name, a centred icon slides to the vertical middle
                     // of the block and stops reading as attached to it.
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: CategorySymbol.name(for: waypoint.category))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                        CalloutIcon(
+                            category: waypoint.category,
+                            size: 12,
+                            shippedColor: .secondary
+                        )
                         CalloutTitle(
                             text: waypoint.label ?? "Untitled stop",
                             size: 17,

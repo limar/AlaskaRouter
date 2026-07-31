@@ -90,7 +90,12 @@ enum PlaceIcons {
 
     /// Warm-paper palette mirroring the text-color match expressions in
     /// style-base.json so a feature's icon and label share a hue.
-    private static func color(for category: String) -> UIColor {
+    ///
+    /// Internal rather than private because the callouts borrow it for their
+    /// category icon (AlaskaRouter-dzhp) — a stop's icon on the map and in its
+    /// callout should not be two different colours. Tuned for the warm paper
+    /// basemap, so check it still reads when used over `.thinMaterial`.
+    static func color(for category: String) -> UIColor {
         switch category {
         case "peak":                  return rgb(0x5A, 0x28, 0x18) // dark terracotta
         case "volcano":               return rgb(0x88, 0x30, 0x18) // red-orange

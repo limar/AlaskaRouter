@@ -111,6 +111,14 @@ struct TweaksPanel: View {
                             range: 0.70...1.50, step: 0.05,
                             format: "%.2f ×"
                         )
+                        // dzhp — the callout category icon is grey on a trip
+                        // stop but coloured on a POI. A/B the fix on the map.
+                        Picker("Callout icon", selection: $tweaks.calloutIconStyle) {
+                            Text("0 — As shipped (grey vs blue)").tag(0)
+                            Text("1 — Slate blue in both").tag(1)
+                            Text("2 — Per-category colour").tag(2)
+                        }
+                        .pickerStyle(.inline)
                     }
                 } header: {
                     sectionHeader("Map labels & markers", isExpanded: $isMapLabelsTweaksExpanded)
